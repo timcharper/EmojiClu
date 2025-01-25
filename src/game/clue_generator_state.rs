@@ -10,9 +10,29 @@ use crate::{
 use super::GameBoard;
 
 pub const MAX_HORIZ_CLUES: usize = 48;
-pub const MAX_VERT_CLUES: usize = 16;
+pub const MAX_VERT_CLUES: usize = 32;
 const MAX_HORIZONTAL_TILE_USAGE: usize = 3;
 const MAX_VERTICAL_TILE_USAGE: usize = 2;
+
+#[derive(Debug)]
+pub struct ClueGeneratorStats {
+    pub n_rejected_no_deductions: usize,
+    pub n_rejected_exceeds_usage_limits: usize,
+    pub n_rejected_exceeds_max_vert_clues: usize,
+    pub n_rejected_exceeds_max_horiz_clues: usize,
+    pub n_rejected_non_singleton_intersecting_clues: usize,
+}
+impl Default for ClueGeneratorStats {
+    fn default() -> Self {
+        ClueGeneratorStats {
+            n_rejected_exceeds_usage_limits: 0,
+            n_rejected_exceeds_max_vert_clues: 0,
+            n_rejected_exceeds_max_horiz_clues: 0,
+            n_rejected_no_deductions: 0,
+            n_rejected_non_singleton_intersecting_clues: 0,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct ClueEvaluation {
@@ -38,6 +58,7 @@ pub struct ClueGeneratorState {
     pub selection_count_by_row: Vec<usize>,
     pub selection_count_by_column: Vec<usize>,
     pub unsolved_tiles: HashSet<Tile>,
+    pub stats: ClueGeneratorStats,
 }
 
 impl ClueGeneratorState {
@@ -76,7 +97,11 @@ impl ClueGeneratorState {
             unsolved_columns,
             unsolved_rows,
             unsolved_tiles,
+            stats: ClueGeneratorStats::default(),
         }
+    }
+    pub fn reset_stats(&mut self) {
+        self.stats = ClueGeneratorStats::default();
     }
 
     /// pick a random tile from the board, prioritizing tiles with evidence from unsolved columns / rows
@@ -110,14 +135,18 @@ impl ClueGeneratorState {
         *self.vertical_usage.get(tile).unwrap_or(&0)
     }
 
-    pub(crate) fn would_exceed_usage_limits(&self, clue: &Clue) -> bool {
+    pub(crate) fn would_exceed_usage_limits(&mut self, clue: &Clue) -> bool {
+        // too many clues?
         if clue.is_horizontal() && self.horizontal_clues >= MAX_HORIZ_CLUES {
+            self.stats.n_rejected_exceeds_max_horiz_clues += 1;
             return true;
         }
         if clue.is_vertical() && self.vertical_clues >= MAX_VERT_CLUES {
+            self.stats.n_rejected_exceeds_max_vert_clues += 1;
             return true;
         }
-        if clue.is_horizontal() {
+        // too many hints on the same tile?
+        let result = if clue.is_horizontal() {
             clue.assertions
                 .iter()
                 .filter(|a| a.assertion)
@@ -127,7 +156,11 @@ impl ClueGeneratorState {
                 .iter()
                 .filter(|a| a.assertion)
                 .any(|a| self.get_vertical_usage(&a.tile) >= MAX_VERTICAL_TILE_USAGE)
+        };
+        if result {
+            self.stats.n_rejected_exceeds_usage_limits += 1;
         }
+        result
     }
 
     fn record_clue_usage(&mut self, clue: &Clue) {

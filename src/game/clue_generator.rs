@@ -1,7 +1,7 @@
 use super::clue_generator_state::{ClueEvaluation, ClueGeneratorState};
 
 pub const MAX_HORIZ_CLUES: usize = 48;
-pub const MAX_VERT_CLUES: usize = 16;
+pub const MAX_VERT_CLUES: usize = 20;
 
 use log::{info, trace};
 use rand::{
@@ -11,7 +11,7 @@ use rand::{
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
-    model::{Clue, ClueOrientation, ClueType, HorizontalClueType, Tile, VerticalClueType},
+    model::{Clue, ClueType, HorizontalClueType, Tile, VerticalClueType},
 };
 
 use super::{deduce_clue, GameBoard};
@@ -328,6 +328,7 @@ pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueG
         let mut possible_clues = Vec::new();
         let mut clue_generation_loops = 0;
         let clue_candidate_count = state.board.solution.difficulty.look_ahead_count();
+        state.reset_stats();
         while possible_clues.len() < clue_candidate_count
             && clue_generation_loops < clue_candidate_count * 1000
         /* TODO - need to make the clue generation guided to try to choose at least one unsolved tile. */
@@ -349,6 +350,7 @@ pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueG
                     .find(|c| clue.non_singleton_intersects(c));
 
                 if non_singleton_intersecting_clues.is_some() {
+                    state.stats.n_rejected_non_singleton_intersecting_clues += 1;
                     trace!(
                         target: "clue_generator",
                         "Skipping clue with non-singleton intersecting clues: {:?} - {:?}",
@@ -364,6 +366,7 @@ pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueG
                 }
                 let evaluation = evaluate_clue(&state.board.clone(), &clue);
                 if evaluation.deductions.len() == 0 {
+                    state.stats.n_rejected_no_deductions += 1;
                     trace!(
                         target: "clue_generator",
                         "Skipping clue with no deductions: {:?}",
@@ -385,6 +388,12 @@ pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueG
                 possible_clues.push(evaluation);
             }
         }
+        info!(
+            target: "clue_generator",
+            "Clue generation loop done; found {} clues. Stats: {:?}",
+            possible_clues.len(),
+            state.stats
+        );
         possible_clues.sort_by_key(|c| c.score);
         if let Some(evaluated_clue) = possible_clues.first() {
             trace!(
@@ -404,6 +413,7 @@ pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueG
                 evaluated_clue
             );
         } else {
+            println!("Stats: {:?}", state.stats);
             panic!(
                 "Failed to generate valid clues after {} attempts.",
                 clue_generation_loops
