@@ -1,0 +1,31 @@
+[package]
+name = "gwatson"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+log = { version = "0.4.25", features = ["max_level_trace"] }
+env_logger = "0.11.6"
+gtk = { version = "0.7", package = "gtk4", features = ["v4_6"] }
+gdk-pixbuf = "0.17"
+gio = "0.17"
+glib = "0.17"
+rand = "0.8"
+rusqlite = { version = "0.29", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
+uuid = { version = "1.4", features = ["v4", "serde"] }
+itertools = "0.14"
+
+
+[build-dependencies]
+glib-build-tools = "0.17"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+rustflags = [
+    "-L/home/tim/src/oss/gwatson/bundle/gtk/lib",
+    "-L/home/tim/src/oss/gwatson/bundle/gtk/bin",
+]

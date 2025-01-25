@@ -1,0 +1,146 @@
+frame,
+.frame,
+frame.flat,
+frame.view,
+frame.border {
+    border-radius: 0;
+    border: none;
+}
+
+.selected-cell {
+    box-shadow: inset 0 0 0 2px #3584e4;
+    border-radius: 0px;
+}
+
+.cell-frame {
+    border-radius: 0px;
+}
+
+.clue-cell-frame,
+.clue-cell-frame.selected-cell,
+.clue-cell-frame .highlight-frame {
+    border-radius: 0;
+}
+
+.clue-set-frame {
+    border-radius: 0;
+}
+
+image {
+    -gtk-icon-style: regular;
+}
+
+.highlight-frame {
+    border: none;
+    background: transparent;
+}
+
+.correct-candidate {
+    border: 4px solid #2ec27e;
+    border-radius: 0px;
+    background: transparent;
+}
+
+@keyframes highlight-clue {
+    0% { background: #f6d32d; opacity: 0.9; }
+    99% { background: #f6d32d; opacity: 0.0; }
+    100% { background: transparent; opacity: 0; }
+}
+
+.clue-highlight {
+    animation: highlight-clue 1s normal;
+    border: 4px solid #f6d32d;
+    background: #f6d32d;
+}
+
+.clue-nohighlight {
+    animation: none;
+}
+
+.clue-overlay {
+    margin: 0;
+}
+
+.negative-assertion-frame {
+    border: 3px solid #e01b24;  /* Thicker red border */
+    background: transparent;
+    margin: 0;  /* Ensure border aligns with tile edges */
+}
+
+.negative-assertion-x {
+    margin: 4px;  /* Space from top-left corner */
+    opacity: 0.9;
+    min-width: 20px;
+    min-height: 20px;
+}
+
+.maybe-assertion-frame {
+    border: 3px solid #f6d32d;  /* Yellow border */
+    background: transparent;
+    margin: 0;  /* Ensure border aligns with tile edges */
+}
+
+.maybe-assertion-mark {
+    margin: 4px;  /* Space from top-left corner */
+    opacity: 0.9;
+    min-width: 20px;
+    min-height: 20px;
+}
+
+.puzzle-grid {
+    background-color: black;
+    padding: 3px;
+}
+
+@keyframes blink-ready {
+    0% { background: none; }
+    50% { background: #ffeb3b; }
+    100% { background: none; }
+}
+
+.submit-ready {
+    animation: blink-ready 2s infinite;
+}
+
+.timer {
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: bold;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.timer-control {
+    font-size: 14px;
+    padding: 2px 6px;
+    margin-right: 4px;
+}
+
+.hints-label {
+    font-weight: bold;
+}
+
+.highlight-score {
+    font-weight: bold;
+    color: #2ecc71;  /* A nice green color */
+}
+
+.pause-overlay {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.pause-label {
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    margin: 0;
+}
+
+.vertical-clues .new-group {
+    margin-left: 10px;
+}
+.horizontal-clues .new-group {
+    margin-top: 0px;
+}
