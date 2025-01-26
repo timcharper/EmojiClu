@@ -1,6 +1,6 @@
 use log::{info, trace};
 use rand::{rngs::StdRng, seq::IteratorRandom, RngCore, SeedableRng};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
@@ -42,20 +42,20 @@ pub struct ClueEvaluation {
 
 pub struct ClueGeneratorState {
     pub board: GameBoard,
-    pub revealed_tiles: HashSet<Tile>,
-    pub tiles_with_evidence: HashSet<(usize, Tile)>,
-    pub tiles_without_evidence: HashSet<(usize, Tile)>,
+    pub revealed_tiles: BTreeSet<Tile>,
+    pub tiles_with_evidence: BTreeSet<(usize, Tile)>,
+    pub tiles_without_evidence: BTreeSet<(usize, Tile)>,
     pub clues: Vec<Clue>,
     pub rng: Box<dyn RngCore>,
     pub horizontal_usage: HashMap<Tile, usize>,
     pub vertical_usage: HashMap<Tile, usize>,
     pub horizontal_clues: usize,
     pub vertical_clues: usize,
-    pub unsolved_columns: HashSet<usize>,
-    pub unsolved_rows: HashSet<usize>,
+    pub unsolved_columns: BTreeSet<usize>,
+    pub unsolved_rows: BTreeSet<usize>,
     pub selection_count_by_row: Vec<usize>,
     pub selection_count_by_column: Vec<usize>,
-    pub unsolved_tiles: HashSet<Tile>,
+    pub unsolved_tiles: BTreeSet<Tile>,
     pub stats: ClueGeneratorStats,
 }
 
@@ -64,10 +64,10 @@ impl ClueGeneratorState {
         let board = board.clone();
         let selection_count_by_row = vec![0; board.solution.n_rows];
         let selection_count_by_column = vec![0; board.solution.n_variants];
-        let unsolved_columns: HashSet<usize> = (0..board.solution.n_variants).collect();
-        let unsolved_rows: HashSet<usize> = (0..board.solution.n_rows).collect();
-        let unsolved_tiles: HashSet<Tile> = board.solution.all_tiles().into_iter().collect();
-        let mut tiles_without_evidence: HashSet<(usize, Tile)> = HashSet::new();
+        let unsolved_columns: BTreeSet<usize> = (0..board.solution.n_variants).collect();
+        let unsolved_rows: BTreeSet<usize> = (0..board.solution.n_rows).collect();
+        let unsolved_tiles: BTreeSet<Tile> = board.solution.all_tiles().into_iter().collect();
+        let mut tiles_without_evidence: BTreeSet<(usize, Tile)> = BTreeSet::new();
 
         for row in 0..board.solution.n_rows {
             for col in 0..board.solution.n_variants {
@@ -80,8 +80,8 @@ impl ClueGeneratorState {
             selection_count_by_row,
             selection_count_by_column,
             board,
-            revealed_tiles: HashSet::new(),
-            tiles_with_evidence: HashSet::new(),
+            revealed_tiles: BTreeSet::new(),
+            tiles_with_evidence: BTreeSet::new(),
             tiles_without_evidence,
             clues: Vec::new(),
             rng: match random_seed {
@@ -249,7 +249,7 @@ impl ClueGeneratorState {
         self.tiles_without_evidence.remove(&(column, tile));
     }
 
-    pub fn prune_clues(&mut self, board: &GameBoard, revealed_tiles: HashSet<Tile>) {
+    pub fn prune_clues(&mut self, board: &GameBoard, revealed_tiles: BTreeSet<Tile>) {
         let mut board = board.clone();
         revealed_tiles.into_iter().for_each(|t| {
             board.select_tile_from_solution(t);

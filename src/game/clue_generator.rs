@@ -8,6 +8,7 @@ use rand::{
     seq::{IteratorRandom, SliceRandom},
     Rng,
 };
+use std::collections::BTreeSet;
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
@@ -456,7 +457,6 @@ mod tests {
 
     // for some reason, our deterministic generation isn't working.
     #[test]
-    #[ignore]
     fn test_generate_clues_deterministic() {
         let solution = Solution::new(Difficulty::Easy);
         let board = GameBoard::new(solution.into());
