@@ -839,6 +839,7 @@ mod tests {
             n_variants: 4,
             variants_range: 'a'..='d',
             difficulty: Difficulty::Easy,
+            seed: 0,
         })
     }
 

@@ -1,5 +1,4 @@
 use gtk::prelude::WidgetExt;
-use gtk::ApplicationWindow;
 use log::trace;
 use std::cell::RefCell;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -85,6 +84,12 @@ impl GameState {
         std::env::var("DEBUG").map(|v| v == "1").unwrap_or(false)
     }
 
+    pub fn seed_from_env() -> Option<u64> {
+        std::env::var("SEED")
+            .map(|v| v.parse::<u64>().unwrap())
+            .ok()
+    }
+
     pub fn new_board_set(n_rows: usize) -> GameBoardSet {
         let difficulty = match n_rows {
             4 => Difficulty::Easy,
@@ -92,26 +97,19 @@ impl GameState {
             6 => Difficulty::Hard,
             _ => Difficulty::Veteran,
         };
-        let solution = Rc::new(Solution::new(difficulty));
+        let solution = Rc::new(Solution::new(difficulty, GameState::seed_from_env()));
         trace!(target: "game_state", "Generated solution: {:?}", solution);
-        let mut board = GameBoard::new(Rc::clone(&solution));
+        let blank_board = GameBoard::new(Rc::clone(&solution));
         let ClueGeneratorResult {
             clues,
-            revealed_tiles,
-        } = generate_clues(&board, None);
-
-        let clue_set = Rc::new(ClueSet::new(clues));
-        board.set_clues(clue_set.clone());
-
-        revealed_tiles.iter().for_each(|tile| {
-            log::trace!(target: "game_state", "Revealing tile: {:?}", tile);
-            board.select_tile_from_solution(*tile);
-        });
+            board,
+            revealed_tiles: _,
+        } = generate_clues(&blank_board);
 
         let debug_mode = GameState::is_debug_mode();
 
         GameBoardSet {
-            clue_set,
+            clue_set: Rc::new(ClueSet::new(clues)),
             board,
             solution,
             debug_mode,
@@ -384,7 +382,10 @@ impl GameState {
         let solution = perform_evaluation_step(&mut current_board, &all_clues);
         match solution {
             EvaluationStepResult::Nothing => {
-                log::info!("No solution found");
+                log::info!(
+                    "No solution found in seed {:?}",
+                    self.current_board.solution.seed
+                );
                 return;
             }
             EvaluationStepResult::HiddenPairsFound => {
@@ -439,7 +440,12 @@ impl GameState {
         if deduction_result.is_some() {
             self.increment_hints_used();
         }
-        log::info!(target: "game_state", "Deduction result: {:?}", deduction_result);
+        log::info!(
+            target: "game_state",
+            "Deduction result: {:?}; seed: {:?}",
+            deduction_result,
+            self.current_board.solution.seed
+        );
 
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
             if let Some(clue) = clue {

@@ -1,7 +1,4 @@
-mod events;
-mod game;
-mod model;
-mod ui;
+use gwatson::ui;
 
 use gio::glib::Bytes;
 

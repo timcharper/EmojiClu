@@ -60,7 +60,7 @@ pub struct ClueGeneratorState {
 }
 
 impl ClueGeneratorState {
-    pub(crate) fn new(board: GameBoard, random_seed: Option<u64>) -> Self {
+    pub(crate) fn new(board: GameBoard) -> Self {
         let board = board.clone();
         let selection_count_by_row = vec![0; board.solution.n_rows];
         let selection_count_by_column = vec![0; board.solution.n_variants];
@@ -76,6 +76,8 @@ impl ClueGeneratorState {
             }
         }
 
+        let rng = Box::new(StdRng::seed_from_u64(board.solution.seed));
+
         Self {
             selection_count_by_row,
             selection_count_by_column,
@@ -84,10 +86,7 @@ impl ClueGeneratorState {
             tiles_with_evidence: BTreeSet::new(),
             tiles_without_evidence,
             clues: Vec::new(),
-            rng: match random_seed {
-                Some(s) => Box::new(StdRng::seed_from_u64(s)),
-                None => Box::new(rand::thread_rng()),
-            },
+            rng,
             horizontal_usage: HashMap::new(),
             vertical_usage: HashMap::new(),
             horizontal_clues: 0,
@@ -257,6 +256,8 @@ impl ClueGeneratorState {
 
         let original_clue_count = self.clues.len();
 
+        println!("Original clues: {:?}", self.clues);
+
         // Try removing each clue one at a time
         let mut i = 0;
         while i < self.clues.len() {
@@ -295,5 +296,6 @@ impl ClueGeneratorState {
             original_clue_count,
             self.clues.len()
         );
+        println!("Pruned clues: {:?}", self.clues);
     }
 }

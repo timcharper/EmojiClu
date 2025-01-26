@@ -19,6 +19,8 @@ chrono = "0.4"
 uuid = { version = "1.4", features = ["v4", "serde"] }
 itertools = "0.14"
 
+[dev-dependencies]
+test-context = "0.3.0"
 
 [build-dependencies]
 glib-build-tools = "0.17"

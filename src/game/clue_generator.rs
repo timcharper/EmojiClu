@@ -8,11 +8,11 @@ use rand::{
     seq::{IteratorRandom, SliceRandom},
     Rng,
 };
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, rc::Rc};
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
-    model::{Clue, ClueType, GameBoard, HorizontalClueType, Tile, VerticalClueType},
+    model::{Clue, ClueSet, ClueType, GameBoard, HorizontalClueType, Tile, VerticalClueType},
 };
 
 use super::deduce_clue;
@@ -251,16 +251,18 @@ fn evaluate_clue(board: &GameBoard, clue: &Clue) -> ClueEvaluation {
 pub struct ClueGeneratorResult {
     pub clues: Vec<Clue>,
     pub revealed_tiles: Vec<Tile>,
+    /// The board after revealing initial tiles
+    pub board: GameBoard,
 }
 
-pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueGeneratorResult {
+pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
     trace!(
         target: "clue_generator",
         "Generating clues... for board: {:?}; solution is {:?}",
         init_board,
         init_board.solution
     );
-    let mut state = ClueGeneratorState::new(init_board.clone(), random_seed);
+    let mut state = ClueGeneratorState::new(init_board.clone());
     let three_adjacent_clue_generator = ClueGenerator {
         weight: 6,
         clue_type: ClueType::Horizontal(HorizontalClueType::ThreeAdjacent),
@@ -430,40 +432,70 @@ pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueG
         state.board
     );
 
+    let mut board_with_revealed_tiles = init_board.clone();
+    for tile in state.revealed_tiles.iter() {
+        board_with_revealed_tiles.select_tile_from_solution(*tile);
+    }
+
+    let clue_set = Rc::new(ClueSet::new(state.clues.clone()));
+    board_with_revealed_tiles.set_clues(clue_set);
+
     ClueGeneratorResult {
         clues: state.clues,
         revealed_tiles: state.revealed_tiles.into_iter().collect(),
+        board: board_with_revealed_tiles,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{Difficulty, GameBoard, Solution};
+    use crate::{
+        game::tests::UsingLogger,
+        model::{Difficulty, GameBoard, Solution},
+    };
+    use test_context::test_context;
 
     use super::*;
 
+    #[test_context(UsingLogger)]
     #[test]
-    fn test_generate_clues() {
-        let solution = Solution::new(Difficulty::Easy);
-        let board = GameBoard::new(solution.into());
-        let result = generate_clues(&board, Some(0));
-        trace!(
-            target: "clue_generator",
-            "Generated clues: {:?}",
-            result.clues
-        );
-        assert!(result.clues.len() > 0);
+    fn test_generate_clues(_: &mut UsingLogger) {
+        // CLUE_GEN_ITERATIONS=100 RUST_LOG=info cargo test game::clue_generator::tests::test_generate_clues -- --nocapture --exact
+
+        let n_iterations = std::env::var("CLUE_GEN_ITERATIONS").unwrap_or("1".to_string());
+        let n_iterations = n_iterations.parse::<u64>().unwrap();
+        for i in 0..n_iterations {
+            let solution = Solution::new(Difficulty::Hard, Some(i));
+            let init_board = GameBoard::new(solution.into());
+            let result = generate_clues(&init_board);
+            trace!(
+                target: "clue_generator",
+                "Generated clues: {:?}",
+                result.clues
+            );
+            assert!(result.clues.len() > 0);
+            // assert solvable
+            let mut board = result.board.clone();
+            while perform_evaluation_step(&mut board, &result.clues)
+                != EvaluationStepResult::Nothing
+            {
+                board.auto_solve_all();
+            }
+            println!("Board is {:?}", board);
+            println!("Clues are {:?}", result.clues);
+            assert!(board.is_complete(), "Board is not solvable");
+        }
     }
 
     // for some reason, our deterministic generation isn't working.
     #[test]
     fn test_generate_clues_deterministic() {
-        let solution = Solution::new(Difficulty::Easy);
+        let solution = Solution::new(Difficulty::Easy, Some(42));
         let board = GameBoard::new(solution.into());
 
         // Generate clues twice with same seed
-        let result1 = generate_clues(&board, Some(42));
-        let result2 = generate_clues(&board, Some(42));
+        let result1 = generate_clues(&board);
+        let result2 = generate_clues(&board);
 
         // Should generate exact same clues in same order
         assert_eq!(result1.clues.len(), result2.clues.len());

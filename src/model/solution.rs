@@ -3,8 +3,8 @@ use std::ops::RangeInclusive;
 
 use crate::model::{Difficulty, Tile};
 use log::trace;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{seq::SliceRandom, SeedableRng};
+use rand::{thread_rng, RngCore};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_GRID_SIZE: usize = 8;
@@ -17,6 +17,7 @@ pub struct Solution {
     pub n_rows: usize,
     pub n_variants: usize,
     pub difficulty: Difficulty,
+    pub seed: u64,
 }
 
 impl Default for Solution {
@@ -28,6 +29,7 @@ impl Default for Solution {
             n_rows: 0,
             n_variants: 0,
             difficulty: Difficulty::default(),
+            seed: 0,
         }
     }
 }
@@ -38,7 +40,7 @@ impl Solution {
         'a'..=last_variant
     }
 
-    pub fn new(difficulty: Difficulty) -> Self {
+    pub fn new(difficulty: Difficulty, seed: Option<u64>) -> Self {
         let n_rows = difficulty.grid_size();
         let n_variants = n_rows;
 
@@ -57,7 +59,10 @@ impl Solution {
         );
 
         let mut grid = [[Tile::new(0, '0'); MAX_GRID_SIZE]; MAX_GRID_SIZE];
-        let mut rng = thread_rng();
+
+        let seed = seed.unwrap_or(rand::thread_rng().next_u64());
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         let variants_range = Self::variants_range(n_variants);
         let variants = variants_range.clone().collect::<Vec<char>>();
@@ -86,6 +91,7 @@ impl Solution {
             n_rows,
             n_variants,
             difficulty,
+            seed,
         }
     }
 

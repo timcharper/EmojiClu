@@ -307,13 +307,6 @@ impl GameBoard {
     ///
     /// # Returns
     /// `true` if the tile has been selected in the column, `false` otherwise
-    ///
-    /// # Examples
-    /// ```
-    /// let board = GameBoard::new(...);
-    /// let tile = Tile::new(0, 'a');
-    /// let has_selection = board.has_selection(&tile);
-    /// ```
     pub fn is_selected_in_column(&self, tile: &Tile, column: usize) -> bool {
         let row = tile.row as usize;
         let selected = self.selected[row][column];
@@ -468,6 +461,7 @@ mod tests {
             n_variants: 4,
             variants_range: 'a'..='d',
             difficulty: Difficulty::Easy,
+            seed: 0,
         })
     }
 
