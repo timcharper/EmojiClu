@@ -4,14 +4,14 @@ use log::trace;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use super::board::GameBoard;
 use super::clue_generator::ClueGeneratorResult;
-use super::game_event::GameEvent;
-use super::solution::Solution;
 use super::solver::{deduce_hidden_pairs, perform_evaluation_step, EvaluationStepResult};
 use super::stats_manager::GameStats;
-use super::{deduce_clue, generate_clues, ClueSet};
-use crate::model::{CandidateState, ClueWithGrouping, Deduction, Difficulty, TimerState};
+use super::{deduce_clue, generate_clues};
+use crate::model::{
+    CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameBoard, GameEvent,
+    Solution, TimerState,
+};
 use crate::ui::clue_set_ui::ClueSetUI;
 use crate::ui::game_info_ui::GameInfoUI;
 use crate::ui::puzzle_grid_ui::PuzzleGridUI;

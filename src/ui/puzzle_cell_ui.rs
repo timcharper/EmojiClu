@@ -1,8 +1,7 @@
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-use crate::game::game_event::GameEvent;
-use crate::model::{Candidate, CandidateState, Tile};
+use crate::model::{Candidate, CandidateState, GameEvent, Tile};
 use crate::ui::layout::{CANDIDATE_IMG_SIZE, CELL_SPACING, FRAME_MARGIN};
 use glib::timeout_add_local_once;
 use gtk::{prelude::*, ApplicationWindow};

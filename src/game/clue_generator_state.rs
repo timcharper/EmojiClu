@@ -4,10 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
-    model::{Clue, ClueOrientation, Deduction, Tile, TileAssertion},
+    model::{Clue, Deduction, GameBoard, Tile, TileAssertion},
 };
-
-use super::GameBoard;
 
 pub const MAX_HORIZ_CLUES: usize = 48;
 pub const MAX_VERT_CLUES: usize = 32;

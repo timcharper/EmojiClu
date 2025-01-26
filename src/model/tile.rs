@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub struct Tile {
     pub row: usize,    // 0-5 (zero-based row index)
     pub variant: char, // 'a'-'f'

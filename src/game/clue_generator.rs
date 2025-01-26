@@ -11,10 +11,10 @@ use rand::{
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
-    model::{Clue, ClueType, HorizontalClueType, Tile, VerticalClueType},
+    model::{Clue, ClueType, GameBoard, HorizontalClueType, Tile, VerticalClueType},
 };
 
-use super::{deduce_clue, GameBoard};
+use super::deduce_clue;
 
 #[derive(Debug, Clone)]
 struct ClueGenerator {
@@ -437,7 +437,7 @@ pub fn generate_clues(init_board: &GameBoard, random_seed: Option<u64>) -> ClueG
 
 #[cfg(test)]
 mod tests {
-    use crate::{game::solution::Solution, model::Difficulty};
+    use crate::model::{Difficulty, GameBoard, Solution};
 
     use super::*;
 

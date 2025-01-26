@@ -41,6 +41,7 @@ impl GameEvent {
         trace!(target: "game_event", "Deserialized event: {:?}", result);
         Some(result)
     }
+
     pub fn dispatch_event(window: &ApplicationWindow, event: GameEvent) {
         trace!(target: "game_event", "Dispatching event: {:?}", event);
         window.activate_action("game-event", Some(&event.to_variant()));

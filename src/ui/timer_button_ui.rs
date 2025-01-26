@@ -4,7 +4,7 @@ use gtk::{ApplicationWindow, Button};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::game::game_event::GameEvent;
+use crate::model::GameEvent;
 
 pub struct TimerButtonUI {
     pub button: Rc<Button>,

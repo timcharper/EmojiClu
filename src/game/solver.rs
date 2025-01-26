@@ -1,11 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{
-    game::board::GameBoard,
-    model::{
-        CandidateState, Clue, ClueType, Deduction, HorizontalClueType, PartialSolution, Tile,
-        TileAssertion, VerticalClueType,
-    },
+use crate::model::{
+    CandidateState, Clue, ClueType, Deduction, GameBoard, HorizontalClueType, PartialSolution,
+    Tile, TileAssertion, VerticalClueType,
 };
 use log::trace;
 
@@ -823,9 +820,7 @@ pub fn perform_evaluation_step(board: &mut GameBoard, clues: &Vec<Clue>) -> Eval
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::board::GameBoard;
-    use crate::game::solution::{Solution, MAX_GRID_SIZE};
-    use crate::model::{Clue, Difficulty, Tile};
+    use crate::model::{Clue, Difficulty, GameBoard, Solution, Tile, MAX_GRID_SIZE};
     use std::rc::Rc;
 
     fn create_test_solution(n_rows: usize) -> Rc<Solution> {

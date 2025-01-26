@@ -4,9 +4,7 @@ use gtk::{
 };
 use std::{rc::Rc, time::Duration};
 
-use crate::game::game_event::GameEvent;
-use crate::game::ClueSet;
-use crate::model::ClueOrientation;
+use crate::model::{ClueOrientation, ClueSet, GameEvent};
 use crate::ui::clue_ui::ClueUI;
 use crate::ui::layout::calc_clue_set_size;
 use crate::ui::ResourceSet;

@@ -1,8 +1,7 @@
-use crate::game::game_event::GameEvent;
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
-use crate::model::Difficulty;
+use crate::model::{Difficulty, GameEvent};
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use glib::timeout_add_local_once;

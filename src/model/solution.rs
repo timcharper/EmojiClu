@@ -5,10 +5,11 @@ use crate::model::{Difficulty, Tile};
 use log::trace;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use serde::{Deserialize, Serialize};
 
 pub const MAX_GRID_SIZE: usize = 8;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Solution {
     pub variants: Vec<char>,
     pub variants_range: RangeInclusive<char>,

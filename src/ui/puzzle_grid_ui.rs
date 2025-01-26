@@ -4,7 +4,7 @@ use gtk::{
 };
 use std::rc::Rc;
 
-use crate::game::solution::Solution;
+use crate::model::Solution;
 
 use super::{layout::SPACING_LARGE, puzzle_cell_ui::PuzzleCellUI, ResourceSet};
 
