@@ -256,52 +256,46 @@ impl ClueGeneratorState {
         revealed_tiles.into_iter().for_each(|t| {
             board.select_tile_from_solution(t);
         });
-        // simulate solving the board from scratch. Remove any unused clues
-        for _ in 0..=1 {
-            let mut board = board.clone();
-            // once forward, once backwards
-            self.clues.reverse();
 
-            trace!(
-                target: "clue_generator",
-                "Beginning prune; Initial board: {:?}",
-                board
-            );
-            let mut used_clues = HashSet::new();
+        let original_clue_count = self.clues.len();
 
-            while !board.is_complete() {
-                board.auto_solve_all();
-                let result = perform_evaluation_step(&mut board, &self.clues);
-                match result {
-                    EvaluationStepResult::Nothing => break,
-                    EvaluationStepResult::HiddenPairsFound => {}
-                    EvaluationStepResult::DeductionsFound(clue) => {
-                        trace!(
-                            target: "clue_generator",
-                            "Used clue {:?}; current board: {:?}",
-                            clue,
-                            board
-                        );
-                        used_clues.insert(clue.clone());
-                    }
-                }
+        // Try removing each clue one at a time
+        let mut i = 0;
+        while i < self.clues.len() {
+            let clue = self.clues.remove(i);
+            let mut test_board = board.clone();
+
+            // Try solving without this clue
+            while perform_evaluation_step(&mut test_board, &self.clues)
+                != EvaluationStepResult::Nothing
+            {
+                test_board.auto_solve_all();
             }
-            if !board.is_complete() {
-                panic!("Failed to solve board!");
-            }
-            info!(
-                target: "clue_generator",
-                "Used {} / {} clues to solve the puzzle",
-                used_clues.len(),
-                self.clues.len()
-            );
 
-            trace!(
-                target: "clue_generator",
-                "Board after solving: {:?}",
-                board
-            );
-            self.clues.retain(|c| used_clues.contains(c));
+            if !test_board.is_complete() {
+                trace!(
+                    target: "clue_generator",
+                    "Board wasn't solvable without clue {:?}; keeping it",
+                    clue
+                );
+                trace!(
+                    target: "clue_generator",
+                    "Board state: {:?}",
+                    test_board
+                );
+                // Board wasn't solvable without this clue, put it back
+                self.clues.insert(i, clue);
+                i += 1;
+            }
+            // If board was solvable without the clue, leave it removed and don't increment i
+            // since we need to test the next clue at the same index
         }
+
+        info!(
+            target: "clue_generator",
+            "Deep prune reduced clues from {} to {} clues",
+            original_clue_count,
+            self.clues.len()
+        );
     }
 }
