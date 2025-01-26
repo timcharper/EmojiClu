@@ -10,7 +10,7 @@ use super::stats_manager::GameStats;
 use super::{deduce_clue, generate_clues};
 use crate::events::{EventEmitter, EventObserver};
 use crate::model::{
-    CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameBoard, GameEvent,
+    CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameActionEvent, GameBoard,
     Solution, TimerState,
 };
 use crate::ui::clue_set_ui::ClueSetUI;
@@ -136,17 +136,17 @@ impl GameState {
         undo_button: &Rc<gtk::Button>,
         redo_button: &Rc<gtk::Button>,
         resources: &Rc<ResourceSet>,
-        game_event_emitter: EventEmitter<GameEvent>,
-        game_event_observer: EventObserver<GameEvent>,
+        game_action_emitter: EventEmitter<GameActionEvent>,
+        game_action_observer: EventObserver<GameActionEvent>,
     ) -> Rc<RefCell<Self>> {
         let board_set = GameBoardSet::default();
         let puzzle_grid_ui = PuzzleGridUI::new(
-            game_event_emitter.clone(),
+            game_action_emitter.clone(),
             &resources,
             board_set.board.solution.n_rows,
             board_set.board.solution.n_variants,
         );
-        let clue_set_ui = ClueSetUI::new(game_event_emitter.clone(), resources);
+        let clue_set_ui = ClueSetUI::new(game_action_emitter.clone(), resources);
         let game_info = GameInfoUI::new();
         let timer_state = TimerState::default();
         let game_state = Self {
@@ -172,15 +172,15 @@ impl GameState {
             timer_state,
         };
         let refcell = Rc::new(RefCell::new(game_state));
-        GameState::wire_subscription(refcell.clone(), game_event_observer.clone());
+        GameState::wire_subscription(refcell.clone(), game_action_observer.clone());
         refcell
     }
 
     fn wire_subscription(
         game_state: Rc<RefCell<Self>>,
-        game_event_emitter: EventObserver<GameEvent>,
+        game_action_emitter: EventObserver<GameActionEvent>,
     ) {
-        game_event_emitter.subscribe(move |event| {
+        game_action_emitter.subscribe(move |event| {
             let mut game_state = game_state.borrow_mut();
             game_state.handle_event(event.clone());
         });
@@ -320,31 +320,37 @@ impl GameState {
         }
     }
 
-    pub fn handle_event(&mut self, event: GameEvent) {
+    pub fn handle_event(&mut self, event: GameActionEvent) {
         log::trace!(target: "game_state", "Handling event: {:?}", event);
         match event {
-            GameEvent::CellClick(row, col, variant) => self.handle_cell_click(row, col, variant),
-            GameEvent::CellRightClick(row, col, variant) => {
+            GameActionEvent::CellClick(row, col, variant) => {
+                self.handle_cell_click(row, col, variant)
+            }
+            GameActionEvent::CellRightClick(row, col, variant) => {
                 self.handle_cell_right_click(row, col, variant)
             }
-            GameEvent::HorizontalClueClick(clue_idx) => self.handle_horizontal_clue_click(clue_idx),
-            GameEvent::VerticalClueClick(clue_idx) => self.handle_vertical_clue_click(clue_idx),
-            GameEvent::NewGame(rows) => self.new_game(rows),
-            GameEvent::InitDisplay => {
+            GameActionEvent::HorizontalClueClick(clue_idx) => {
+                self.handle_horizontal_clue_click(clue_idx)
+            }
+            GameActionEvent::VerticalClueClick(clue_idx) => {
+                self.handle_vertical_clue_click(clue_idx)
+            }
+            GameActionEvent::NewGame(rows) => self.new_game(rows),
+            GameActionEvent::InitDisplay => {
                 self.sync_board_display();
                 self.sync_clues_completion_state();
             }
-            GameEvent::Solve => self.try_solve(),
-            GameEvent::RewindLastGood => self.rewind_last_good(),
-            GameEvent::IncrementHintsUsed => self.increment_hints_used(),
-            GameEvent::ShowHint => {
+            GameActionEvent::Solve => self.try_solve(),
+            GameActionEvent::RewindLastGood => self.rewind_last_good(),
+            GameActionEvent::IncrementHintsUsed => self.increment_hints_used(),
+            GameActionEvent::ShowHint => {
                 self.show_hint();
             }
-            GameEvent::Undo => self.undo(),
-            GameEvent::Redo => self.redo(),
-            GameEvent::Pause => self.pause_game(),
-            GameEvent::Resume => self.resume_game(),
-            GameEvent::Quit => (),
+            GameActionEvent::Undo => self.undo(),
+            GameActionEvent::Redo => self.redo(),
+            GameActionEvent::Pause => self.pause_game(),
+            GameActionEvent::Resume => self.resume_game(),
+            GameActionEvent::Quit => (),
         }
     }
 

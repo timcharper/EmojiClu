@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::events::EventEmitter;
-use crate::model::GameEvent;
+use crate::model::GameActionEvent;
 
 pub struct TimerButtonUI {
     pub button: Rc<Button>,
@@ -15,7 +15,7 @@ pub struct TimerButtonUI {
 impl TimerButtonUI {
     pub fn new(
         window: &Rc<ApplicationWindow>,
-        game_event_emitter: EventEmitter<GameEvent>,
+        game_action_emitter: EventEmitter<GameActionEvent>,
     ) -> Self {
         let button = Rc::new(
             Button::builder()
@@ -29,7 +29,7 @@ impl TimerButtonUI {
         button.connect_clicked(TimerButtonUI::pause_resume_handler_button(
             &_is_paused,
             &button,
-            game_event_emitter.clone(),
+            game_action_emitter.clone(),
         ));
 
         // Add pause action
@@ -37,7 +37,7 @@ impl TimerButtonUI {
         action_pause.connect_activate(TimerButtonUI::pause_resume_handler_action(
             &_is_paused,
             &button,
-            game_event_emitter.clone(),
+            game_action_emitter.clone(),
         ));
         window.add_action(&action_pause);
 
@@ -47,24 +47,24 @@ impl TimerButtonUI {
     fn pause_resume_logic(
         is_paused_ref: &Rc<RefCell<bool>>,
         button_ref: &Button,
-        game_event_emitter: EventEmitter<GameEvent>,
+        game_action_emitter: EventEmitter<GameActionEvent>,
     ) {
         let mut is_paused = is_paused_ref.borrow_mut();
         if !*is_paused {
             *is_paused = true;
             TimerButtonUI::update_button_state(&button_ref, true);
-            game_event_emitter.emit(&GameEvent::Pause);
+            game_action_emitter.emit(&GameActionEvent::Pause);
         } else {
             *is_paused = false;
             TimerButtonUI::update_button_state(&button_ref, false);
-            game_event_emitter.emit(&GameEvent::Resume);
+            game_action_emitter.emit(&GameActionEvent::Resume);
         }
     }
 
     fn pause_resume_handler_button<T>(
         is_paused_ref: &Rc<RefCell<bool>>,
         button_ref: &Rc<Button>,
-        game_event_emitter: EventEmitter<GameEvent>,
+        game_action_emitter: EventEmitter<GameActionEvent>,
     ) -> impl Fn(&T) {
         let button_ref = Rc::clone(&button_ref);
         let is_paused_ref = Rc::clone(&is_paused_ref);
@@ -72,7 +72,7 @@ impl TimerButtonUI {
             TimerButtonUI::pause_resume_logic(
                 &is_paused_ref,
                 &button_ref,
-                game_event_emitter.clone(),
+                game_action_emitter.clone(),
             )
         }
     }
@@ -80,7 +80,7 @@ impl TimerButtonUI {
     fn pause_resume_handler_action<T>(
         is_paused_ref: &Rc<RefCell<bool>>,
         button_ref: &Rc<Button>,
-        game_event_emitter: EventEmitter<GameEvent>,
+        game_action_emitter: EventEmitter<GameActionEvent>,
     ) -> impl Fn(&T, Option<&Variant>) {
         let button_ref = Rc::clone(&button_ref);
         let is_paused_ref = Rc::clone(&is_paused_ref);
@@ -88,7 +88,7 @@ impl TimerButtonUI {
             TimerButtonUI::pause_resume_logic(
                 &is_paused_ref,
                 &button_ref,
-                game_event_emitter.clone(),
+                game_action_emitter.clone(),
             )
         }
     }

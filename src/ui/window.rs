@@ -2,7 +2,7 @@ use crate::events::{Channel, EventEmitter};
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
-use crate::model::{Difficulty, GameEvent};
+use crate::model::{Difficulty, GameActionEvent};
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use glib::timeout_add_local_once;
@@ -16,7 +16,7 @@ use std::time::Duration;
 use super::ResourceSet;
 
 fn hint_button_handler(
-    game_event_emitter: EventEmitter<GameEvent>,
+    game_action_emitter: EventEmitter<GameActionEvent>,
     game_state: &Rc<RefCell<GameState>>,
     resources: &Rc<ResourceSet>,
 ) -> impl Fn(&Button) {
@@ -28,7 +28,7 @@ fn hint_button_handler(
         log::trace!(target: "window", "Handling hint button click");
         if board_is_incorrect {
             log::trace!(target: "window", "Board is incorrect, showing rewind dialog");
-            game_event_emitter.emit(&GameEvent::IncrementHintsUsed);
+            game_action_emitter.emit(&GameActionEvent::IncrementHintsUsed);
             // Play game over sound using a MediaStream
             let media = resources_hint.random_lose_sound();
             media.play();
@@ -44,18 +44,18 @@ fn hint_button_handler(
                 gtk::ButtonsType::OkCancel,
                 "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
             );
-            let game_event_emitter = game_event_emitter.clone();
+            let game_action_emitter = game_action_emitter.clone();
             dialog.connect_response(move |dialog, response| {
                 log::trace!(target: "window", "Dialog response: {:?}", response);
                 if response == gtk::ResponseType::Ok {
-                    game_event_emitter.emit(&GameEvent::RewindLastGood);
+                    game_action_emitter.emit(&GameActionEvent::RewindLastGood);
                 }
                 dialog.close();
             });
             dialog.show();
         } else {
             log::trace!(target: "window", "Board is correct, showing hint");
-            game_event_emitter.emit(&GameEvent::ShowHint);
+            game_action_emitter.emit(&GameActionEvent::ShowHint);
             button.set_sensitive(false);
             let button = button.clone();
             timeout_add_local_once(Duration::from_secs(1), move || {
@@ -67,7 +67,7 @@ fn hint_button_handler(
 }
 
 fn submit_handler(
-    game_event_emitter: EventEmitter<GameEvent>,
+    game_action_emitter: EventEmitter<GameActionEvent>,
     state_submit: &Rc<RefCell<GameState>>,
     manager_submit: &Rc<RefCell<StatsManager>>,
     resources: &Rc<ResourceSet>,
@@ -102,9 +102,9 @@ fn submit_handler(
                     .and_then(|r| r.downcast::<ApplicationWindow>().ok())
                 {
                     // Drop the mutable borrow before showing stats
-                    let game_event_emitter = game_event_emitter.clone();
+                    let game_action_emitter = game_action_emitter.clone();
                     StatsDialog::show(&window, &state, &stats_manager, Some(stats), move || {
-                        game_event_emitter.emit(&GameEvent::NewGame(grid_size));
+                        game_action_emitter.emit(&GameActionEvent::NewGame(grid_size));
                     });
                 }
             } else {
@@ -123,10 +123,10 @@ fn submit_handler(
                 let media = resources.random_lose_sound();
                 media.play();
 
-                let game_event_emitter = game_event_emitter.clone();
+                let game_action_emitter = game_action_emitter.clone();
                 dialog.connect_response(move |dialog, response| {
                     if response == gtk::ResponseType::Ok {
-                        game_event_emitter.emit(&GameEvent::RewindLastGood);
+                        game_action_emitter.emit(&GameActionEvent::RewindLastGood);
                     }
                     dialog.close();
                 });
@@ -137,7 +137,8 @@ fn submit_handler(
 }
 
 pub fn build_ui(app: &Application) {
-    let (game_event_emitter, game_event_observer) = Channel::<GameEvent>::new();
+    let (game_action_emitter, game_action_observer) = Channel::<GameActionEvent>::new();
+    // let (ui_state_emitter, ui_state_observer) = Channel::<UiState>::new();
 
     let settings = Rc::new(RefCell::new(Settings::load()));
     let resources = Rc::new(ResourceSet::new());
@@ -196,7 +197,7 @@ pub fn build_ui(app: &Application) {
     // Handle difficulty changes
     let settings_ref = Rc::clone(&settings);
     let window_ref = Rc::clone(&window);
-    let game_event_emitter_new_game = game_event_emitter.clone();
+    let game_action_emitter_new_game = game_action_emitter.clone();
     difficulty_selector.connect_selected_notify(move |selector| {
         let new_difficulty = match selector.selected() {
             0 => Difficulty::Easy,
@@ -208,7 +209,7 @@ pub fn build_ui(app: &Application) {
         settings_ref.borrow_mut().difficulty = new_difficulty;
         let _ = settings_ref.borrow().save();
         let grid_size = new_difficulty.grid_size();
-        game_event_emitter_new_game.emit(&GameEvent::NewGame(grid_size));
+        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(grid_size));
 
         // Set window to minimum size after a short delay to ensure new game is rendered
         let window_ref = Rc::clone(&window_ref);
@@ -239,8 +240,8 @@ pub fn build_ui(app: &Application) {
         &undo_button,
         &redo_button,
         &resources,
-        game_event_emitter.clone(),
-        game_event_observer.clone(),
+        game_action_emitter.clone(),
+        game_action_observer.clone(),
     );
 
     // Create left side box for timer and hints
@@ -250,7 +251,7 @@ pub fn build_ui(app: &Application) {
         .build();
 
     // Create pause button
-    let timer_button = TimerButtonUI::new(&window, game_event_emitter.clone());
+    let timer_button = TimerButtonUI::new(&window, game_action_emitter.clone());
     left_box.append(timer_button.button.as_ref());
     left_box.append(game_state.borrow().game_info.timer_label.as_ref());
     let hints_label = Label::new(Some("Hints: "));
@@ -307,21 +308,21 @@ pub fn build_ui(app: &Application) {
     // Remove the old button_box since controls are now in header
     let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
 
-    let game_event_emitter_solve = game_event_emitter.clone();
+    let game_action_emitter_solve = game_action_emitter.clone();
     solve_button.connect_clicked(move |_| {
-        game_event_emitter_solve.emit(&GameEvent::Solve);
+        game_action_emitter_solve.emit(&GameActionEvent::Solve);
     });
 
     // Connect hint button
     hint_button.connect_clicked(hint_button_handler(
-        game_event_emitter.clone(),
+        game_action_emitter.clone(),
         &game_state,
         &resources,
     ));
 
     // Wire up submit button handler
     submit_button.connect_clicked(submit_handler(
-        game_event_emitter.clone(),
+        game_action_emitter.clone(),
         &game_state,
         &stats_manager,
         &resources,
@@ -337,7 +338,7 @@ pub fn build_ui(app: &Application) {
     let initial_size = settings.borrow().difficulty.grid_size();
     game_state
         .borrow_mut()
-        .handle_event(GameEvent::NewGame(initial_size));
+        .handle_event(GameActionEvent::NewGame(initial_size));
 
     // Add CSS for selected cells
     let provider = gtk::CssProvider::new();
@@ -367,16 +368,16 @@ pub fn build_ui(app: &Application) {
 
     // Add actions for keyboard shortcuts and menu items
     let action_undo = gtk::gio::SimpleAction::new("undo", None);
-    let game_event_emitter_undo = game_event_emitter.clone();
+    let game_action_emitter_undo = game_action_emitter.clone();
     action_undo.connect_activate(move |_, _| {
-        game_event_emitter_undo.emit(&GameEvent::Undo);
+        game_action_emitter_undo.emit(&GameActionEvent::Undo);
     });
     window.add_action(&action_undo);
 
     let action_redo = gtk::gio::SimpleAction::new("redo", None);
-    let game_event_emitter_redo = game_event_emitter.clone();
+    let game_action_emitter_redo = game_action_emitter.clone();
     action_redo.connect_activate(move |_, _| {
-        game_event_emitter_redo.emit(&GameEvent::Redo);
+        game_action_emitter_redo.emit(&GameActionEvent::Redo);
     });
     window.add_action(&action_redo);
 
@@ -387,11 +388,11 @@ pub fn build_ui(app: &Application) {
     // Add new game action that uses current difficulty
     let action_new_game = gtk::gio::SimpleAction::new("new-game", None);
     let settings_ref: Rc<RefCell<Settings>> = Rc::clone(&settings);
-    let game_event_emitter_new_game = game_event_emitter.clone();
+    let game_action_emitter_new_game = game_action_emitter.clone();
     action_new_game.connect_activate(move |_, _| {
         let difficulty = settings_ref.borrow().difficulty;
         let grid_size = difficulty.grid_size();
-        game_event_emitter_new_game.emit(&GameEvent::NewGame(grid_size));
+        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(grid_size));
     });
     window.add_action(&action_new_game);
 

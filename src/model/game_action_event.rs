@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-pub enum GameEvent {
+pub enum GameActionEvent {
     CellClick(usize, usize, Option<char>),
     CellRightClick(usize, usize, Option<char>),
     HorizontalClueClick(usize), // clue_idx
