@@ -1,17 +1,17 @@
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
+use crate::events::EventEmitter;
 use crate::model::{Candidate, CandidateState, GameEvent, Tile};
 use crate::ui::layout::{CANDIDATE_IMG_SIZE, CELL_SPACING, FRAME_MARGIN};
 use glib::timeout_add_local_once;
-use gtk::{prelude::*, ApplicationWindow};
+use gtk::prelude::*;
 use gtk::{Frame, Grid, Image, Overlay};
 use log::trace;
 
 use super::layout::CELL_SIZE;
 use super::ResourceSet;
 
-#[derive(Debug)]
 pub struct PuzzleCellUI {
     pub frame: Frame,
     pub candidates_grid: Grid,                 // 2x3 grid for candidates
@@ -22,7 +22,7 @@ pub struct PuzzleCellUI {
     pub resources: Rc<ResourceSet>,
     pub row: usize,
     pub col: usize,
-    pub window: Rc<ApplicationWindow>,
+    pub game_event_emitter: EventEmitter<GameEvent>,
     pub _variants: RangeInclusive<char>,
     pub n_variants: usize,
 }
@@ -42,7 +42,7 @@ impl PuzzleCellUI {
 
     pub fn new(
         resources: &Rc<ResourceSet>,
-        window: &Rc<ApplicationWindow>,
+        game_event_emitter: EventEmitter<GameEvent>,
         variants: RangeInclusive<char>,
         row: usize,
         col: usize,
@@ -137,7 +137,7 @@ impl PuzzleCellUI {
             resources: Rc::clone(resources),
             row,
             col,
-            window: Rc::clone(window),
+            game_event_emitter: game_event_emitter,
             n_variants,
         };
         instance.register_click_handler();
@@ -152,19 +152,19 @@ impl PuzzleCellUI {
         // Left click handler
         let gesture_click = gtk::GestureClick::new();
         gesture_click.set_button(1);
-        let window = Rc::clone(&self.window);
+        let game_event_emitter = self.game_event_emitter.clone();
         gesture_click.connect_pressed(move |_gesture, _, x, y| {
             let variant = PuzzleCellUI::get_variant_at_position(x, y, n_variants);
-            GameEvent::dispatch_event(&window, GameEvent::CellClick(row, col, variant));
+            game_event_emitter.emit(&GameEvent::CellClick(row, col, variant));
         });
 
         // Right click handler
         let gesture_right = gtk::GestureClick::new();
         gesture_right.set_button(3);
-        let window = Rc::clone(&self.window);
+        let game_event_emitter = self.game_event_emitter.clone();
         gesture_right.connect_pressed(move |_gesture, _, x, y| {
             let variant = PuzzleCellUI::get_variant_at_position(x, y, n_variants);
-            GameEvent::dispatch_event(&window, GameEvent::CellRightClick(row, col, variant));
+            game_event_emitter.emit(&GameEvent::CellRightClick(row, col, variant));
         });
 
         self.frame.add_controller(gesture_click);

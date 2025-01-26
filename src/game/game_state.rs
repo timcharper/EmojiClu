@@ -1,6 +1,7 @@
 use gtk::prelude::WidgetExt;
 use gtk::ApplicationWindow;
 use log::trace;
+use std::cell::RefCell;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -8,6 +9,7 @@ use super::clue_generator::ClueGeneratorResult;
 use super::solver::{deduce_hidden_pairs, perform_evaluation_step, EvaluationStepResult};
 use super::stats_manager::GameStats;
 use super::{deduce_clue, generate_clues};
+use crate::events::{EventEmitter, EventObserver};
 use crate::model::{
     CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameBoard, GameEvent,
     Solution, TimerState,
@@ -116,24 +118,40 @@ impl GameState {
         }
     }
 
+    /*
+       let game_state_ref = Rc::clone(&game_state);
+       action.connect_activate(move |_, variant| {
+           if let Some(variant) = variant {
+               if let Some(event) = GameEvent::from_variant(variant) {
+                   if let Ok(mut state) = game_state_ref.try_borrow_mut() {
+                       state.handle_event(event);
+                   } else {
+                       log::error!("Failed to borrow game state");
+                   }
+               }
+           }
+       });
+       window.add_action(&action);
+    */
     pub fn new(
         submit_button: &Rc<gtk::Button>,
         undo_button: &Rc<gtk::Button>,
         redo_button: &Rc<gtk::Button>,
-        window: &Rc<ApplicationWindow>,
         resources: &Rc<ResourceSet>,
-    ) -> Self {
+        game_event_emitter: EventEmitter<GameEvent>,
+        game_event_observer: EventObserver<GameEvent>,
+    ) -> Rc<RefCell<Self>> {
         let board_set = GameBoardSet::default();
         let puzzle_grid_ui = PuzzleGridUI::new(
-            &window,
+            game_event_emitter.clone(),
             &resources,
             board_set.board.solution.n_rows,
             board_set.board.solution.n_variants,
         );
-        let clue_set_ui = ClueSetUI::new(window, resources);
+        let clue_set_ui = ClueSetUI::new(game_event_emitter.clone(), resources);
         let game_info = GameInfoUI::new();
         let timer_state = TimerState::default();
-        Self {
+        let game_state = Self {
             game_info,
             clue_set: board_set.clue_set.clone(),
             history: vec![Rc::new(board_set.board.clone())],
@@ -154,7 +172,20 @@ impl GameState {
             redo_button: Rc::clone(redo_button),
             is_paused: false,
             timer_state,
-        }
+        };
+        let refcell = Rc::new(RefCell::new(game_state));
+        GameState::wire_subscription(refcell.clone(), game_event_observer.clone());
+        refcell
+    }
+
+    fn wire_subscription(
+        game_state: Rc<RefCell<Self>>,
+        game_event_emitter: EventObserver<GameEvent>,
+    ) {
+        game_event_emitter.subscribe(move |event| {
+            let mut game_state = game_state.borrow_mut();
+            game_state.handle_event(event.clone());
+        });
     }
 
     fn new_game(&mut self, n_rows: usize) {

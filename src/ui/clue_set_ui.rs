@@ -4,10 +4,13 @@ use gtk::{
 };
 use std::{rc::Rc, time::Duration};
 
-use crate::model::{ClueOrientation, ClueSet, GameEvent};
 use crate::ui::clue_ui::ClueUI;
 use crate::ui::layout::calc_clue_set_size;
 use crate::ui::ResourceSet;
+use crate::{
+    events::EventEmitter,
+    model::{ClueOrientation, ClueSet, GameEvent},
+};
 use crate::{
     game::clue_generator::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
     model::ClueWithGrouping,
@@ -21,13 +24,13 @@ pub struct ClueSetUI {
     pub vertical_grid: Grid,
     horizontal_clue_uis: Vec<ClueUI>,
     vertical_clue_uis: Vec<ClueUI>,
-    window: Rc<ApplicationWindow>,
+    game_event_emitter: EventEmitter<GameEvent>,
     resources: Rc<ResourceSet>,
 }
 
 // Parent widget for both horizontal clues and vertical clues
 impl ClueSetUI {
-    pub fn new(window: &Rc<ApplicationWindow>, resources: &Rc<ResourceSet>) -> Self {
+    pub fn new(game_event_emitter: EventEmitter<GameEvent>, resources: &Rc<ResourceSet>) -> Self {
         let horizontal_clues_grid = Grid::new();
         horizontal_clues_grid.set_row_spacing(0);
         horizontal_clues_grid.set_column_spacing(10);
@@ -52,7 +55,7 @@ impl ClueSetUI {
             vertical_grid: vertical_clues_grid,
             horizontal_clue_uis: Vec::with_capacity(MAX_HORIZ_CLUES),
             vertical_clue_uis: Vec::with_capacity(MAX_VERT_CLUES),
-            window: Rc::clone(window),
+            game_event_emitter: game_event_emitter,
             resources: Rc::clone(resources),
         };
 
@@ -85,22 +88,22 @@ impl ClueSetUI {
     fn wire_clue_handlers(&self) {
         // Wire up horizontal clue handlers
         for (clue_idx, clue_set) in self.horizontal_clue_uis.iter().enumerate() {
-            let window_ref = Rc::clone(&self.window);
+            let game_event_emitter = self.game_event_emitter.clone();
             let gesture_right = gtk::GestureClick::new();
             gesture_right.set_button(3);
             gesture_right.connect_pressed(move |_gesture, _, _, _| {
-                GameEvent::dispatch_event(&window_ref, GameEvent::HorizontalClueClick(clue_idx));
+                game_event_emitter.emit(&GameEvent::HorizontalClueClick(clue_idx));
             });
             clue_set.frame.add_controller(gesture_right);
         }
 
         // Wire up vertical clue handlers
         for (clue_idx, clue_set) in self.vertical_clue_uis.iter().enumerate() {
-            let window_ref = Rc::clone(&self.window);
+            let game_event_emitter = self.game_event_emitter.clone();
             let gesture_right = gtk::GestureClick::new();
             gesture_right.set_button(3);
             gesture_right.connect_pressed(move |_gesture, _, _, _| {
-                GameEvent::dispatch_event(&window_ref, GameEvent::VerticalClueClick(clue_idx));
+                game_event_emitter.emit(&GameEvent::VerticalClueClick(clue_idx));
             });
             clue_set.frame.add_controller(gesture_right);
         }

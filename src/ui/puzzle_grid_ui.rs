@@ -4,7 +4,10 @@ use gtk::{
 };
 use std::rc::Rc;
 
-use crate::model::Solution;
+use crate::{
+    events::EventEmitter,
+    model::{GameEvent, Solution},
+};
 
 use super::{layout::SPACING_LARGE, puzzle_cell_ui::PuzzleCellUI, ResourceSet};
 
@@ -14,13 +17,13 @@ pub struct PuzzleGridUI {
     pub grid: gtk::Grid,
     pub pause_label: gtk::Label,
     pub cells: Vec<Vec<PuzzleCellUI>>,
-    _window: Rc<ApplicationWindow>,
+    game_event_emitter: EventEmitter<GameEvent>,
     resources: Rc<ResourceSet>,
 }
 
 impl PuzzleGridUI {
     pub fn new(
-        window: &Rc<ApplicationWindow>,
+        game_event_emitter: EventEmitter<GameEvent>,
         resources: &Rc<ResourceSet>,
         n_rows: usize,
         n_cols: usize,
@@ -40,7 +43,7 @@ impl PuzzleGridUI {
             cells: vec![vec![]],
             n_rows: 0,
             n_cols: 0,
-            _window: Rc::clone(window),
+            game_event_emitter: game_event_emitter,
             resources: Rc::clone(resources),
         };
         puzzle_grid.grid.set_row_spacing(SPACING_LARGE as u32);
@@ -71,7 +74,7 @@ impl PuzzleGridUI {
             for col in 0..n_cols {
                 let cell_ui = PuzzleCellUI::new(
                     &self.resources,
-                    &self._window,
+                    self.game_event_emitter.clone(),
                     variants_range.clone(),
                     row,
                     col,

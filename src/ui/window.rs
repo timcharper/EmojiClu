@@ -1,3 +1,4 @@
+use crate::events::{Channel, EventEmitter};
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
@@ -15,11 +16,10 @@ use std::time::Duration;
 use super::ResourceSet;
 
 fn hint_button_handler(
-    window_ref: &Rc<ApplicationWindow>,
+    game_event_emitter: EventEmitter<GameEvent>,
     game_state: &Rc<RefCell<GameState>>,
     resources: &Rc<ResourceSet>,
 ) -> impl Fn(&Button) {
-    let window_ref = Rc::clone(&window_ref);
     let game_state = Rc::clone(&game_state);
     let resources_hint = Rc::clone(&resources);
 
@@ -28,7 +28,7 @@ fn hint_button_handler(
         log::trace!(target: "window", "Handling hint button click");
         if board_is_incorrect {
             log::trace!(target: "window", "Board is incorrect, showing rewind dialog");
-            GameEvent::dispatch_event(&window_ref, GameEvent::IncrementHintsUsed);
+            game_event_emitter.emit(&GameEvent::IncrementHintsUsed);
             // Play game over sound using a MediaStream
             let media = resources_hint.random_lose_sound();
             media.play();
@@ -44,18 +44,18 @@ fn hint_button_handler(
                 gtk::ButtonsType::OkCancel,
                 "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
             );
-            let window_ref = Rc::clone(&window_ref);
+            let game_event_emitter = game_event_emitter.clone();
             dialog.connect_response(move |dialog, response| {
                 log::trace!(target: "window", "Dialog response: {:?}", response);
                 if response == gtk::ResponseType::Ok {
-                    GameEvent::dispatch_event(&window_ref, GameEvent::RewindLastGood);
+                    game_event_emitter.emit(&GameEvent::RewindLastGood);
                 }
                 dialog.close();
             });
             dialog.show();
         } else {
             log::trace!(target: "window", "Board is correct, showing hint");
-            GameEvent::dispatch_event(&window_ref, GameEvent::ShowHint);
+            game_event_emitter.emit(&GameEvent::ShowHint);
             button.set_sensitive(false);
             let button = button.clone();
             timeout_add_local_once(Duration::from_secs(1), move || {
@@ -67,7 +67,7 @@ fn hint_button_handler(
 }
 
 fn submit_handler(
-    window_ref: &Rc<ApplicationWindow>,
+    game_event_emitter: EventEmitter<GameEvent>,
     state_submit: &Rc<RefCell<GameState>>,
     manager_submit: &Rc<RefCell<StatsManager>>,
     resources: &Rc<ResourceSet>,
@@ -75,7 +75,6 @@ fn submit_handler(
     let state_submit = Rc::clone(&state_submit);
     let manager_submit = Rc::clone(&manager_submit);
     let resources = Rc::clone(&resources);
-    let window_ref = Rc::clone(&window_ref);
 
     move |button| {
         let state = state_submit.try_borrow().ok().and_then(|gs| {
@@ -103,9 +102,9 @@ fn submit_handler(
                     .and_then(|r| r.downcast::<ApplicationWindow>().ok())
                 {
                     // Drop the mutable borrow before showing stats
-                    let window_ref = Rc::clone(&window_ref);
+                    let game_event_emitter = game_event_emitter.clone();
                     StatsDialog::show(&window, &state, &stats_manager, Some(stats), move || {
-                        GameEvent::dispatch_event(&window_ref, GameEvent::NewGame(grid_size));
+                        game_event_emitter.emit(&GameEvent::NewGame(grid_size));
                     });
                 }
             } else {
@@ -124,10 +123,10 @@ fn submit_handler(
                 let media = resources.random_lose_sound();
                 media.play();
 
-                let window_ref = Rc::clone(&window_ref);
+                let game_event_emitter = game_event_emitter.clone();
                 dialog.connect_response(move |dialog, response| {
                     if response == gtk::ResponseType::Ok {
-                        GameEvent::dispatch_event(&window_ref, GameEvent::RewindLastGood);
+                        game_event_emitter.emit(&GameEvent::RewindLastGood);
                     }
                     dialog.close();
                 });
@@ -138,6 +137,8 @@ fn submit_handler(
 }
 
 pub fn build_ui(app: &Application) {
+    let (game_event_emitter, game_event_observer) = Channel::<GameEvent>::new();
+
     let settings = Rc::new(RefCell::new(Settings::load()));
     let resources = Rc::new(ResourceSet::new());
     let window = Rc::new(
@@ -195,6 +196,7 @@ pub fn build_ui(app: &Application) {
     // Handle difficulty changes
     let settings_ref = Rc::clone(&settings);
     let window_ref = Rc::clone(&window);
+    let game_event_emitter_new_game = game_event_emitter.clone();
     difficulty_selector.connect_selected_notify(move |selector| {
         let new_difficulty = match selector.selected() {
             0 => Difficulty::Easy,
@@ -206,7 +208,7 @@ pub fn build_ui(app: &Application) {
         settings_ref.borrow_mut().difficulty = new_difficulty;
         let _ = settings_ref.borrow().save();
         let grid_size = new_difficulty.grid_size();
-        GameEvent::dispatch_event(&window_ref, GameEvent::NewGame(grid_size));
+        game_event_emitter_new_game.emit(&GameEvent::NewGame(grid_size));
 
         // Set window to minimum size after a short delay to ensure new game is rendered
         let window_ref = Rc::clone(&window_ref);
@@ -232,13 +234,14 @@ pub fn build_ui(app: &Application) {
     hint_button.set_tooltip_text(Some("Show Hint"));
 
     // Create game state first to know how many clue cells we need
-    let game_state = Rc::new(RefCell::new(GameState::new(
+    let game_state = GameState::new(
         &submit_button,
         &undo_button,
         &redo_button,
-        &window,
         &resources,
-    )));
+        game_event_emitter.clone(),
+        game_event_observer.clone(),
+    );
 
     // Create left side box for timer and hints
     let left_box = gtk::Box::builder()
@@ -247,7 +250,7 @@ pub fn build_ui(app: &Application) {
         .build();
 
     // Create pause button
-    let timer_button = TimerButtonUI::new(&window);
+    let timer_button = TimerButtonUI::new(&window, game_event_emitter.clone());
     left_box.append(timer_button.button.as_ref());
     left_box.append(game_state.borrow().game_info.timer_label.as_ref());
     let hints_label = Label::new(Some("Hints: "));
@@ -304,18 +307,21 @@ pub fn build_ui(app: &Application) {
     // Remove the old button_box since controls are now in header
     let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
 
-    let window_ref = Rc::clone(&window);
+    let game_event_emitter_solve = game_event_emitter.clone();
     solve_button.connect_clicked(move |_| {
-        GameEvent::dispatch_event(&window_ref, GameEvent::Solve);
+        game_event_emitter_solve.emit(&GameEvent::Solve);
     });
 
     // Connect hint button
-    let window_ref = Rc::clone(&window);
-    hint_button.connect_clicked(hint_button_handler(&window_ref, &game_state, &resources));
+    hint_button.connect_clicked(hint_button_handler(
+        game_event_emitter.clone(),
+        &game_state,
+        &resources,
+    ));
 
     // Wire up submit button handler
     submit_button.connect_clicked(submit_handler(
-        &window,
+        game_event_emitter.clone(),
         &game_state,
         &stats_manager,
         &resources,
@@ -326,19 +332,6 @@ pub fn build_ui(app: &Application) {
         "game-event",
         Some(&gtk::glib::VariantType::new("s").unwrap()),
     );
-    let game_state_ref = Rc::clone(&game_state);
-    action.connect_activate(move |_, variant| {
-        if let Some(variant) = variant {
-            if let Some(event) = GameEvent::from_variant(variant) {
-                if let Ok(mut state) = game_state_ref.try_borrow_mut() {
-                    state.handle_event(event);
-                } else {
-                    log::error!("Failed to borrow game state");
-                }
-            }
-        }
-    });
-    window.add_action(&action);
 
     // Initialize game with saved difficulty
     let initial_size = settings.borrow().difficulty.grid_size();
@@ -374,16 +367,16 @@ pub fn build_ui(app: &Application) {
 
     // Add actions for keyboard shortcuts and menu items
     let action_undo = gtk::gio::SimpleAction::new("undo", None);
-    let window_ref = Rc::clone(&window);
+    let game_event_emitter_undo = game_event_emitter.clone();
     action_undo.connect_activate(move |_, _| {
-        GameEvent::dispatch_event(&window_ref, GameEvent::Undo);
+        game_event_emitter_undo.emit(&GameEvent::Undo);
     });
     window.add_action(&action_undo);
 
     let action_redo = gtk::gio::SimpleAction::new("redo", None);
-    let window_ref = Rc::clone(&window);
+    let game_event_emitter_redo = game_event_emitter.clone();
     action_redo.connect_activate(move |_, _| {
-        GameEvent::dispatch_event(&window_ref, GameEvent::Redo);
+        game_event_emitter_redo.emit(&GameEvent::Redo);
     });
     window.add_action(&action_redo);
 
@@ -393,12 +386,12 @@ pub fn build_ui(app: &Application) {
 
     // Add new game action that uses current difficulty
     let action_new_game = gtk::gio::SimpleAction::new("new-game", None);
-    let window_ref = Rc::clone(&window);
     let settings_ref: Rc<RefCell<Settings>> = Rc::clone(&settings);
+    let game_event_emitter_new_game = game_event_emitter.clone();
     action_new_game.connect_activate(move |_, _| {
         let difficulty = settings_ref.borrow().difficulty;
         let grid_size = difficulty.grid_size();
-        GameEvent::dispatch_event(&window_ref, GameEvent::NewGame(grid_size));
+        game_event_emitter_new_game.emit(&GameEvent::NewGame(grid_size));
     });
     window.add_action(&action_new_game);
 

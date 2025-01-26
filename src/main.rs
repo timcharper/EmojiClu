@@ -1,8 +1,10 @@
+mod events;
 mod game;
 mod model;
 mod ui;
 
 use gio::glib::Bytes;
+
 use gtk::prelude::*;
 use gtk::Application;
 
