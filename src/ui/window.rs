@@ -3,7 +3,7 @@ use crate::events::{Channel, EventEmitter};
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
-use crate::model::{Difficulty, GameActionEvent, GameStateEvent};
+use crate::model::{Difficulty, GameActionEvent, GameStateEvent, SettingsEvent};
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
@@ -145,6 +145,7 @@ fn submit_handler(
 pub fn build_ui(app: &Application) {
     let (game_action_emitter, game_action_observer) = Channel::<GameActionEvent>::new();
     let (game_state_emitter, game_state_observer) = Channel::<GameStateEvent>::new();
+    let (settings_emitter, settings_observer) = Channel::<SettingsEvent>::new();
 
     let settings = Rc::new(RefCell::new(Settings::load()));
     let resources = Rc::new(ResourceSet::new());
@@ -165,9 +166,14 @@ pub fn build_ui(app: &Application) {
     // Create menu model for hamburger menu
     let menu = gtk::gio::Menu::new();
 
-    // Simplified menu with single New Game option
+    // Create Settings submenu
+    let settings_menu = gtk::gio::Menu::new();
+    settings_menu.append(Some("Show Clue Tooltips"), Some("win.toggle-tooltips"));
+
+    // Add all menu items
     menu.append(Some("New Game"), Some("win.new-game"));
     menu.append(Some("Statistics"), Some("win.statistics"));
+    menu.append_submenu(Some("Settings"), &settings_menu);
     menu.append(Some("About"), Some("win.about"));
 
     // Add menu button to header bar
@@ -250,6 +256,7 @@ pub fn build_ui(app: &Application) {
     let clue_set_ui = ClueSetUI::new(
         game_action_emitter.clone(),
         game_state_observer.clone(),
+        settings_observer.clone(),
         &resources,
     );
 
@@ -441,6 +448,23 @@ pub fn build_ui(app: &Application) {
         dialog.present();
     });
     window.add_action(&action_about);
+
+    // Add toggle tooltips action
+    let action_toggle_tooltips = gtk::gio::SimpleAction::new_stateful(
+        "toggle-tooltips",
+        None,
+        &settings.borrow().clue_tooltips_enabled.to_variant(),
+    );
+    let settings_ref = Rc::clone(&settings);
+    let settings_emitter = settings_emitter.clone();
+    action_toggle_tooltips.connect_activate(move |action, _| {
+        let mut settings = settings_ref.borrow_mut();
+        settings.clue_tooltips_enabled = !settings.clue_tooltips_enabled;
+        action.set_state(&settings.clue_tooltips_enabled.to_variant());
+        let _ = settings.save();
+        settings_emitter.emit(&SettingsEvent::SettingsChanged(Rc::new(settings.clone())));
+    });
+    window.add_action(&action_toggle_tooltips);
 
     let submit_ui_cleanup = Rc::clone(&submit_ui);
     let puzzle_grid_ui_cleanup = Rc::clone(&puzzle_grid_ui);

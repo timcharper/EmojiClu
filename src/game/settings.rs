@@ -4,15 +4,17 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub difficulty: Difficulty,
+    pub clue_tooltips_enabled: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             difficulty: Difficulty::default(),
+            clue_tooltips_enabled: true,
         }
     }
 }

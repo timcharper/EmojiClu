@@ -10,7 +10,7 @@ use crate::ui::layout::calc_clue_set_size;
 use crate::ui::ResourceSet;
 use crate::{
     events::{EventEmitter, EventObserver, SubscriptionId},
-    model::{ClueOrientation, ClueSet, GameActionEvent, GameStateEvent},
+    model::{ClueOrientation, ClueSet, GameActionEvent, GameStateEvent, SettingsEvent},
 };
 use crate::{
     game::clue_generator::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
@@ -27,8 +27,10 @@ pub struct ClueSetUI {
     vertical_clue_uis: Vec<ClueUI>,
     game_action_emitter: EventEmitter<GameActionEvent>,
     resources: Rc<ResourceSet>,
-    subscription_id: Option<SubscriptionId>,
+    game_state_subscription_id: Option<SubscriptionId>,
+    settings_subscription_id: Option<SubscriptionId>,
     game_state_observer: EventObserver<GameStateEvent>,
+    settings_observer: EventObserver<SettingsEvent>,
 }
 
 impl Destroyable for ClueSetUI {
@@ -36,8 +38,11 @@ impl Destroyable for ClueSetUI {
         // Unparent all widgets
         self.horizontal_grid.unparent();
         self.vertical_grid.unparent();
-        if let Some(subscription_id) = self.subscription_id.take() {
+        if let Some(subscription_id) = self.game_state_subscription_id.take() {
             self.game_state_observer.unsubscribe(subscription_id);
+        }
+        if let Some(subscription_id) = self.settings_subscription_id.take() {
+            self.settings_observer.unsubscribe(subscription_id);
         }
     }
 }
@@ -47,6 +52,7 @@ impl ClueSetUI {
     pub fn new(
         game_action_emitter: EventEmitter<GameActionEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
+        settings_observer: EventObserver<SettingsEvent>,
         resources: &Rc<ResourceSet>,
     ) -> Rc<RefCell<Self>> {
         let horizontal_clues_grid = Grid::new();
@@ -75,25 +81,28 @@ impl ClueSetUI {
             vertical_clue_uis: Vec::with_capacity(MAX_VERT_CLUES),
             game_action_emitter: game_action_emitter,
             resources: Rc::clone(resources),
-            subscription_id: None,
+            game_state_subscription_id: None,
+            settings_subscription_id: None,
             game_state_observer: game_state_observer.clone(),
+            settings_observer: settings_observer.clone(),
         }));
 
         // Initialize clue sets
         clue_set_ui.borrow_mut().setup_clue_sets();
 
-        // Connect observer
-        Self::connect_observer(clue_set_ui.clone(), game_state_observer);
+        // Connect observers
+        Self::connect_observers(clue_set_ui.clone(), game_state_observer, settings_observer);
 
         clue_set_ui
     }
 
-    fn connect_observer(
+    fn connect_observers(
         clue_set_ui: Rc<RefCell<Self>>,
         game_state_observer: EventObserver<GameStateEvent>,
+        settings_observer: EventObserver<SettingsEvent>,
     ) {
         let clue_set_ui_moved = clue_set_ui.clone();
-        let subscription_id = game_state_observer.subscribe(move |event| match event {
+        let game_state_subscription_id = game_state_observer.subscribe(move |event| match event {
             GameStateEvent::ClueSetUpdate(clue_set) => {
                 clue_set_ui_moved.borrow().set_clues(clue_set);
             }
@@ -111,7 +120,6 @@ impl ClueSetUI {
                     clue_set_ui_moved.borrow().hide();
                 }
             }
-
             GameStateEvent::ClueVisibilityChanged {
                 horizontal_clues,
                 vertical_clues,
@@ -123,10 +131,20 @@ impl ClueSetUI {
                     .borrow()
                     .set_vert_completion(vertical_clues);
             }
-
             _ => {}
         });
-        clue_set_ui.borrow_mut().subscription_id = Some(subscription_id);
+
+        let clue_set_ui_moved = clue_set_ui.clone();
+        let settings_subscription_id = settings_observer.subscribe(move |event| match event {
+            SettingsEvent::SettingsChanged(settings) => {
+                clue_set_ui_moved
+                    .borrow()
+                    .update_tooltip_visibility(settings.clue_tooltips_enabled);
+            }
+        });
+
+        clue_set_ui.borrow_mut().game_state_subscription_id = Some(game_state_subscription_id);
+        clue_set_ui.borrow_mut().settings_subscription_id = Some(settings_subscription_id);
     }
 
     fn setup_clue_sets(&mut self) {
@@ -237,6 +255,15 @@ impl ClueSetUI {
     pub(crate) fn set_vert_completion(&self, completed_clues: &HashSet<usize>) {
         for (idx, clue_ui) in self.vertical_clue_uis.iter().enumerate() {
             clue_ui.set_completed(completed_clues.contains(&idx));
+        }
+    }
+
+    fn update_tooltip_visibility(&self, enabled: bool) {
+        for clue_ui in &self.horizontal_clue_uis {
+            clue_ui.frame.set_has_tooltip(enabled);
+        }
+        for clue_ui in &self.vertical_clue_uis {
+            clue_ui.frame.set_has_tooltip(enabled);
         }
     }
 }
