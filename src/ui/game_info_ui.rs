@@ -5,38 +5,69 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 use glib::{timeout_add_local, Continue, SourceId};
 use gtk::{prelude::WidgetExt, Label};
 
-use crate::model::TimerState;
+use crate::{
+    destroyable::Destroyable,
+    events::EventObserver,
+    model::{GameStateEvent, TimerState},
+};
 
 pub struct GameInfoUI {
     hints_used: u32,
-    timer_state: Rc<RefCell<TimerState>>,
-    pub timer_label: Rc<Label>,
-    pub hints_label: Rc<Label>,
-    timer: RefCell<Option<SourceId>>,
+    timer_state: TimerState,
+    pub timer_label: Label,
+    pub hints_label: Label,
+    timer: Option<SourceId>,
+}
+
+impl Destroyable for GameInfoUI {
+    fn destroy(&mut self) {
+        if let Some(timer) = self.timer.take() {
+            timer.remove();
+        }
+    }
 }
 
 impl GameInfoUI {
-    pub fn new() -> Self {
+    pub fn new(game_state_observer: EventObserver<GameStateEvent>) -> Rc<RefCell<Self>> {
         // Create timer label with monospace font
-        let timer_label = Rc::new(Label::new(None));
+        let timer_label = Label::new(None);
         timer_label.set_css_classes(&["timer"]);
         // Create hints label
-        let hints_label = Rc::new(Label::new(Some("0")));
+        let hints_label = Label::new(Some("0"));
         hints_label.set_css_classes(&["hints"]);
 
         // Set up timer update
         let timer_state = TimerState::default();
         GameInfoUI::update_timer_label(&timer_label, &timer_state);
 
-        let timer_state = Rc::new(RefCell::new(timer_state));
-        let mut game_info = Self {
+        let game_info = Rc::new(RefCell::new(Self {
             hints_used: 0,
             timer_state,
             timer_label,
             hints_label,
-            timer: RefCell::new(None),
-        };
-        game_info.start_timer_label_handler();
+            timer: None,
+        }));
+
+        // Set up timer handler
+        game_info
+            .borrow_mut()
+            .start_timer_label_handler(Rc::clone(&game_info));
+
+        let game_info_handler = game_info.clone();
+        game_state_observer.subscribe(move |event| match event {
+            GameStateEvent::TimerStateChanged(timer_state) => {
+                game_info_handler
+                    .borrow_mut()
+                    .update_timer_state(&timer_state);
+            }
+            GameStateEvent::HintUsageChanged(hints_used) => {
+                game_info_handler
+                    .borrow_mut()
+                    .update_hints_used(*hints_used);
+            }
+            _ => {}
+        });
+
         game_info
     }
 
@@ -47,32 +78,31 @@ impl GameInfoUI {
     }
 
     pub fn update_timer_state(&mut self, new_timer_state: &TimerState) {
-        let mut timer_state = self.timer_state.borrow_mut();
-        *timer_state = new_timer_state.clone();
-        GameInfoUI::update_timer_label(&self.timer_label, &timer_state);
-        let is_paused = timer_state.paused_timestamp.is_some();
-        drop(timer_state);
+        self.timer_state = new_timer_state.clone();
+        GameInfoUI::update_timer_label(&self.timer_label, &self.timer_state);
+        let is_paused = self.timer_state.paused_timestamp.is_some();
         if is_paused {
             self.pause_timer_label_handler();
         } else {
-            self.start_timer_label_handler();
+            let game_info = unsafe { self.get_self_rc() };
+            self.start_timer_label_handler(game_info);
         }
     }
 
     fn pause_timer_label_handler(&mut self) {
-        if let Some(timer) = self.timer.get_mut().take() {
+        if let Some(timer) = self.timer.take() {
             timer.remove();
         }
     }
 
-    fn start_timer_label_handler(&mut self) {
+    fn start_timer_label_handler(&mut self, game_info: Rc<RefCell<Self>>) {
         // time running? Do nothing.
-        if self.timer.borrow().is_none() {
+        if self.timer.is_none() {
             let timer = timeout_add_local(
                 Duration::from_secs(1),
-                GameInfoUI::timer_update_handler(&self.timer_label, &self.timer_state),
+                GameInfoUI::timer_update_handler(game_info),
             );
-            self.timer.replace(Some(timer));
+            self.timer = Some(timer);
         }
     }
 
@@ -83,16 +113,19 @@ impl GameInfoUI {
         timer_label.set_text(&format!("{:02}:{:02}", minutes, seconds));
     }
 
-    fn timer_update_handler(
-        timer_label: &Rc<Label>,
-        timer_state: &Rc<RefCell<TimerState>>,
-    ) -> impl Fn() -> Continue {
-        let timer_label = Rc::clone(&timer_label);
-        let timer_state = Rc::clone(&timer_state);
+    fn timer_update_handler(game_info: Rc<RefCell<Self>>) -> impl Fn() -> Continue {
         move || {
-            GameInfoUI::update_timer_label(timer_label.as_ref(), &timer_state.borrow());
+            let game_info = game_info.borrow();
+            GameInfoUI::update_timer_label(&game_info.timer_label, &game_info.timer_state);
             Continue(true)
         }
+    }
+
+    // SAFETY: This is only safe to call from methods that are called on a GameInfoUI that is stored in an Rc<RefCell<>>
+    unsafe fn get_self_rc(&self) -> Rc<RefCell<Self>> {
+        let ptr = self as *const Self;
+        let offset = ptr.offset(-1);
+        Rc::from_raw(offset as *const RefCell<Self>)
     }
 }
 
@@ -100,7 +133,7 @@ impl Drop for GameInfoUI {
     fn drop(&mut self) {
         log::trace!(target: "game_info_ui", "Dropping GameInfoUI");
 
-        if let Some(timer) = self.timer.get_mut().take() {
+        if let Some(timer) = self.timer.take() {
             timer.remove();
         }
     }

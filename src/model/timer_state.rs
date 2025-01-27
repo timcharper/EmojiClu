@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TimerState {
     pub paused_timestamp: Option<Instant>,
     pub paused_duration: Duration,

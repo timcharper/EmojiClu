@@ -42,19 +42,21 @@ image {
 }
 
 @keyframes highlight-clue {
-    0% { background: #f6d32d; opacity: 0.9; }
-    99% { background: #f6d32d; opacity: 0.0; }
+    0% { background: transparent; opacity: 0; }
+    50% { background: #f6d32d; opacity: 0.9; }
     100% { background: transparent; opacity: 0; }
 }
 
 .clue-highlight {
-    animation: highlight-clue 1s normal;
+    animation: highlight-clue 1s infinite;
     border: 4px solid #f6d32d;
     background: #f6d32d;
 }
 
 .clue-nohighlight {
     animation: none;
+    opacity: 0;
+    background: none;
 }
 
 .clue-overlay {

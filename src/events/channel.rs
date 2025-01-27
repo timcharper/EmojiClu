@@ -1,9 +1,11 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use log::trace;
 
 pub type Callback<T> = Rc<dyn Fn(&T)>;
+pub type SubscriptionId = u64;
 
 pub struct EventEmitter<T: std::fmt::Debug> {
     channel: Channel<T>,
@@ -20,6 +22,7 @@ impl<T: std::fmt::Debug> Clone for EventEmitter<T> {
 pub struct EventObserver<T: std::fmt::Debug> {
     channel: Channel<T>,
 }
+
 impl<T: std::fmt::Debug> Clone for EventObserver<T> {
     fn clone(&self) -> Self {
         Self {
@@ -29,22 +32,26 @@ impl<T: std::fmt::Debug> Clone for EventObserver<T> {
 }
 
 pub struct Channel<T: std::fmt::Debug> {
-    listeners: Rc<RefCell<Vec<Callback<T>>>>,
+    listeners: Rc<RefCell<HashMap<SubscriptionId, Callback<T>>>>,
+    next_id: Rc<RefCell<SubscriptionId>>,
 }
 
 impl<T: std::fmt::Debug> Clone for Channel<T> {
     fn clone(&self) -> Self {
         Self {
             listeners: Rc::clone(&self.listeners),
+            next_id: Rc::clone(&self.next_id),
         }
     }
 }
 
 impl<T: std::fmt::Debug> Channel<T> {
     pub fn new() -> (EventEmitter<T>, EventObserver<T>) {
-        let listeners = Rc::new(RefCell::new(Vec::new()));
+        let listeners = Rc::new(RefCell::new(HashMap::new()));
+        let next_id = Rc::new(RefCell::new(0));
         let channel = Channel {
             listeners: Rc::clone(&listeners),
+            next_id: Rc::clone(&next_id),
         };
         (
             EventEmitter {
@@ -56,18 +63,28 @@ impl<T: std::fmt::Debug> Channel<T> {
         )
     }
 
-    pub fn subscribe<F>(&self, callback: F)
+    pub fn subscribe<F>(&self, callback: F) -> SubscriptionId
     where
         F: Fn(&T) + 'static,
     {
-        self.listeners.borrow_mut().push(Rc::new(callback));
+        let id = {
+            let mut next_id = self.next_id.borrow_mut();
+            let id = *next_id;
+            *next_id += 1;
+            id
+        };
+        self.listeners.borrow_mut().insert(id, Rc::new(callback));
+        id
+    }
+
+    pub fn unsubscribe(&self, id: SubscriptionId) -> bool {
+        self.listeners.borrow_mut().remove(&id).is_some()
     }
 
     pub fn emit(&self, data: &T) {
-        trace!(target: "events", "Emitting event: {:?}", data);
-        let listeners = self.listeners.borrow().clone();
-        for listener in listeners.iter() {
-            trace!(target: "events", "Receiving event: {:?}", data);
+        let listeners = self.listeners.borrow();
+        trace!(target: "events", "Emitting event to {} listeners: {:?}", listeners.len(), data);
+        for listener in listeners.values() {
             listener(data);
         }
     }
@@ -84,11 +101,15 @@ impl<T: std::fmt::Debug> EventEmitter<T> {
 }
 
 impl<T: std::fmt::Debug> EventObserver<T> {
-    pub fn subscribe<F>(&self, callback: F)
+    pub fn subscribe<F>(&self, callback: F) -> SubscriptionId
     where
         F: Fn(&T) + 'static,
     {
-        self.channel.subscribe(callback);
+        self.channel.subscribe(callback)
+    }
+
+    pub fn unsubscribe(&self, id: SubscriptionId) -> bool {
+        self.channel.unsubscribe(id)
     }
 }
 
@@ -157,5 +178,27 @@ mod tests {
         // Emit using first emitter
         emitter1.emit(&42);
         assert_eq!(counter.get(), 3); // Two listeners, each adding 1
+    }
+
+    #[test]
+    fn test_unsubscribe() {
+        let (emitter, observer) = Channel::<i32>::new();
+        let counter = Rc::new(Cell::new(0));
+        let counter_clone = counter.clone();
+
+        let sub_id = observer.subscribe(move |_data: &i32| {
+            counter_clone.set(counter_clone.get() + 1);
+        });
+
+        emitter.emit(&42);
+        assert_eq!(counter.get(), 1);
+
+        // Unsubscribe and verify no more updates
+        assert!(observer.unsubscribe(sub_id));
+        emitter.emit(&42);
+        assert_eq!(counter.get(), 1);
+
+        // Trying to unsubscribe again should return false
+        assert!(!observer.unsubscribe(sub_id));
     }
 }

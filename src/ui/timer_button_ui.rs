@@ -1,96 +1,63 @@
-use gtk::glib::Variant;
 use gtk::prelude::*;
 use gtk::{ApplicationWindow, Button};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::model::GameActionEvent;
 
 pub struct TimerButtonUI {
-    pub button: Rc<Button>,
-    _is_paused: Rc<RefCell<bool>>,
+    pub button: Button,
+    is_paused: bool,
+    game_action_emitter: EventEmitter<GameActionEvent>,
+}
+
+impl Destroyable for TimerButtonUI {
+    fn destroy(&mut self) {}
 }
 
 impl TimerButtonUI {
     pub fn new(
         window: &Rc<ApplicationWindow>,
         game_action_emitter: EventEmitter<GameActionEvent>,
-    ) -> Self {
-        let button = Rc::new(
-            Button::builder()
-                .label("⏸︎")
-                .css_classes(["timer-control"])
-                .build(),
-        );
-        let _is_paused = Rc::new(RefCell::new(false));
+    ) -> Rc<RefCell<Self>> {
+        let button = Button::builder()
+            .label("⏸︎")
+            .css_classes(["timer-control"])
+            .action_name("win.pause")
+            .build();
         button.set_tooltip_text(Some("Pause Game (Space)"));
 
-        button.connect_clicked(TimerButtonUI::pause_resume_handler_button(
-            &_is_paused,
-            &button,
-            game_action_emitter.clone(),
-        ));
+        let timer_button_ui = Rc::new(RefCell::new(Self {
+            button,
+            is_paused: false,
+            game_action_emitter,
+        }));
 
-        // Add pause action
         let action_pause = gtk::gio::SimpleAction::new("pause", None);
-        action_pause.connect_activate(TimerButtonUI::pause_resume_handler_action(
-            &_is_paused,
-            &button,
-            game_action_emitter.clone(),
-        ));
+
+        {
+            let timer_button_ui = timer_button_ui.clone();
+            action_pause.connect_activate(move |_, _| {
+                let mut timer_button_ui = timer_button_ui.borrow_mut();
+                timer_button_ui.toggle_pause();
+            });
+        }
         window.add_action(&action_pause);
 
-        Self { button, _is_paused }
+        timer_button_ui
     }
 
-    fn pause_resume_logic(
-        is_paused_ref: &Rc<RefCell<bool>>,
-        button_ref: &Button,
-        game_action_emitter: EventEmitter<GameActionEvent>,
-    ) {
-        let mut is_paused = is_paused_ref.borrow_mut();
-        if !*is_paused {
-            *is_paused = true;
-            TimerButtonUI::update_button_state(&button_ref, true);
-            game_action_emitter.emit(&GameActionEvent::Pause);
+    fn toggle_pause(&mut self) {
+        if self.is_paused {
+            self.is_paused = false;
+            self.game_action_emitter.emit(&GameActionEvent::Resume);
         } else {
-            *is_paused = false;
-            TimerButtonUI::update_button_state(&button_ref, false);
-            game_action_emitter.emit(&GameActionEvent::Resume);
+            self.is_paused = true;
+            self.game_action_emitter.emit(&GameActionEvent::Pause);
         }
-    }
-
-    fn pause_resume_handler_button<T>(
-        is_paused_ref: &Rc<RefCell<bool>>,
-        button_ref: &Rc<Button>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
-    ) -> impl Fn(&T) {
-        let button_ref = Rc::clone(&button_ref);
-        let is_paused_ref = Rc::clone(&is_paused_ref);
-        move |_| {
-            TimerButtonUI::pause_resume_logic(
-                &is_paused_ref,
-                &button_ref,
-                game_action_emitter.clone(),
-            )
-        }
-    }
-
-    fn pause_resume_handler_action<T>(
-        is_paused_ref: &Rc<RefCell<bool>>,
-        button_ref: &Rc<Button>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
-    ) -> impl Fn(&T, Option<&Variant>) {
-        let button_ref = Rc::clone(&button_ref);
-        let is_paused_ref = Rc::clone(&is_paused_ref);
-        move |_, _| {
-            TimerButtonUI::pause_resume_logic(
-                &is_paused_ref,
-                &button_ref,
-                game_action_emitter.clone(),
-            )
-        }
+        TimerButtonUI::update_button_state(&self.button, self.is_paused);
     }
 
     fn update_button_state(button: &Button, is_paused: bool) {

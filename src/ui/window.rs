@@ -1,9 +1,11 @@
+use crate::destroyable::Destroyable;
 use crate::events::{Channel, EventEmitter};
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
-use crate::model::{Difficulty, GameActionEvent};
+use crate::model::{Difficulty, GameActionEvent, GameStateEvent};
 use crate::ui::stats_dialog::StatsDialog;
+use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use glib::timeout_add_local_once;
 use gtk::gdk::Display;
@@ -13,6 +15,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
+use super::clue_set_ui::ClueSetUI;
+use super::game_info_ui::GameInfoUI;
+use super::history_controls_ui::HistoryControlsUI;
+use super::puzzle_grid_ui::PuzzleGridUI;
 use super::ResourceSet;
 
 fn hint_button_handler(
@@ -58,7 +64,7 @@ fn hint_button_handler(
             game_action_emitter.emit(&GameActionEvent::ShowHint);
             button.set_sensitive(false);
             let button = button.clone();
-            timeout_add_local_once(Duration::from_secs(1), move || {
+            timeout_add_local_once(Duration::from_secs(4), move || {
                 log::trace!(target: "window", "Re-enabling hint button");
                 button.set_sensitive(true);
             });
@@ -138,7 +144,7 @@ fn submit_handler(
 
 pub fn build_ui(app: &Application) {
     let (game_action_emitter, game_action_observer) = Channel::<GameActionEvent>::new();
-    // let (ui_state_emitter, ui_state_observer) = Channel::<UiState>::new();
+    let (game_state_emitter, game_state_observer) = Channel::<GameStateEvent>::new();
 
     let settings = Rc::new(RefCell::new(Settings::load()));
     let resources = Rc::new(ResourceSet::new());
@@ -221,27 +227,44 @@ pub fn build_ui(app: &Application) {
 
     header_bar.pack_start(&difficulty_box);
 
-    // Create buttons first
-    let undo_button = Rc::new(Button::from_icon_name("edit-undo-symbolic"));
-    let redo_button = Rc::new(Button::from_icon_name("edit-redo-symbolic"));
+    let history_controls_ui =
+        HistoryControlsUI::new(game_state_observer.clone(), game_action_emitter.clone());
+
+    let game_info_ui = GameInfoUI::new(game_state_observer.clone());
+
     let solve_button = Button::with_label("Solve");
     let hint_button = Button::from_icon_name("view-reveal-symbolic");
-    let submit_button = Rc::new(Button::with_label("Submit"));
-    submit_button.set_sensitive(false); // Initially disabled
 
     // Add tooltips
-    undo_button.set_tooltip_text(Some("Undo (Ctrl+Z)"));
-    redo_button.set_tooltip_text(Some("Redo (Ctrl+Shift+Z)"));
     hint_button.set_tooltip_text(Some("Show Hint"));
 
-    // Create game state first to know how many clue cells we need
-    let game_state = GameState::new(
-        &submit_button,
-        &undo_button,
-        &redo_button,
-        &resources,
+    // Create puzzle grid and clue set UI first
+    let puzzle_grid_ui = PuzzleGridUI::new(
         game_action_emitter.clone(),
-        game_action_observer.clone(),
+        game_state_observer.clone(),
+        &resources,
+        settings.borrow().difficulty.grid_size(),
+        settings.borrow().difficulty.grid_size(),
+    );
+
+    let clue_set_ui = ClueSetUI::new(
+        game_action_emitter.clone(),
+        game_state_observer.clone(),
+        &resources,
+    );
+
+    // Create game state with UI references
+    let game_state = GameState::new(game_action_observer.clone(), game_state_emitter.clone());
+
+    // Remove the old button_box since controls are now in header
+    let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
+
+    let submit_ui = SubmitUI::new(
+        game_state_observer.clone(),
+        game_action_emitter.clone(),
+        &game_state,
+        &stats_manager,
+        &resources,
     );
 
     // Create left side box for timer and hints
@@ -252,12 +275,12 @@ pub fn build_ui(app: &Application) {
 
     // Create pause button
     let timer_button = TimerButtonUI::new(&window, game_action_emitter.clone());
-    left_box.append(timer_button.button.as_ref());
-    left_box.append(game_state.borrow().game_info.timer_label.as_ref());
+    left_box.append(&timer_button.borrow().button);
+    left_box.append(&game_info_ui.borrow().timer_label);
     let hints_label = Label::new(Some("Hints: "));
     hints_label.set_css_classes(&["hints-label"]);
     left_box.append(&hints_label);
-    left_box.append(game_state.borrow().game_info.hints_label.as_ref());
+    left_box.append(&game_info_ui.borrow().hints_label);
 
     header_bar.pack_start(&left_box);
 
@@ -268,13 +291,14 @@ pub fn build_ui(app: &Application) {
         .css_classes(["menu-box"])
         .build();
 
-    right_box.append(undo_button.as_ref());
-    right_box.append(redo_button.as_ref());
+    // Create buttons first
+    right_box.append(history_controls_ui.borrow().undo_button.as_ref());
+    right_box.append(history_controls_ui.borrow().redo_button.as_ref());
     if GameState::is_debug_mode() {
         right_box.append(&solve_button);
     }
     right_box.append(&hint_button);
-    right_box.append(submit_button.as_ref());
+    right_box.append(submit_ui.borrow().submit_button.as_ref());
 
     let menu_button = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
@@ -305,9 +329,6 @@ pub fn build_ui(app: &Application) {
         .spacing(10)
         .build();
 
-    // Remove the old button_box since controls are now in header
-    let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
-
     let game_action_emitter_solve = game_action_emitter.clone();
     solve_button.connect_clicked(move |_| {
         game_action_emitter_solve.emit(&GameActionEvent::Solve);
@@ -317,14 +338,6 @@ pub fn build_ui(app: &Application) {
     hint_button.connect_clicked(hint_button_handler(
         game_action_emitter.clone(),
         &game_state,
-        &resources,
-    ));
-
-    // Wire up submit button handler
-    submit_button.connect_clicked(submit_handler(
-        game_action_emitter.clone(),
-        &game_state,
-        &stats_manager,
         &resources,
     ));
 
@@ -353,13 +366,13 @@ pub fn build_ui(app: &Application) {
     );
 
     // Assemble the UI
-    puzzle_vertical_box.append(&game_state.borrow().puzzle_grid_ui.grid);
-    puzzle_vertical_box.append(&game_state.borrow().clue_set_ui.vertical_grid);
+    puzzle_vertical_box.append(&puzzle_grid_ui.borrow().grid);
+    puzzle_vertical_box.append(&clue_set_ui.borrow().vertical_grid);
     puzzle_vertical_box.set_hexpand(false);
 
     game_box.append(&puzzle_vertical_box);
-    game_box.append(&game_state.borrow().clue_set_ui.horizontal_grid);
-    game_box.append(&game_state.borrow().puzzle_grid_ui.pause_label);
+    game_box.append(&clue_set_ui.borrow().horizontal_grid);
+    game_box.append(&puzzle_grid_ui.borrow().pause_label);
 
     main_box.append(&game_box);
 
@@ -381,10 +394,6 @@ pub fn build_ui(app: &Application) {
     });
     window.add_action(&action_redo);
 
-    // Connect undo/redo buttons to the actions
-    undo_button.set_action_name(Some("win.undo"));
-    redo_button.set_action_name(Some("win.redo"));
-
     // Add new game action that uses current difficulty
     let action_new_game = gtk::gio::SimpleAction::new("new-game", None);
     let settings_ref: Rc<RefCell<Settings>> = Rc::clone(&settings);
@@ -399,11 +408,12 @@ pub fn build_ui(app: &Application) {
     let action_statistics = gtk::gio::SimpleAction::new("statistics", None);
     let game_state_stats = Rc::clone(&game_state);
     let stats_manager_stats = Rc::clone(&stats_manager);
+    let submit_ui_stats = Rc::clone(&submit_ui);
     action_statistics.connect_activate(move |_, _| {
-        if let Some(window) = game_state_stats.try_borrow().ok().and_then(|state| {
-            state
+        if let Some(window) = game_state_stats.try_borrow().ok().and_then(|_| {
+            submit_ui_stats
+                .borrow()
                 .submit_button
-                .as_ref()
                 .root()
                 .and_then(|r| r.downcast::<ApplicationWindow>().ok())
         }) {
@@ -431,4 +441,18 @@ pub fn build_ui(app: &Application) {
         dialog.present();
     });
     window.add_action(&action_about);
+
+    let submit_ui_cleanup = Rc::clone(&submit_ui);
+    let puzzle_grid_ui_cleanup = Rc::clone(&puzzle_grid_ui);
+    let clue_set_ui_cleanup = Rc::clone(&clue_set_ui);
+    window.connect_destroy(move |_| {
+        println!("Destroying window");
+        history_controls_ui.borrow_mut().destroy();
+        game_state.borrow_mut().destroy();
+        game_info_ui.borrow_mut().destroy();
+        submit_ui_cleanup.borrow_mut().destroy();
+        puzzle_grid_ui_cleanup.borrow_mut().destroy();
+        clue_set_ui_cleanup.borrow_mut().destroy();
+        timer_button.borrow_mut().destroy();
+    });
 }

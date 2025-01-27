@@ -1,22 +1,18 @@
-use gtk::prelude::WidgetExt;
 use log::trace;
 use std::cell::RefCell;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use super::clue_generator::ClueGeneratorResult;
 use super::solver::{deduce_hidden_pairs, perform_evaluation_step, EvaluationStepResult};
 use super::stats_manager::GameStats;
 use super::{deduce_clue, generate_clues};
-use crate::events::{EventEmitter, EventObserver};
+use crate::destroyable::Destroyable;
+use crate::events::{EventEmitter, EventObserver, SubscriptionId};
 use crate::model::{
     CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameActionEvent, GameBoard,
-    Solution, TimerState,
+    GameStateEvent, Solution, TimerState,
 };
-use crate::ui::clue_set_ui::ClueSetUI;
-use crate::ui::game_info_ui::GameInfoUI;
-use crate::ui::puzzle_grid_ui::PuzzleGridUI;
-use crate::ui::ResourceSet;
 use std::rc::Rc;
 
 const HINT_LEVEL_MAX: u8 = 1;
@@ -42,23 +38,28 @@ struct HintStatus {
 }
 
 pub struct GameState {
-    pub clue_set: Rc<ClueSet>,
+    clue_set: Rc<ClueSet>,
+    history: Vec<Rc<GameBoard>>,
     pub current_board: Rc<GameBoard>,
-    pub history: Vec<Rc<GameBoard>>,
-    pub puzzle_grid_ui: PuzzleGridUI,
-    pub clue_set_ui: ClueSetUI,
-    pub solution: Rc<Solution>,
-    pub debug_mode: bool,
-    pub history_index: usize,
-    pub submit_button: Rc<gtk::Button>,
-    pub hints_used: u32,
-    pub current_playthrough_id: Uuid,
+    solution: Rc<Solution>,
+    debug_mode: bool,
+    history_index: usize,
+    hints_used: u32,
     hint_status: HintStatus,
-    pub undo_button: Rc<gtk::Button>,
-    pub redo_button: Rc<gtk::Button>,
-    pub game_info: GameInfoUI,
-    pub is_paused: bool,
-    pub timer_state: TimerState,
+    current_playthrough_id: Uuid,
+    is_paused: bool,
+    timer_state: TimerState,
+    game_action_observer: EventObserver<GameActionEvent>,
+    subscription_id: Option<SubscriptionId>,
+    game_state_emitter: EventEmitter<GameStateEvent>,
+}
+
+impl Destroyable for GameState {
+    fn destroy(&mut self) {
+        if let Some(subscription_id) = self.subscription_id.take() {
+            self.game_action_observer.unsubscribe(subscription_id);
+        }
+    }
 }
 
 pub struct GameBoardSet {
@@ -116,63 +117,33 @@ impl GameState {
         }
     }
 
-    /*
-       let game_state_ref = Rc::clone(&game_state);
-       action.connect_activate(move |_, variant| {
-           if let Some(variant) = variant {
-               if let Some(event) = GameEvent::from_variant(variant) {
-                   if let Ok(mut state) = game_state_ref.try_borrow_mut() {
-                       state.handle_event(event);
-                   } else {
-                       log::error!("Failed to borrow game state");
-                   }
-               }
-           }
-       });
-       window.add_action(&action);
-    */
     pub fn new(
-        submit_button: &Rc<gtk::Button>,
-        undo_button: &Rc<gtk::Button>,
-        redo_button: &Rc<gtk::Button>,
-        resources: &Rc<ResourceSet>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
         game_action_observer: EventObserver<GameActionEvent>,
+        game_state_emitter: EventEmitter<GameStateEvent>,
     ) -> Rc<RefCell<Self>> {
         let board_set = GameBoardSet::default();
-        let puzzle_grid_ui = PuzzleGridUI::new(
-            game_action_emitter.clone(),
-            &resources,
-            board_set.board.solution.n_rows,
-            board_set.board.solution.n_variants,
-        );
-        let clue_set_ui = ClueSetUI::new(game_action_emitter.clone(), resources);
-        let game_info = GameInfoUI::new();
         let timer_state = TimerState::default();
         let game_state = Self {
-            game_info,
             clue_set: board_set.clue_set.clone(),
             history: vec![Rc::new(board_set.board.clone())],
             current_board: Rc::new(board_set.board),
-            puzzle_grid_ui,
-            clue_set_ui,
             solution: board_set.solution.clone(),
             debug_mode: board_set.debug_mode,
             history_index: 0,
-            submit_button: Rc::clone(submit_button),
             hints_used: 0,
             hint_status: HintStatus {
                 history_index: 0,
                 hint_level: 0,
             },
             current_playthrough_id: Uuid::new_v4(),
-            undo_button: Rc::clone(undo_button),
-            redo_button: Rc::clone(redo_button),
             is_paused: false,
             timer_state,
+            game_action_observer: game_action_observer.clone(),
+            subscription_id: None,
+            game_state_emitter,
         };
         let refcell = Rc::new(RefCell::new(game_state));
-        GameState::wire_subscription(refcell.clone(), game_action_observer.clone());
+        GameState::wire_subscription(refcell.clone(), game_action_observer);
         refcell
     }
 
@@ -180,16 +151,16 @@ impl GameState {
         game_state: Rc<RefCell<Self>>,
         game_action_emitter: EventObserver<GameActionEvent>,
     ) {
-        game_action_emitter.subscribe(move |event| {
-            let mut game_state = game_state.borrow_mut();
+        let game_state_handler = game_state.clone();
+        let subscription_id = game_action_emitter.subscribe(move |event| {
+            let mut game_state = game_state_handler.borrow_mut();
             game_state.handle_event(event.clone());
         });
+        game_state.borrow_mut().subscription_id = Some(subscription_id);
     }
 
     fn new_game(&mut self, n_rows: usize) {
         let board_set = GameState::new_board_set(n_rows);
-        self.puzzle_grid_ui
-            .resize(n_rows, board_set.board.solution.n_variants);
         self.current_board = Rc::new(board_set.board);
         self.clue_set = board_set.clue_set;
         self.solution = board_set.solution;
@@ -201,99 +172,19 @@ impl GameState {
         self.current_playthrough_id = Uuid::new_v4();
         self.is_paused = false;
         self.timer_state = TimerState::default();
-        self.clue_set_ui.set_clues(&self.clue_set);
         self.sync_board_display();
         self.sync_clues_completion_state();
-        self.game_info.update_hints_used(self.hints_used);
-        self.game_info.update_timer_state(&self.timer_state);
-    }
-
-    fn sync_cell(&mut self, row: usize, col: usize) {
-        if let Some(cell) = self
-            .puzzle_grid_ui
-            .cells
-            .get(row)
-            .and_then(|row| row.get(col))
-        {
-            // If there's a solution, show it
-            if let Some(tile) = self.current_board.selected[row][col] {
-                cell.set_solution(Some(&tile));
-            } else {
-                // Otherwise show candidates
-                cell.set_solution(None);
-                let correct_tile = self.solution.get(row, col);
-                for (i, variant) in self.current_board.get_variants().iter().enumerate() {
-                    if let Some(candidate) = self.current_board.get_candidate(row, col, *variant) {
-                        cell.set_candidate(i, Some(&candidate));
-                        // In debug mode, highlight the correct candidate
-                        if self.debug_mode && candidate.tile == correct_tile {
-                            cell.highlight_candidate(i, Some("correct-candidate"));
-                        } else {
-                            cell.highlight_candidate(i, None);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// moves the GameBoard into an Rc, sets it as the current state, pushes the history
-    fn push_board(&mut self, board: GameBoard) {
-        self.current_board = Rc::new(board);
-        // if we're not at the end of the list, prune redo state
-        if self.history_index < self.history.len() - 1 {
-            self.history.truncate(self.history_index + 1);
-        }
-        self.history.push(Rc::clone(&self.current_board));
-        self.history_index += 1;
-        self.sync_board_display();
-        self.sync_clues_completion_state();
-    }
-
-    fn undo(&mut self) {
-        if self.history_index > 0 {
-            self.history_index -= 1;
-            self.current_board = self.history[self.history_index].clone();
-            self.sync_board_display();
-            self.sync_clues_completion_state();
-        }
-    }
-
-    fn redo(&mut self) {
-        if self.history_index < self.history.len() - 1 {
-            self.history_index += 1;
-            self.current_board = self.history[self.history_index].clone();
-            self.sync_board_display();
-            self.sync_clues_completion_state();
-        }
-    }
-
-    fn sync_board_display(&mut self) {
-        for row in 0..self.current_board.solution.n_rows {
-            for col in 0..self.current_board.solution.n_variants {
-                self.sync_cell(row, col);
-            }
-        }
-        // sync submit button
-        let all_cells_filled = self.current_board.is_complete();
-        self.submit_button.set_sensitive(all_cells_filled);
-        if all_cells_filled {
-            self.submit_button.add_css_class("submit-ready");
-        } else {
-            self.submit_button.remove_css_class("submit-ready");
-        }
-
-        if self.history_index > 0 {
-            self.undo_button.set_sensitive(true);
-        } else {
-            self.undo_button.set_sensitive(false);
-        }
-
-        if self.history_index < self.history.len() - 1 {
-            self.redo_button.set_sensitive(true);
-        } else {
-            self.redo_button.set_sensitive(false);
-        }
+        self.game_state_emitter
+            .emit(&GameStateEvent::HintUsageChanged(self.hints_used));
+        self.game_state_emitter
+            .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+        self.game_state_emitter
+            .emit(&GameStateEvent::ClueSetUpdate(self.clue_set.clone()));
+        self.game_state_emitter
+            .emit(&GameStateEvent::HistoryChanged {
+                history_index: self.history_index,
+                history_length: self.history.len(),
+            });
     }
 
     fn handle_cell_click(&mut self, row: usize, col: usize, variant: Option<char>) {
@@ -318,6 +209,69 @@ impl GameState {
                 self.sync_board_display();
             }
         }
+    }
+
+    /// moves the GameBoard into an Rc, sets it as the current state, pushes the history
+    fn push_board(&mut self, board: GameBoard) {
+        self.current_board = Rc::new(board);
+        // if we're not at the end of the list, prune redo state
+        if self.history_index < self.history.len() - 1 {
+            self.history.truncate(self.history_index + 1);
+        }
+        self.history.push(Rc::clone(&self.current_board));
+        self.history_index += 1;
+
+        self.game_state_emitter
+            .emit(&GameStateEvent::HistoryChanged {
+                history_index: self.history_index,
+                history_length: self.history.len(),
+            });
+
+        self.sync_board_display();
+        self.sync_clues_completion_state();
+    }
+
+    fn undo(&mut self) {
+        if self.history_index > 0 {
+            self.history_index -= 1;
+            self.current_board = self.history[self.history_index].clone();
+            self.sync_board_display();
+            self.sync_clues_completion_state();
+        }
+
+        self.game_state_emitter
+            .emit(&GameStateEvent::HistoryChanged {
+                history_index: self.history_index,
+                history_length: self.history.len(),
+            });
+    }
+
+    fn redo(&mut self) {
+        if self.history_index < self.history.len() - 1 {
+            self.history_index += 1;
+            self.current_board = self.history[self.history_index].clone();
+            self.sync_board_display();
+            self.sync_clues_completion_state();
+        }
+
+        self.game_state_emitter
+            .emit(&GameStateEvent::HistoryChanged {
+                history_index: self.history_index,
+                history_length: self.history.len(),
+            });
+    }
+
+    fn sync_board_display(&mut self) {
+        // Emit grid update event
+        self.game_state_emitter.emit(&GameStateEvent::GridUpdate(
+            self.current_board.as_ref().clone(),
+        ));
+        // Emit completion state event
+        let all_cells_filled = self.current_board.is_complete();
+        self.game_state_emitter
+            .emit(&GameStateEvent::PuzzleCompletionStateChanged(
+                all_cells_filled,
+            ));
     }
 
     pub fn handle_event(&mut self, event: GameActionEvent) {
@@ -351,6 +305,7 @@ impl GameState {
             GameActionEvent::Pause => self.pause_game(),
             GameActionEvent::Resume => self.resume_game(),
             GameActionEvent::Quit => (),
+            GameActionEvent::Submit => todo!(),
         }
     }
 
@@ -437,7 +392,8 @@ impl GameState {
             self.hints_used += 1;
             self.hint_status.hint_level += 1;
         }
-        self.game_info.update_hints_used(self.hints_used);
+        self.game_state_emitter
+            .emit(&GameStateEvent::HintUsageChanged(self.hints_used));
     }
 
     fn show_hint(&mut self) -> bool {
@@ -455,30 +411,19 @@ impl GameState {
 
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
             if let Some(clue) = clue {
-                self.clue_set_ui.highlight_clue(
-                    clue.orientation,
-                    clue.index,
-                    Duration::from_secs(1),
-                );
+                self.game_state_emitter
+                    .emit(&GameStateEvent::ClueHintHighlight { clue: clue.clone() });
             }
 
             if self.hint_status.hint_level > 0 {
                 if let Some(first_deduction) = deductions.first() {
                     // highlight cells
-                    self.puzzle_grid_ui.highlight_candidate(
-                        first_deduction.tile.row,
-                        first_deduction.column,
-                        first_deduction.tile.variant,
-                        Duration::from_secs(1),
-                        // .cells
-                        // .get(first_deduction.tile.row)
-                        // .and_then(|row| row.get(first_deduction.column))
-                        // .unwrap()
-                        // .highlight_candidate_for(
-                        //     Duration::from_secs(1),
-                        //     first_deduction.tile.variant,
-                        // );
-                    );
+
+                    self.game_state_emitter
+                        .emit(&GameStateEvent::CellHintHighlight {
+                            cell: (first_deduction.tile.row, first_deduction.column),
+                            variant: first_deduction.tile.variant,
+                        });
                 }
             }
             return true;
@@ -492,6 +437,11 @@ impl GameState {
             self.current_board = self.history[self.history_index].clone();
             self.sync_board_display();
         }
+        self.game_state_emitter
+            .emit(&GameStateEvent::HistoryChanged {
+                history_index: self.history_index,
+                history_length: self.history.len(),
+            });
     }
 
     pub fn get_game_stats(&self) -> GameStats {
@@ -511,26 +461,11 @@ impl GameState {
     }
 
     fn sync_clues_completion_state(&self) {
-        // Display horizontal clues
-        let horizontal_clues = self.clue_set.horizontal_clues();
-
-        for (clue_idx, _) in horizontal_clues.iter().enumerate() {
-            self.clue_set_ui.set_horiz_completion(
-                clue_idx,
-                self.current_board
-                    .completed_horizontal_clues
-                    .contains(&clue_idx),
-            );
-        }
-
-        for (clue_idx, _) in self.clue_set.vertical_clues().iter().enumerate() {
-            self.clue_set_ui.set_vert_completion(
-                clue_idx,
-                self.current_board
-                    .completed_vertical_clues
-                    .contains(&clue_idx),
-            );
-        }
+        self.game_state_emitter
+            .emit(&GameStateEvent::ClueVisibilityChanged {
+                horizontal_clues: self.current_board.completed_horizontal_clues.clone(),
+                vertical_clues: self.current_board.completed_vertical_clues.clone(),
+            });
     }
 
     fn handle_horizontal_clue_click(&mut self, clue_idx: usize) {
@@ -553,10 +488,10 @@ impl GameState {
         if !self.is_paused {
             self.is_paused = true;
             self.timer_state.paused_timestamp = Some(Instant::now());
-            self.game_info.update_timer_state(&self.timer_state);
-            // Hide the puzzle grid
-            self.puzzle_grid_ui.hide();
-            self.clue_set_ui.hide();
+            self.game_state_emitter
+                .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+            self.game_state_emitter
+                .emit(&GameStateEvent::PuzzleVisibilityChanged(false));
         }
     }
 
@@ -566,11 +501,18 @@ impl GameState {
             if let Some(pause_time) = self.timer_state.paused_timestamp.take() {
                 // Add the duration of this pause to total_paused_duration
                 self.timer_state.paused_duration += pause_time.elapsed();
-                self.game_info.update_timer_state(&self.timer_state);
+                self.game_state_emitter
+                    .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
             }
-            // Show the puzzle grid
-            self.puzzle_grid_ui.show();
-            self.clue_set_ui.show();
+            self.game_state_emitter
+                .emit(&GameStateEvent::PuzzleVisibilityChanged(true));
         }
     }
+}
+
+struct HintInfo {
+    clue: ClueWithGrouping,
+    clue_idx: usize,
+    row: usize,
+    col: usize,
 }

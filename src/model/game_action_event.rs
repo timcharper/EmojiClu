@@ -15,4 +15,5 @@ pub enum GameActionEvent {
     Pause,
     Resume,
     Quit,
+    Submit,
 }

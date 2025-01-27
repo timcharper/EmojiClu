@@ -1,12 +1,13 @@
 use gtk::{
     prelude::{GridExt, WidgetExt},
-    ApplicationWindow, Grid, Label,
+    Grid, Label,
 };
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use crate::{
-    events::EventEmitter,
-    model::{GameActionEvent, Solution},
+    destroyable::Destroyable,
+    events::{EventEmitter, EventObserver, SubscriptionId},
+    model::{GameActionEvent, GameStateEvent, Solution},
 };
 
 use super::{layout::SPACING_LARGE, puzzle_cell_ui::PuzzleCellUI, ResourceSet};
@@ -19,16 +20,35 @@ pub struct PuzzleGridUI {
     pub cells: Vec<Vec<PuzzleCellUI>>,
     game_action_emitter: EventEmitter<GameActionEvent>,
     resources: Rc<ResourceSet>,
+    subscription_id: Option<SubscriptionId>,
+    game_state_observer: EventObserver<GameStateEvent>,
+}
+
+impl Destroyable for PuzzleGridUI {
+    fn destroy(&mut self) {
+        // Unparent all widgets
+        self.grid.unparent();
+        self.pause_label.unparent();
+        if let Some(subscription_id) = self.subscription_id.take() {
+            self.game_state_observer.unsubscribe(subscription_id);
+        }
+    }
 }
 
 impl PuzzleGridUI {
     pub fn new(
         game_action_emitter: EventEmitter<GameActionEvent>,
+        game_state_observer: EventObserver<GameStateEvent>,
         resources: &Rc<ResourceSet>,
         n_rows: usize,
         n_cols: usize,
-    ) -> Self {
+    ) -> Rc<RefCell<Self>> {
         let grid = Grid::new();
+        grid.set_row_spacing(SPACING_LARGE as u32);
+        grid.set_column_spacing(SPACING_LARGE as u32);
+        grid.set_hexpand(false);
+        grid.set_vexpand(false);
+        grid.set_css_classes(&["puzzle-grid"]);
         let pause_label = Label::new(Some("Game is Paused"));
         pause_label.set_css_classes(&["pause-label"]);
         pause_label.set_visible(false);
@@ -37,7 +57,7 @@ impl PuzzleGridUI {
         pause_label.set_vexpand(true);
         pause_label.set_hexpand(true);
 
-        let mut puzzle_grid = Self {
+        let puzzle_grid_ui = Rc::new(RefCell::new(Self {
             grid,
             pause_label,
             cells: vec![vec![]],
@@ -45,17 +65,76 @@ impl PuzzleGridUI {
             n_cols: 0,
             game_action_emitter: game_action_emitter,
             resources: Rc::clone(resources),
-        };
-        puzzle_grid.grid.set_row_spacing(SPACING_LARGE as u32);
-        puzzle_grid.grid.set_column_spacing(SPACING_LARGE as u32);
-        puzzle_grid.grid.set_hexpand(false);
-        puzzle_grid.grid.set_vexpand(false);
-        puzzle_grid.grid.set_css_classes(&["puzzle-grid"]);
-        puzzle_grid.resize(n_rows, n_cols);
-        puzzle_grid
+            subscription_id: None,
+            game_state_observer: game_state_observer.clone(),
+        }));
+
+        // Initialize grid
+        {
+            let mut grid = puzzle_grid_ui.borrow_mut();
+            grid.maybe_resize(n_rows, n_cols);
+        }
+
+        // Connect observer
+        Self::connect_observer(puzzle_grid_ui.clone(), game_state_observer);
+
+        puzzle_grid_ui
     }
 
-    pub fn resize(&mut self, n_rows: usize, n_cols: usize) {
+    fn connect_observer(
+        puzzle_grid_ui: Rc<RefCell<Self>>,
+        game_state_observer: EventObserver<GameStateEvent>,
+    ) {
+        let puzzle_grid_ui_moved = puzzle_grid_ui.clone();
+        let subscription_id = game_state_observer.subscribe(move |event| match event {
+            GameStateEvent::GridUpdate(board) => {
+                let mut puzzle_grid_ui = puzzle_grid_ui_moved.borrow_mut();
+                puzzle_grid_ui.maybe_resize(board.solution.n_rows, board.solution.n_rows);
+                for row in 0..board.solution.n_rows {
+                    for col in 0..board.solution.n_variants {
+                        if let Some(cell) =
+                            puzzle_grid_ui.cells.get(row).and_then(|row| row.get(col))
+                        {
+                            // If there's a solution, show it
+                            if let Some(tile) = board.selected[row][col] {
+                                cell.set_solution(Some(&tile));
+                            } else {
+                                // Otherwise show candidates
+                                cell.set_solution(None);
+                                let correct_tile = board.solution.get(row, col);
+                                for (i, variant) in board.get_variants().iter().enumerate() {
+                                    if let Some(candidate) = board.get_candidate(row, col, *variant)
+                                    {
+                                        cell.set_candidate(i, Some(&candidate));
+                                        cell.highlight_candidate(i, None);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            GameStateEvent::PuzzleVisibilityChanged(visible) => {
+                if *visible {
+                    puzzle_grid_ui_moved.borrow().show();
+                } else {
+                    puzzle_grid_ui_moved.borrow().hide();
+                }
+            }
+            GameStateEvent::CellHintHighlight { cell, variant } => {
+                puzzle_grid_ui_moved.borrow().highlight_candidate(
+                    cell.0,
+                    cell.1,
+                    *variant,
+                    Duration::from_secs(4),
+                );
+            }
+            _ => {}
+        });
+        puzzle_grid_ui.borrow_mut().subscription_id = Some(subscription_id);
+    }
+
+    pub fn maybe_resize(&mut self, n_rows: usize, n_cols: usize) {
         if n_rows == self.n_rows && n_cols == self.n_cols {
             return;
         }
@@ -120,13 +199,5 @@ impl PuzzleGridUI {
     pub fn hide(&self) {
         self.grid.set_visible(false);
         self.pause_label.set_visible(true);
-    }
-}
-
-impl Drop for PuzzleGridUI {
-    fn drop(&mut self) {
-        // Unparent the grid and label
-        self.grid.unparent();
-        self.pause_label.unparent();
     }
 }

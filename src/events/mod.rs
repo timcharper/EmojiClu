@@ -1,3 +1,3 @@
 mod channel;
 
-pub use channel::{Channel, EventEmitter, EventObserver};
+pub use channel::{Channel, EventEmitter, EventObserver, SubscriptionId};
