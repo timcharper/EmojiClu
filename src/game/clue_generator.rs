@@ -317,7 +317,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
 
         for _ in 0..3 {
             let seed = tiles.choose(&mut state.rng).unwrap().clone();
-            println!("Seed: {:?}", seed);
+            trace!(target: "clue_generator", "Seed: {:?}", seed);
             let clue = generate_clue(&mut state, &three_only_clue_generator, seed).unwrap();
             state.add_clue(&evaluate_clue(&state.board, &clue));
         }
@@ -416,7 +416,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
                 evaluated_clue
             );
         } else {
-            println!("Stats: {:?}", state.stats);
+            warn!(target: "clue_generator", "Stats: {:?}", state.stats);
             panic!(
                 "Failed to generate valid clues after {} attempts.",
                 clue_generation_loops

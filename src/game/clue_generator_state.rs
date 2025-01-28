@@ -256,7 +256,11 @@ impl ClueGeneratorState {
 
         let original_clue_count = self.clues.len();
 
-        println!("Original clues: {:?}", self.clues);
+        trace!(
+            target: "clue_generator",
+            "Original clues: {:?}",
+            self.clues
+        );
 
         // Try removing each clue one at a time
         let mut i = 0;
@@ -296,6 +300,10 @@ impl ClueGeneratorState {
             original_clue_count,
             self.clues.len()
         );
-        println!("Pruned clues: {:?}", self.clues);
+        trace!(
+            target: "clue_generator",
+            "Pruned clues: {:?}",
+            self.clues
+        );
     }
 }
