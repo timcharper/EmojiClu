@@ -72,8 +72,6 @@ image {
 .negative-assertion-x {
     margin: 4px;  /* Space from top-left corner */
     opacity: 0.9;
-    min-width: 20px;
-    min-height: 20px;
 }
 
 .maybe-assertion-frame {
@@ -85,8 +83,6 @@ image {
 .maybe-assertion-mark {
     margin: 4px;  /* Space from top-left corner */
     opacity: 0.9;
-    min-width: 20px;
-    min-height: 20px;
 }
 
 .puzzle-grid {
@@ -140,9 +136,9 @@ image {
     margin: 0;
 }
 
-.vertical-clues .new-group {
+/* .vertical-clues .new-group {
     margin-left: 10px;
 }
 .horizontal-clues .new-group {
     margin-top: 0px;
-}
+} */

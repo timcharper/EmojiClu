@@ -3,12 +3,12 @@ use crate::events::{Channel, EventEmitter};
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
-use crate::model::{Difficulty, GameActionEvent, GameStateEvent, SettingsEvent};
+use crate::model::{Difficulty, GameActionEvent, GameStateEvent, GlobalEvent};
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use glib::timeout_add_local_once;
-use gtk::gdk::Display;
+use gtk::gdk::{Display, Monitor};
 use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow, Button, Label, Orientation};
 use std::cell::RefCell;
@@ -18,6 +18,7 @@ use std::time::Duration;
 use super::clue_set_ui::ClueSetUI;
 use super::game_info_ui::GameInfoUI;
 use super::history_controls_ui::HistoryControlsUI;
+use super::layout_manager::{self, ClueStats, LayoutManager};
 use super::puzzle_grid_ui::PuzzleGridUI;
 use super::ResourceSet;
 
@@ -72,89 +73,45 @@ fn hint_button_handler(
     }
 }
 
-fn submit_handler(
-    game_action_emitter: EventEmitter<GameActionEvent>,
-    state_submit: &Rc<RefCell<GameState>>,
-    manager_submit: &Rc<RefCell<StatsManager>>,
-    resources: &Rc<ResourceSet>,
-) -> impl Fn(&Button) {
-    let state_submit = Rc::clone(&state_submit);
-    let manager_submit = Rc::clone(&manager_submit);
-    let resources = Rc::clone(&resources);
-
-    move |button| {
-        let state = state_submit.try_borrow().ok().and_then(|gs| {
-            manager_submit
-                .try_borrow_mut()
-                .ok()
-                .and_then(|sm| Some((gs, sm)))
-        });
-        if let Some((state, mut stats_manager)) = state {
-            if state.current_board.is_complete() && !state.current_board.is_incorrect() {
-                button.remove_css_class("submit-ready"); // Stop blinking once clicked
-                let media = resources.random_win_sound();
-                media.play();
-
-                // Record completion and show stats
-                let stats = state.get_game_stats();
-                let grid_size = state.current_board.solution.n_rows;
-
-                if let Err(e) = stats_manager.record_game(&stats) {
-                    log::error!(target: "window", "Failed to record game stats: {}", e);
-                }
-
-                if let Some(window) = button
-                    .root()
-                    .and_then(|r| r.downcast::<ApplicationWindow>().ok())
-                {
-                    // Drop the mutable borrow before showing stats
-                    let game_action_emitter = game_action_emitter.clone();
-                    StatsDialog::show(&window, &state, &stats_manager, Some(stats), move || {
-                        game_action_emitter.emit(&GameActionEvent::NewGame(grid_size));
-                    });
-                }
-            } else {
-                let dialog = gtk::MessageDialog::new(
-                    button
-                        .root()
-                        .and_then(|r| r.downcast::<gtk::Window>().ok())
-                        .as_ref(),
-                    gtk::DialogFlags::MODAL,
-                    gtk::MessageType::Info,
-                    gtk::ButtonsType::OkCancel,
-                    "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
-                );
-
-                // Play game over sound using a MediaStream
-                let media = resources.random_lose_sound();
-                media.play();
-
-                let game_action_emitter = game_action_emitter.clone();
-                dialog.connect_response(move |dialog, response| {
-                    if response == gtk::ResponseType::Ok {
-                        game_action_emitter.emit(&GameActionEvent::RewindLastGood);
-                    }
-                    dialog.close();
-                });
-                dialog.show();
-            }
-        }
-    }
-}
-
 pub fn build_ui(app: &Application) {
     let (game_action_emitter, game_action_observer) = Channel::<GameActionEvent>::new();
     let (game_state_emitter, game_state_observer) = Channel::<GameStateEvent>::new();
-    let (settings_emitter, settings_observer) = Channel::<SettingsEvent>::new();
+    let (global_event_emitter, global_event_observer) = Channel::<GlobalEvent>::new();
 
     let settings = Rc::new(RefCell::new(Settings::load()));
     let resources = Rc::new(ResourceSet::new());
+
+    let display = Display::default().expect("Could not connect to a display.");
+    let monitor = display
+        .monitors()
+        .item(0)
+        .and_then(|m| m.downcast::<Monitor>().ok())
+        .expect("No monitors found");
+    let monitor_geometry = monitor.geometry();
+    let monitor_width = monitor_geometry.width();
+    let monitor_height = monitor_geometry.height();
+    let desired_height = (monitor_height * 8) / 10;
+    let desired_width = (monitor_height * 3) / 2;
+    let max_desired_width = (monitor_width * 8) / 10;
+
     let window = Rc::new(
         ApplicationWindow::builder()
             .application(app)
             .title("GWatson Logic Puzzle")
             .resizable(true)
+            .decorated(true)
+            .default_height(desired_height as i32)
+            .default_width(desired_width.min(max_desired_width) as i32)
             .build(),
+    );
+
+    let layout_manager = LayoutManager::new(
+        window.clone(),
+        global_event_emitter.clone(),
+        game_action_observer.clone(),
+        game_state_observer.clone(),
+        resources.clone(),
+        settings.borrow().difficulty,
     );
 
     // Set up keyboard shortcuts
@@ -220,15 +177,7 @@ pub fn build_ui(app: &Application) {
         };
         settings_ref.borrow_mut().difficulty = new_difficulty;
         let _ = settings_ref.borrow().save();
-        let grid_size = new_difficulty.grid_size();
-        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(grid_size));
-
-        // Set window to minimum size after a short delay to ensure new game is rendered
-        let window_ref = Rc::clone(&window_ref);
-        glib::timeout_add_local_once(std::time::Duration::from_millis(100), move || {
-            window_ref.set_default_size(1, 1); // This triggers the window to shrink to its minimum size
-            window_ref.queue_resize();
-        });
+        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(new_difficulty));
     });
 
     header_bar.pack_start(&difficulty_box);
@@ -244,20 +193,24 @@ pub fn build_ui(app: &Application) {
     // Add tooltips
     hint_button.set_tooltip_text(Some("Show Hint"));
 
+    let default_layout =
+        LayoutManager::unscaled_layout(settings.borrow().difficulty, Some(ClueStats::default()));
+
     // Create puzzle grid and clue set UI first
     let puzzle_grid_ui = PuzzleGridUI::new(
         game_action_emitter.clone(),
         game_state_observer.clone(),
-        &resources,
-        settings.borrow().difficulty.grid_size(),
-        settings.borrow().difficulty.grid_size(),
+        global_event_observer.clone(),
+        resources.clone(),
+        default_layout.clone(),
     );
 
     let clue_set_ui = ClueSetUI::new(
         game_action_emitter.clone(),
         game_state_observer.clone(),
-        settings_observer.clone(),
+        global_event_observer.clone(),
         &resources,
+        default_layout.clone(),
     );
 
     // Create game state with UI references
@@ -318,12 +271,6 @@ pub fn build_ui(app: &Application) {
 
     window.set_titlebar(Some(&header_bar));
 
-    // Create main container
-    let main_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(10)
-        .build();
-
     // Create game area with puzzle and horizontal clues side by side
     let game_box = gtk::Box::builder()
         .orientation(Orientation::Horizontal)
@@ -355,10 +302,9 @@ pub fn build_ui(app: &Application) {
     );
 
     // Initialize game with saved difficulty
-    let initial_size = settings.borrow().difficulty.grid_size();
     game_state
         .borrow_mut()
-        .handle_event(GameActionEvent::NewGame(initial_size));
+        .handle_event(GameActionEvent::NewGame(settings.borrow().difficulty));
 
     // Add CSS for selected cells
     let provider = gtk::CssProvider::new();
@@ -381,9 +327,11 @@ pub fn build_ui(app: &Application) {
     game_box.append(&clue_set_ui.borrow().horizontal_grid);
     game_box.append(&puzzle_grid_ui.borrow().pause_label);
 
-    main_box.append(&game_box);
-
-    window.set_child(Some(&main_box));
+    {
+        let scrolled_window = &layout_manager.borrow().scrolled_window;
+        scrolled_window.set_child(Some(&game_box));
+        window.set_child(Some(scrolled_window));
+    }
     window.present();
 
     // Add actions for keyboard shortcuts and menu items
@@ -407,8 +355,7 @@ pub fn build_ui(app: &Application) {
     let game_action_emitter_new_game = game_action_emitter.clone();
     action_new_game.connect_activate(move |_, _| {
         let difficulty = settings_ref.borrow().difficulty;
-        let grid_size = difficulty.grid_size();
-        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(grid_size));
+        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(difficulty));
     });
     window.add_action(&action_new_game);
 
@@ -456,13 +403,13 @@ pub fn build_ui(app: &Application) {
         &settings.borrow().clue_tooltips_enabled.to_variant(),
     );
     let settings_ref = Rc::clone(&settings);
-    let settings_emitter = settings_emitter.clone();
+    let global_event_emitter = global_event_emitter.clone();
     action_toggle_tooltips.connect_activate(move |action, _| {
         let mut settings = settings_ref.borrow_mut();
         settings.clue_tooltips_enabled = !settings.clue_tooltips_enabled;
         action.set_state(&settings.clue_tooltips_enabled.to_variant());
         let _ = settings.save();
-        settings_emitter.emit(&SettingsEvent::SettingsChanged(Rc::new(settings.clone())));
+        global_event_emitter.emit(&GlobalEvent::SettingsChanged(Rc::new(settings.clone())));
     });
     window.add_action(&action_toggle_tooltips);
 
@@ -478,5 +425,6 @@ pub fn build_ui(app: &Application) {
         puzzle_grid_ui_cleanup.borrow_mut().destroy();
         clue_set_ui_cleanup.borrow_mut().destroy();
         timer_button.borrow_mut().destroy();
+        layout_manager.borrow_mut().destroy();
     });
 }

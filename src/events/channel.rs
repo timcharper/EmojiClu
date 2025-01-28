@@ -5,7 +5,7 @@ use std::rc::Rc;
 use log::trace;
 
 pub type Callback<T> = Rc<dyn Fn(&T)>;
-pub type SubscriptionId = u64;
+type SubscriptionId = u64;
 
 pub struct EventEmitter<T: std::fmt::Debug> {
     channel: Channel<T>,
@@ -45,6 +45,17 @@ impl<T: std::fmt::Debug> Clone for Channel<T> {
     }
 }
 
+pub struct Unsubscriber<T: std::fmt::Debug> {
+    channel: Channel<T>,
+    id: SubscriptionId,
+}
+
+impl<T: std::fmt::Debug> Unsubscriber<T> {
+    pub fn unsubscribe(&self) -> bool {
+        self.channel.unsubscribe(self.id)
+    }
+}
+
 impl<T: std::fmt::Debug> Channel<T> {
     pub fn new() -> (EventEmitter<T>, EventObserver<T>) {
         let listeners = Rc::new(RefCell::new(HashMap::new()));
@@ -63,7 +74,7 @@ impl<T: std::fmt::Debug> Channel<T> {
         )
     }
 
-    pub fn subscribe<F>(&self, callback: F) -> SubscriptionId
+    pub fn subscribe<F>(&self, callback: F) -> Unsubscriber<T>
     where
         F: Fn(&T) + 'static,
     {
@@ -74,7 +85,10 @@ impl<T: std::fmt::Debug> Channel<T> {
             id
         };
         self.listeners.borrow_mut().insert(id, Rc::new(callback));
-        id
+        Unsubscriber {
+            channel: self.clone(),
+            id,
+        }
     }
 
     pub fn unsubscribe(&self, id: SubscriptionId) -> bool {
@@ -101,15 +115,11 @@ impl<T: std::fmt::Debug> EventEmitter<T> {
 }
 
 impl<T: std::fmt::Debug> EventObserver<T> {
-    pub fn subscribe<F>(&self, callback: F) -> SubscriptionId
+    pub fn subscribe<F>(&self, callback: F) -> Unsubscriber<T>
     where
         F: Fn(&T) + 'static,
     {
         self.channel.subscribe(callback)
-    }
-
-    pub fn unsubscribe(&self, id: SubscriptionId) -> bool {
-        self.channel.unsubscribe(id)
     }
 }
 
@@ -194,11 +204,11 @@ mod tests {
         assert_eq!(counter.get(), 1);
 
         // Unsubscribe and verify no more updates
-        assert!(observer.unsubscribe(sub_id));
+        assert!(sub_id.unsubscribe());
         emitter.emit(&42);
         assert_eq!(counter.get(), 1);
 
         // Trying to unsubscribe again should return false
-        assert!(!observer.unsubscribe(sub_id));
+        assert!(!sub_id.unsubscribe());
     }
 }

@@ -46,7 +46,7 @@ fn main() {
     let app = Application::builder().application_id(APP_ID).build();
 
     // Connect to "activate" signal
-    app.connect_activate(ui::window::build_ui);
+    app.connect_activate(ui::build_ui);
 
     // Run the application
     app.run();

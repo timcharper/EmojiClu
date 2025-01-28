@@ -8,7 +8,7 @@ use super::solver::{deduce_hidden_pairs, perform_evaluation_step, EvaluationStep
 use super::stats_manager::GameStats;
 use super::{deduce_clue, generate_clues};
 use crate::destroyable::Destroyable;
-use crate::events::{EventEmitter, EventObserver, SubscriptionId};
+use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::model::{
     CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameActionEvent, GameBoard,
     GameStateEvent, Solution, TimerState,
@@ -50,14 +50,14 @@ pub struct GameState {
     is_paused: bool,
     timer_state: TimerState,
     game_action_observer: EventObserver<GameActionEvent>,
-    subscription_id: Option<SubscriptionId>,
+    subscription_id: Option<Unsubscriber<GameActionEvent>>,
     game_state_emitter: EventEmitter<GameStateEvent>,
 }
 
 impl Destroyable for GameState {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.subscription_id.take() {
-            self.game_action_observer.unsubscribe(subscription_id);
+            subscription_id.unsubscribe();
         }
     }
 }
@@ -91,13 +91,7 @@ impl GameState {
             .ok()
     }
 
-    pub fn new_board_set(n_rows: usize) -> GameBoardSet {
-        let difficulty = match n_rows {
-            4 => Difficulty::Easy,
-            5 => Difficulty::Moderate,
-            6 => Difficulty::Hard,
-            _ => Difficulty::Veteran,
-        };
+    pub fn new_board_set(difficulty: Difficulty) -> GameBoardSet {
         let solution = Rc::new(Solution::new(difficulty, GameState::seed_from_env()));
         trace!(target: "game_state", "Generated solution: {:?}", solution);
         let blank_board = GameBoard::new(Rc::clone(&solution));
@@ -159,8 +153,8 @@ impl GameState {
         game_state.borrow_mut().subscription_id = Some(subscription_id);
     }
 
-    fn new_game(&mut self, n_rows: usize) {
-        let board_set = GameState::new_board_set(n_rows);
+    fn new_game(&mut self, difficulty: Difficulty) {
+        let board_set = GameState::new_board_set(difficulty);
         self.current_board = Rc::new(board_set.board);
         self.clue_set = board_set.clue_set;
         self.solution = board_set.solution;
@@ -289,7 +283,7 @@ impl GameState {
             GameActionEvent::VerticalClueClick(clue_idx) => {
                 self.handle_vertical_clue_click(clue_idx)
             }
-            GameActionEvent::NewGame(rows) => self.new_game(rows),
+            GameActionEvent::NewGame(difficulty) => self.new_game(difficulty),
             GameActionEvent::InitDisplay => {
                 self.sync_board_display();
                 self.sync_clues_completion_state();
@@ -508,11 +502,4 @@ impl GameState {
                 .emit(&GameStateEvent::PuzzleVisibilityChanged(true));
         }
     }
-}
-
-struct HintInfo {
-    clue: ClueWithGrouping,
-    clue_idx: usize,
-    row: usize,
-    col: usize,
 }

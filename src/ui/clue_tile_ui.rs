@@ -2,11 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::model::TileAssertion;
-use crate::ui::layout::{CELL_SIZE, ICON_SIZE_SMALL};
+use crate::model::{CluesSizing, LayoutConfiguration, TileAssertion};
 use gtk::glib::{timeout_add_local_once, SourceId};
 use gtk::prelude::*;
-use gtk::{Frame, Image, Overlay};
+use gtk::{Frame, Image, Overlay, Widget};
 
 use super::ResourceSet;
 
@@ -30,26 +29,25 @@ impl ClueTileUI {
         frame.set_vexpand(false);
 
         let image = Image::new();
-        image.set_pixel_size(CELL_SIZE); // Half size of main solution tiles
 
-        let x_image = Image::new();
-        x_image.set_pixel_size(ICON_SIZE_SMALL); // Small enough to fit in corner
-        x_image.set_visible(false);
-        x_image.set_css_classes(&["negative-assertion-x"]);
-        x_image.set_halign(gtk::Align::Start);
-        x_image.set_valign(gtk::Align::Start);
+        let x_image = Image::builder()
+            .visible(false)
+            .css_classes(["negative-assertion-x"])
+            .halign(gtk::Align::Start)
+            .valign(gtk::Align::Start)
+            .hexpand(false)
+            .vexpand(false)
+            .build();
 
         let maybe_image = Image::new();
-        maybe_image.set_pixel_size(ICON_SIZE_SMALL); // Small enough to fit in corner
         maybe_image.set_visible(false);
         maybe_image.set_css_classes(&["maybe-assertion-mark"]);
         maybe_image.set_halign(gtk::Align::Start);
         maybe_image.set_valign(gtk::Align::Start);
 
         let triple_dot = Image::new();
-        triple_dot.set_pixel_size(CELL_SIZE); // Same size as clue tiles
         triple_dot.set_visible(false);
-        triple_dot.set_halign(gtk::Align::Center); // Center in the cell
+        triple_dot.set_halign(gtk::Align::Center);
         triple_dot.set_valign(gtk::Align::Center);
 
         let highlight_frame = Frame::new(None);
@@ -64,8 +62,8 @@ impl ClueTileUI {
         overlay.add_overlay(&x_image);
         overlay.add_overlay(&maybe_image);
         overlay.add_overlay(&triple_dot);
-        overlay.add_overlay(&highlight_frame);
-        overlay.add_overlay(&decoration_frame);
+        overlay.add_overlay(highlight_frame.upcast_ref::<Widget>());
+        overlay.add_overlay(decoration_frame.upcast_ref::<Widget>());
 
         frame.set_child(Some(&overlay));
 
@@ -77,10 +75,23 @@ impl ClueTileUI {
             maybe_image,
             triple_dot,
             highlight_frame: Arc::new(highlight_frame),
-            resources,
             decoration_frame: Arc::new(decoration_frame),
+            resources,
             highlight_timeout: Rc::new(RefCell::new(None)),
         }
+    }
+
+    pub fn update_layout(&self, layout: &CluesSizing) {
+        // Update main image size
+        self.image.set_pixel_size(layout.clue_tile_size.width);
+        self.triple_dot.set_pixel_size(layout.clue_tile_size.width);
+
+        // Update decoration sizes and force a queue_resize
+        self.x_image
+            .set_pixel_size(layout.clue_annotation_size.width);
+
+        self.maybe_image
+            .set_pixel_size(layout.clue_annotation_size.width);
     }
 
     pub fn set_tile(&self, assertion: Option<&TileAssertion>) {

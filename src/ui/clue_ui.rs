@@ -3,11 +3,11 @@ use gtk::{Box, Frame, Grid, Label, Orientation};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::model::Clue;
+use crate::model::LayoutConfiguration;
+use crate::model::{Clue, CluesSizing};
 use crate::model::{ClueOrientation, TileAssertion};
 use crate::model::{ClueType, HorizontalClueType, VerticalClueType};
 use crate::ui::clue_tile_ui::ClueTileUI;
-use crate::ui::layout::{calc_clue_set_size, CELL_SIZE, CELL_SPACING, FRAME_MARGIN};
 use crate::ui::ResourceSet;
 
 #[derive(Debug)]
@@ -29,6 +29,7 @@ pub struct ClueUI {
     tooltip_data: Rc<RefCell<Option<ClueTooltipData>>>,
     tooltip_widget: Rc<RefCell<Option<gtk::Box>>>,
     resources: Rc<ResourceSet>,
+    layout: CluesSizing,
 }
 
 impl ClueUI {
@@ -103,8 +104,15 @@ impl ClueUI {
         box_container
     }
 
-    fn create_tooltip_widget(clue_data: &ClueTooltipData) -> gtk::Box {
+    fn create_tooltip_widget(&self) -> gtk::Box {
         let tooltip_box = Box::new(Orientation::Vertical, 5);
+        let clue_data = self.tooltip_data.borrow();
+        if clue_data.is_none() {
+            return tooltip_box;
+        }
+
+        let clue_data = clue_data.as_ref().unwrap();
+
         tooltip_box.set_margin_start(5);
         tooltip_box.set_margin_end(5);
         tooltip_box.set_margin_top(5);
@@ -121,8 +129,6 @@ impl ClueUI {
         let desc_box = Box::new(Orientation::Horizontal, 5);
 
         // Create a temporary UI just for parsing templates
-        let temp_ui = ClueUI::new(Rc::clone(&clue_data.resources), ClueOrientation::Horizontal);
-
         match &clue_data.clue.clue_type {
             ClueType::Horizontal(horiz) => match horiz {
                 HorizontalClueType::TwoAdjacent | HorizontalClueType::ThreeAdjacent => {
@@ -135,19 +141,19 @@ impl ClueUI {
                         template.push_str(&format!("{{t{}}}", i));
                     }
                     template.push_str(" are adjacent (forward, backward).");
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
                 HorizontalClueType::TwoApartNotMiddle => {
                     let template = "{t0} is two away from {t2}, without {t1} in the middle (forward, backward).";
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
                 HorizontalClueType::LeftOf => {
                     let template = "{t0} is left of {t1} (any number of tiles in between).";
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
                 HorizontalClueType::NotAdjacent => {
                     let template = "{t0} is not next to {t1} (forward, backward).";
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
             },
             ClueType::Vertical(vert) => match vert {
@@ -160,7 +166,7 @@ impl ClueUI {
                         template.push_str(&format!("{{t{}}}", i));
                     }
                     template.push_str(" are in the same column.");
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
                 VerticalClueType::TwoInColumnWithout => {
                     let clue_assertions: Vec<(usize, &TileAssertion)> =
@@ -187,17 +193,17 @@ impl ClueUI {
                         positive_assertion_positions[1],
                         negative_assertion_positions[0],
                     );
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
 
                 VerticalClueType::NotInSameColumn => {
                     let template = "{t0} is not in the same column as {t1}";
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
                 VerticalClueType::OneMatchesEither => {
                     let template =
                         "{t0} is either in the same column as {t1} or {t2}, but not both.";
-                    desc_box.append(&temp_ui.parse_template(&template, clue_data));
+                    desc_box.append(&self.parse_template(&template, clue_data));
                 }
             },
         }
@@ -207,43 +213,22 @@ impl ClueUI {
         tooltip_box
     }
 
-    pub fn new(resources: Rc<ResourceSet>, orientation: ClueOrientation) -> Self {
+    pub fn new(
+        resources: Rc<ResourceSet>,
+        orientation: ClueOrientation,
+        layout: CluesSizing,
+    ) -> Self {
         let frame = Frame::new(None);
-        frame.set_margin_start(FRAME_MARGIN);
-        frame.set_margin_end(FRAME_MARGIN);
-        frame.set_margin_top(FRAME_MARGIN);
-        frame.set_margin_bottom(FRAME_MARGIN);
-        frame.set_css_classes(&["clue-set-frame"]);
-        frame.set_hexpand(false);
-        frame.set_vexpand(false);
+        frame.set_css_classes(&["clue-cell-frame"]);
 
         let grid = Grid::new();
-        grid.set_row_spacing(CELL_SPACING as u32);
-        grid.set_column_spacing(CELL_SPACING as u32);
-        grid.set_halign(gtk::Align::Center);
-        grid.set_valign(gtk::Align::Center);
-        grid.set_hexpand(false);
-        grid.set_vexpand(false);
-
-        let tooltip_data: Rc<RefCell<Option<ClueTooltipData>>> = Rc::new(RefCell::new(None));
-        let tooltip_widget: Rc<RefCell<Option<gtk::Box>>> = Rc::new(RefCell::new(None));
-
-        // Set up tooltip handling
-        frame.set_has_tooltip(true);
-        let tooltip_widget_clone = Rc::clone(&tooltip_widget);
-        frame.connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
-            let widget = tooltip_widget_clone.borrow();
-            if let Some(ref w) = *widget {
-                tooltip.set_custom(Some(w));
-            }
-            true
-        });
+        grid.set_row_spacing(0);
+        grid.set_column_spacing(0);
 
         // Create the three cells for this clue
         let mut cells = Vec::new();
         for i in 0..3 {
             let clue_cell = ClueTileUI::new(Rc::clone(&resources));
-            clue_cell.frame.set_size_request(CELL_SIZE, CELL_SIZE);
             match orientation {
                 ClueOrientation::Horizontal => {
                     grid.attach(&clue_cell.frame, i as i32, 0, 1, 1);
@@ -257,17 +242,8 @@ impl ClueUI {
 
         frame.set_child(Some(&grid));
 
-        // Set the frame size based on orientation
-        let total_size = calc_clue_set_size(3);
-        let single_size = CELL_SIZE + FRAME_MARGIN * 2;
-        match orientation {
-            ClueOrientation::Horizontal => {
-                frame.set_size_request(total_size, single_size);
-            }
-            ClueOrientation::Vertical => {
-                frame.set_size_request(single_size, total_size);
-            }
-        }
+        let tooltip_data = Rc::new(RefCell::new(None));
+        let tooltip_widget = Rc::new(RefCell::new(None));
 
         Self {
             frame,
@@ -276,6 +252,31 @@ impl ClueUI {
             tooltip_data,
             tooltip_widget,
             resources,
+            layout,
+        }
+    }
+
+    pub fn update_layout(&mut self, layout: &LayoutConfiguration) {
+        self.layout = layout.clues.clone();
+        // Update frame size based on orientation
+        match self.orientation {
+            ClueOrientation::Horizontal => {
+                self.frame.set_size_request(
+                    layout.clues.horizontal_clue_panel_width,
+                    layout.clues.clue_tile_size.height,
+                );
+            }
+            ClueOrientation::Vertical => {
+                self.frame.set_size_request(
+                    layout.clues.clue_tile_size.width,
+                    layout.clues.vertical_clue_panel_height,
+                );
+            }
+        }
+
+        // Update individual tile sizes
+        for cell in &self.cells {
+            cell.update_layout(&layout.clues);
         }
     }
 
@@ -288,8 +289,7 @@ impl ClueUI {
             *self.tooltip_data.borrow_mut() = Some(tooltip_data);
 
             // Create new tooltip widget when clue changes
-            let new_tooltip =
-                Self::create_tooltip_widget(self.tooltip_data.borrow().as_ref().unwrap());
+            let new_tooltip = self.create_tooltip_widget();
             *self.tooltip_widget.borrow_mut() = Some(new_tooltip);
 
             match self.orientation {
@@ -297,8 +297,9 @@ impl ClueUI {
                 ClueOrientation::Vertical => self.set_vert_clue(clue),
             }
             self.frame.set_visible(true);
-            if is_new_group {
-                self.frame.add_css_class("new-group");
+            if clue.is_vertical() && is_new_group {
+                self.frame
+                    .set_margin_start(self.layout.vertical_clue_group_spacer);
             } else {
                 self.frame.remove_css_class("new-group");
             }

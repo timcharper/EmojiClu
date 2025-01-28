@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::events::EventObserver;
-use crate::events::SubscriptionId;
+use crate::events::Unsubscriber;
 use crate::game::game_state::GameState;
 use crate::game::stats_manager::StatsManager;
 use crate::model::GameActionEvent;
@@ -18,14 +18,14 @@ use crate::ui::ResourceSet;
 
 pub struct SubmitUI {
     pub submit_button: Rc<Button>,
-    subscription_id: Option<SubscriptionId>,
+    subscription_id: Option<Unsubscriber<GameStateEvent>>,
     game_state_observer: EventObserver<GameStateEvent>,
 }
 
 impl Destroyable for SubmitUI {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.subscription_id.take() {
-            self.game_state_observer.unsubscribe(subscription_id);
+            subscription_id.unsubscribe();
         }
     }
 }
@@ -63,7 +63,7 @@ impl SubmitUI {
 
                     // Record completion and show stats
                     let stats = state.get_game_stats();
-                    let grid_size = state.current_board.solution.n_rows;
+                    let difficulty = state.current_board.solution.difficulty;
 
                     if let Err(e) = stats_manager.record_game(&stats) {
                         log::error!(target: "window", "Failed to record game stats: {}", e);
@@ -76,7 +76,7 @@ impl SubmitUI {
                         // Drop the mutable borrow before showing stats
                         let game_action_emitter = game_action_emitter_submit.clone();
                         StatsDialog::show(&window, &state, &stats_manager, Some(stats), move || {
-                            game_action_emitter.emit(&GameActionEvent::NewGame(grid_size));
+                            game_action_emitter.emit(&GameActionEvent::NewGame(difficulty));
                         });
                     }
                 } else {

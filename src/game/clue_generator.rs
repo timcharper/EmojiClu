@@ -8,7 +8,7 @@ use rand::{
     seq::{IteratorRandom, SliceRandom},
     Rng,
 };
-use std::{collections::BTreeSet, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},

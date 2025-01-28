@@ -13,14 +13,14 @@ pub mod tests {
     use test_context::TestContext;
 
     pub struct UsingLogger {
-        value: String,
+        _value: String,
     }
 
     impl TestContext for UsingLogger {
         fn setup() -> UsingLogger {
             env_logger::init();
             UsingLogger {
-                value: "Hello, World!".to_string(),
+                _value: "Hello, World!".to_string(),
             }
         }
 

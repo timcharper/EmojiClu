@@ -1,6 +1,6 @@
-use super::{Clue, ClueSet, ClueWithGrouping, TimerState};
+use super::{ClueSet, ClueWithGrouping, TimerState};
 use crate::model::GameBoard;
-use std::{collections::HashSet, rc::Rc, time::Duration};
+use std::{collections::HashSet, rc::Rc};
 
 #[derive(Debug)]
 pub enum GameStateEvent {

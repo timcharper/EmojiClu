@@ -1,10 +1,7 @@
-use glib::idle_add;
 use glib::timeout_add_local_once;
-use glib::Continue;
 use gtk::prelude::*;
-use gtk::ApplicationWindow;
 use gtk::Button;
-use gtk::Widget;
+use log::trace;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -12,21 +9,21 @@ use std::time::Duration;
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::events::EventObserver;
-use crate::events::SubscriptionId;
+use crate::events::Unsubscriber;
 use crate::model::GameActionEvent;
 use crate::model::GameStateEvent;
 
 pub struct HistoryControlsUI {
     pub undo_button: Rc<Button>,
     pub redo_button: Rc<Button>,
-    subscription_id: Option<SubscriptionId>,
+    subscription_id: Option<Unsubscriber<GameStateEvent>>,
     game_state_observer: EventObserver<GameStateEvent>,
 }
 
 impl Destroyable for HistoryControlsUI {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.subscription_id.take() {
-            self.game_state_observer.unsubscribe(subscription_id);
+            subscription_id.unsubscribe();
         }
     }
 }
@@ -99,7 +96,12 @@ impl HistoryControlsUI {
     }
 
     fn update_buttons(&self, history_index: usize, history_length: usize) {
-        println!("update_buttons {:?} {:?}", history_index, history_length);
+        trace!(
+            target: "history_controls_ui",
+            "update_buttons {:?} {:?}",
+            history_index,
+            history_length
+        );
         self.undo_button.set_sensitive(history_index > 0);
         self.redo_button
             .set_sensitive(history_index + 1 < history_length);

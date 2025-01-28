@@ -3,8 +3,8 @@ use std::ops::RangeInclusive;
 
 use crate::model::{Difficulty, Tile};
 use log::trace;
+use rand::RngCore;
 use rand::{seq::SliceRandom, SeedableRng};
-use rand::{thread_rng, RngCore};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_GRID_SIZE: usize = 8;

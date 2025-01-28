@@ -1,15 +1,15 @@
+use std::cell::RefCell;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
+use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
-use crate::model::{Candidate, CandidateState, GameActionEvent, Tile};
-use crate::ui::layout::{CANDIDATE_IMG_SIZE, CELL_SPACING, FRAME_MARGIN};
+use crate::model::{Candidate, CandidateState, GameActionEvent, GridSizing, Tile};
 use glib::timeout_add_local_once;
-use gtk::prelude::*;
-use gtk::{Frame, Grid, Image, Overlay};
-use log::trace;
+use gtk::{prelude::*, GestureClick};
+use gtk::{Frame, Grid, Image, Overlay, Widget};
+use log::{trace, warn};
 
-use super::layout::CELL_SIZE;
 use super::ResourceSet;
 
 pub struct PuzzleCellUI {
@@ -25,44 +25,31 @@ pub struct PuzzleCellUI {
     pub game_action_emitter: EventEmitter<GameActionEvent>,
     pub _variants: RangeInclusive<char>,
     pub n_variants: usize,
+    current_layout: GridSizing,
+    gesture_click: Option<GestureClick>,
+    gesture_right: Option<GestureClick>,
 }
 
 impl PuzzleCellUI {
-    pub fn calc_cell_width(n_variants: usize) -> i32 {
-        CELL_SIZE * (PuzzleCellUI::calc_ncols(n_variants) as i32) + CELL_SPACING * 2
-    }
-
-    pub fn calc_cell_height() -> i32 {
-        CELL_SIZE * 2 + CELL_SPACING
-    }
-
-    fn calc_ncols(n_variants: usize) -> usize {
-        (n_variants + 1) / 2
+    fn grid_dimensions(n_variants: usize, idx: usize) -> (usize, usize) {
+        let n_cols = (n_variants + 1) / 2;
+        let row = idx / n_cols;
+        let col = idx % n_cols;
+        (row, col)
     }
 
     pub fn new(
-        resources: &Rc<ResourceSet>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
-        variants: RangeInclusive<char>,
+        resources: Rc<ResourceSet>,
         row: usize,
         col: usize,
-    ) -> Self {
+        game_action_emitter: EventEmitter<GameActionEvent>,
+        variants: RangeInclusive<char>,
+        layout: GridSizing,
+    ) -> Rc<RefCell<Self>> {
         let frame = Frame::new(None);
-        let n_variants = variants.clone().count();
-        frame.set_margin_start(FRAME_MARGIN);
-        frame.set_margin_end(FRAME_MARGIN);
-        frame.set_margin_top(FRAME_MARGIN);
-        frame.set_margin_bottom(FRAME_MARGIN);
-        frame.set_css_classes(&["cell-frame"]);
-        frame.set_hexpand(false);
-        frame.set_vexpand(false);
-        let cell_width = PuzzleCellUI::calc_cell_width(n_variants);
-        let cell_height = PuzzleCellUI::calc_cell_height();
-        frame.set_size_request(cell_width, cell_height);
+        frame.set_css_classes(&["puzzle-cell-frame"]);
 
         let candidates_grid = Grid::new();
-        candidates_grid.set_row_spacing(CELL_SPACING as u32);
-        candidates_grid.set_column_spacing(CELL_SPACING as u32);
         candidates_grid.set_halign(gtk::Align::Center);
         candidates_grid.set_valign(gtk::Align::Center);
         candidates_grid.set_hexpand(false);
@@ -71,11 +58,11 @@ impl PuzzleCellUI {
         let solution_image = Image::new();
         solution_image.set_visible(false);
 
+        let n_variants = variants.clone().count();
         let candidate_images: Vec<Image> = variants
             .clone()
             .map(|_| {
                 let img = Image::new();
-                img.set_pixel_size(CANDIDATE_IMG_SIZE);
                 img
             })
             .collect();
@@ -92,86 +79,124 @@ impl PuzzleCellUI {
         let candidate_overlays: Vec<Rc<Overlay>> =
             variants.clone().map(|_| Rc::new(Overlay::new())).collect();
 
-        let ncols = PuzzleCellUI::calc_ncols(n_variants); // TODO - handle odd # of columns
-        let nrows = 2;
-        // Add candidates to grid
-        for row in 0..nrows {
-            for col in 0..ncols {
-                let idx = row * ncols + col;
-                if idx >= n_variants {
-                    break;
-                }
-                // Set up overlay with image and highlight frame
-                candidate_overlays[idx].set_child(Some(&candidate_images[idx]));
-                candidate_overlays[idx].add_overlay(candidate_highlight_frames[idx].as_ref());
-                candidates_grid.attach(
-                    candidate_overlays[idx].as_ref(),
-                    col as i32,
-                    row as i32,
-                    1,
-                    1,
-                );
-            }
+        // Set up grid of candidate overlays
+        for (idx, overlay) in candidate_overlays.iter().enumerate() {
+            let (grid_row, grid_col) = PuzzleCellUI::grid_dimensions(n_variants, idx);
+
+            overlay.set_child(Some(&candidate_images[idx]));
+            overlay.add_overlay(candidate_highlight_frames[idx].upcast_ref::<Widget>());
+
+            candidates_grid.attach(overlay.as_ref(), grid_col as i32, grid_row as i32, 1, 1);
         }
 
         let overlay = Overlay::new();
-        overlay.set_css_classes(&["grid-overlay"]);
+        overlay.set_child(Some(&candidates_grid));
+        overlay.add_overlay(&solution_image);
 
-        let highlight_frame = Frame::new(None);
-        highlight_frame.set_css_classes(&["highlight-frame"]);
-        overlay.add_overlay(&highlight_frame);
+        frame.set_child(Some(&overlay));
 
-        // overlay.set_child(Some(&candidates_grid));
-        // frame.set_child(Some(&overlay));
-
-        frame.set_child(Some(&candidates_grid));
-
-        let instance = Self {
-            _variants: variants,
+        let cell_ui = Self {
             frame,
             candidates_grid,
             solution_image,
             candidate_images,
             _candidate_overlays: candidate_overlays,
             highlight_frames: candidate_highlight_frames,
-            resources: Rc::clone(resources),
+            resources,
             row,
             col,
-            game_action_emitter: game_action_emitter,
+            game_action_emitter,
+            _variants: variants.clone(),
             n_variants,
+            current_layout: layout,
+            gesture_click: None,
+            gesture_right: None,
         };
-        instance.register_click_handler();
-        instance
+        cell_ui.apply_layout();
+
+        let cell_ui = Rc::new(RefCell::new(cell_ui));
+
+        PuzzleCellUI::register_click_handler(cell_ui.clone());
+        cell_ui
     }
 
-    fn register_click_handler(&self) {
-        let row = self.row;
-        let col = self.col;
-        let n_variants = self.n_variants;
+    pub fn apply_layout(&self) {
+        // Update frame size
+        self.frame.set_size_request(
+            self.current_layout.cell.dimensions.width,
+            self.current_layout.cell.dimensions.height,
+        );
+
+        // Update solution image size
+        self.solution_image
+            .set_pixel_size(self.current_layout.cell.solution_image.width);
+
+        // Update candidate image sizes
+        for img in &self.candidate_images {
+            img.set_pixel_size(self.current_layout.cell.candidate_image.width);
+        }
+
+        // Update grid spacing
+        self.candidates_grid
+            .set_row_spacing(self.current_layout.cell.padding as u32);
+        self.candidates_grid
+            .set_column_spacing(self.current_layout.cell.padding as u32);
+    }
+
+    pub fn update_layout(&mut self, layout: &GridSizing) {
+        self.current_layout = layout.clone();
+        self.apply_layout();
+    }
+
+    fn register_click_handler(cell_ui: Rc<RefCell<Self>>) {
+        let cell_ui_borrowed = cell_ui.borrow();
+        let row = cell_ui_borrowed.row;
+        let col = cell_ui_borrowed.col;
+        let game_action_emitter = cell_ui_borrowed.game_action_emitter.clone();
+        drop(cell_ui_borrowed);
 
         // Left click handler
+
         let gesture_click = gtk::GestureClick::new();
-        gesture_click.set_button(1);
-        let game_action_emitter = self.game_action_emitter.clone();
-        gesture_click.connect_pressed(move |_gesture, _, x, y| {
-            let variant = PuzzleCellUI::get_variant_at_position(x, y, n_variants);
-            game_action_emitter.emit(&GameActionEvent::CellClick(row, col, variant));
-        });
+        {
+            let cell_ui = Rc::downgrade(&cell_ui);
+            let game_action_emitter = game_action_emitter.clone();
+            gesture_click.set_button(1);
+            gesture_click.connect_pressed(move |_gesture, _, x, y| {
+                if let Some(cell_ui) = cell_ui.upgrade() {
+                    let variant = cell_ui.borrow_mut().get_variant_at_position(x, y);
+                    game_action_emitter.emit(&GameActionEvent::CellClick(row, col, variant));
+                } else {
+                    warn!(target: "puzzle_cell_ui", "Stale handler called!");
+                }
+            });
+        }
 
         // Right click handler
         let gesture_right = gtk::GestureClick::new();
         gesture_right.set_button(3);
-        let game_action_emitter = self.game_action_emitter.clone();
-        gesture_right.connect_pressed(move |_gesture, _, x, y| {
-            let variant = PuzzleCellUI::get_variant_at_position(x, y, n_variants);
-            game_action_emitter.emit(&GameActionEvent::CellRightClick(row, col, variant));
-        });
-
-        self.frame.add_controller(gesture_click);
-        self.frame.add_controller(gesture_right);
+        {
+            let game_action_emitter = game_action_emitter.clone();
+            let cell_ui = Rc::downgrade(&cell_ui);
+            gesture_right.connect_pressed(move |_gesture, _, x, y| {
+                if let Some(cell_ui) = cell_ui.upgrade() {
+                    let variant = cell_ui.borrow_mut().get_variant_at_position(x, y);
+                    game_action_emitter.emit(&GameActionEvent::CellRightClick(row, col, variant));
+                } else {
+                    warn!(target: "puzzle_cell_ui", "Stale handler called!");
+                }
+            });
+        }
+        let mut cell_ui_borrowed = cell_ui.borrow_mut();
+        let frame: &Frame = &cell_ui_borrowed.frame;
+        frame.add_controller(gesture_click.clone());
+        frame.add_controller(gesture_right.clone());
+        cell_ui_borrowed.gesture_click = Some(gesture_click);
+        cell_ui_borrowed.gesture_right = Some(gesture_right);
     }
 
-    pub fn highlight_candidate(&self, index: usize, highlight_class: Option<&str>) {
+    pub fn highlight_candidate(&self, index: char, highlight_class: Option<&str>) {
+        let index = index as usize - 'a' as usize;
         if let Some(class) = highlight_class {
             self.highlight_frames[index].set_css_classes(&[class]);
             self.highlight_frames[index].set_visible(true);
@@ -180,14 +205,15 @@ impl PuzzleCellUI {
         }
     }
 
-    pub fn set_candidate(&self, index: usize, candidate: Option<&Candidate>) {
+    pub fn set_candidate(&self, variant: char, candidate: Option<&Candidate>) {
+        let variant_idx = variant as usize - 'a' as usize;
         if let Some(candidate) = candidate {
-            if let Some(pixbuf) = self.resources.get_icon(
-                candidate.tile.row as i32,
-                candidate.tile.variant as i32 - 'a' as i32,
-            ) {
-                self.candidate_images[index].set_from_pixbuf(Some(&pixbuf));
-                self.candidate_images[index].set_opacity(match candidate.state {
+            if let Some(pixbuf) = self
+                .resources
+                .get_icon(candidate.tile.row as i32, variant_idx as i32)
+            {
+                self.candidate_images[variant_idx].set_from_pixbuf(Some(&pixbuf));
+                self.candidate_images[variant_idx].set_opacity(match candidate.state {
                     CandidateState::Available => 1.0,
                     CandidateState::Eliminated => 0.1,
                 });
@@ -220,15 +246,15 @@ impl PuzzleCellUI {
         }
     }
 
-    pub fn get_variant_at_position(x: f64, y: f64, n_variants: usize) -> Option<char> {
-        // Each candidate is 32x32 pixels, and the grid is centered in a 96x96 cell
-        // Calculate offset to center of candidates grid
-
-        let ncols = PuzzleCellUI::calc_ncols(n_variants); // TODO - handle odd # of columns
+    pub fn get_variant_at_position(&self, x: f64, y: f64) -> Option<char> {
+        let ncols = (self.n_variants + 1) / 2;
         let nrows = 2;
 
-        let grid_width = (ncols as f64) * (CANDIDATE_IMG_SIZE as f64) + 2.0 * 2.0; // 3 candidates * 32px + 2 gaps * 2px
-        let grid_height = (nrows as f64) * (CANDIDATE_IMG_SIZE as f64) + 1.0 * 2.0; // 2 rows * 32px + 1 gap * 2px
+        let grid_width = self.current_layout.total_dimensions.width as f64;
+        let grid_height = self.current_layout.total_dimensions.height as f64;
+        let candidate_image = &self.current_layout.cell.candidate_image;
+
+        // unclear what these were
         let grid_x_offset = 2.0;
         let grid_y_offset = 1.0;
 
@@ -242,14 +268,22 @@ impl PuzzleCellUI {
 
         trace!(target: "puzzle_cell_ui", "Adjusted click position: ({}, {})", grid_x, grid_y);
 
-        // Check if click is outside the grid
-        if grid_x < 0.0 || grid_y < 0.0 || grid_x >= grid_width || grid_y >= grid_height {
+        // Check if click is outside the cell grid
+        if grid_x < 0.0
+            || grid_y < 0.0
+            || grid_x >= self.current_layout.cell.dimensions.width as f64
+            || grid_y >= self.current_layout.cell.dimensions.height as f64
+        {
             trace!(target: "puzzle_cell_ui", "Click outside grid bounds");
             return None;
         }
 
-        let col = (grid_x / (CANDIDATE_IMG_SIZE as f64 + 2.0)).floor() as usize; // Add 2px for gap
-        let row = (grid_y / (CANDIDATE_IMG_SIZE as f64 + 2.0)).floor() as usize; // Add 2px for gap
+        let col = (grid_x
+            / (candidate_image.width as f64 + self.current_layout.cell.padding as f64))
+            .floor() as usize; // Add 2px for gap
+        let row = (grid_y
+            / (candidate_image.height as f64 + self.current_layout.cell.padding as f64))
+            .floor() as usize; // Add 2px for gap
 
         trace!(target: "puzzle_cell_ui", "Calculated grid position: row={}, col={}", row, col);
 
@@ -260,7 +294,7 @@ impl PuzzleCellUI {
 
         // Convert grid position to variant (a-f)
         let variant_index = row * ncols + col;
-        if variant_index >= n_variants {
+        if variant_index >= self.n_variants {
             trace!(target: "puzzle_cell_ui", "Variant index {} out of range", variant_index);
             return None;
         }
@@ -270,7 +304,7 @@ impl PuzzleCellUI {
         Some(variant)
     }
 
-    pub fn highlight_candidate_for(&self, from_secs: std::time::Duration, variant: char) {
+    pub fn hint_highlight_candidate_for(&self, from_secs: std::time::Duration, variant: char) {
         trace!(
             target: "cell_ui",
             "Highlighting candidate: {} in cell ({}, {})",
@@ -292,6 +326,19 @@ impl PuzzleCellUI {
 impl Drop for PuzzleCellUI {
     fn drop(&mut self) {
         // Unparent all widgets to ensure proper cleanup
+        trace!(target: "puzzle_cell_ui", "Dropping cell UI {}, {}", self.col, self.row);
         self.frame.unparent();
+    }
+}
+
+impl Destroyable for PuzzleCellUI {
+    fn destroy(&mut self) {
+        trace!(target: "puzzle_cell_ui", "Destroying cell UI {}, {}", self.col, self.row);
+        if let Some(gesture_click) = self.gesture_click.take() {
+            self.frame.remove_controller(&gesture_click);
+        }
+        if let Some(gesture_right) = self.gesture_right.take() {
+            self.frame.remove_controller(&gesture_right);
+        }
     }
 }
