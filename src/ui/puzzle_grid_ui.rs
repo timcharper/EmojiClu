@@ -15,7 +15,6 @@ use super::{puzzle_cell_ui::PuzzleCellUI, ResourceSet};
 
 pub struct PuzzleGridUI {
     pub grid: gtk::Grid,
-    pub pause_label: gtk::Label,
     pub cells: Vec<Vec<Rc<RefCell<PuzzleCellUI>>>>,
     game_action_emitter: EventEmitter<GameActionEvent>,
     resources: Rc<ResourceSet>,
@@ -32,7 +31,6 @@ impl Destroyable for PuzzleGridUI {
     fn destroy(&mut self) {
         // Unparent all widgets
         self.grid.unparent();
-        self.pause_label.unparent();
         if let Some(subscription_id) = self.game_state_subscription_id.take() {
             subscription_id.unsubscribe();
         }
@@ -53,13 +51,8 @@ impl PuzzleGridUI {
         let grid = Grid::new();
         grid.set_css_classes(&["puzzle-grid"]);
 
-        let pause_label = Label::new(Some("PAUSED"));
-        pause_label.set_css_classes(&["pause-label"]);
-        pause_label.set_visible(false);
-
         let puzzle_grid_ui = Rc::new(RefCell::new(Self {
             grid,
-            pause_label,
             cells: vec![],
             game_action_emitter,
             resources,
@@ -162,13 +155,6 @@ impl PuzzleGridUI {
                     }
                 }
             }
-            GameStateEvent::PuzzleVisibilityChanged(visible) => {
-                if *visible {
-                    self.show();
-                } else {
-                    self.hide();
-                }
-            }
             GameStateEvent::CellHintHighlight { cell, variant } => {
                 self.highlight_candidate(cell.0, cell.1, *variant);
             }
@@ -231,15 +217,5 @@ impl PuzzleGridUI {
         self.cells[row][column]
             .borrow()
             .hint_highlight_candidate_for(Duration::from_secs(4), variant);
-    }
-
-    pub fn show(&self) {
-        self.grid.set_visible(true);
-        self.pause_label.set_visible(false);
-    }
-
-    pub fn hide(&self) {
-        self.grid.set_visible(false);
-        self.pause_label.set_visible(true);
     }
 }

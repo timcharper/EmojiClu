@@ -218,10 +218,26 @@ impl ClueUI {
         orientation: ClueOrientation,
         layout: CluesSizing,
     ) -> Self {
-        let frame = Frame::new(None);
-        frame.set_css_classes(&["clue-cell-frame"]);
+        let frame = Frame::builder()
+            .name(&format!("clue-cell-frame-{}", orientation))
+            .css_classes(["clue-cell-frame"])
+            .build();
 
         let grid = Grid::new();
+        let tooltip_data = Rc::new(RefCell::new(None));
+        let tooltip_widget = Rc::new(RefCell::new(None));
+
+        // Set up tooltip handling
+        frame.set_has_tooltip(true);
+        let tooltip_widget_clone = Rc::clone(&tooltip_widget);
+        frame.connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
+            let widget = tooltip_widget_clone.borrow();
+            if let Some(ref w) = *widget {
+                tooltip.set_custom(Some(w));
+            }
+            true
+        });
+
         grid.set_row_spacing(0);
         grid.set_column_spacing(0);
 
@@ -241,9 +257,6 @@ impl ClueUI {
         }
 
         frame.set_child(Some(&grid));
-
-        let tooltip_data = Rc::new(RefCell::new(None));
-        let tooltip_widget = Rc::new(RefCell::new(None));
 
         Self {
             frame,

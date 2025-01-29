@@ -142,19 +142,9 @@ impl ClueSetUI {
             GameStateEvent::ClueHintHighlight { clue } => {
                 self.highlight_clue(clue.orientation, clue.index, Duration::from_secs(4));
             }
-            GameStateEvent::PuzzleVisibilityChanged(visible) => {
-                if *visible {
-                    self.show();
-                } else {
-                    self.hide();
-                }
-            }
-            GameStateEvent::ClueVisibilityChanged {
-                horizontal_clues,
-                vertical_clues,
-            } => {
-                self.set_horiz_completion(horizontal_clues);
-                self.set_vert_completion(vertical_clues);
+            GameStateEvent::GridUpdate(grid) => {
+                self.set_horiz_completion(&grid.completed_horizontal_clues);
+                self.set_vert_completion(&grid.completed_vertical_clues);
             }
             _ => {}
         }
@@ -268,13 +258,13 @@ impl ClueSetUI {
         self.horizontal_grid.set_size_request(min_width, -1);
     }
 
-    pub(crate) fn set_horiz_completion(&self, completed_clues: &HashSet<usize>) {
+    fn set_horiz_completion(&self, completed_clues: &HashSet<usize>) {
         for (idx, clue_ui) in self.horizontal_clue_uis.iter().enumerate() {
             clue_ui.set_completed(completed_clues.contains(&idx));
         }
     }
 
-    pub(crate) fn set_vert_completion(&self, completed_clues: &HashSet<usize>) {
+    fn set_vert_completion(&self, completed_clues: &HashSet<usize>) {
         for (idx, clue_ui) in self.vertical_clue_uis.iter().enumerate() {
             clue_ui.set_completed(completed_clues.contains(&idx));
         }

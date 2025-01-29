@@ -18,9 +18,25 @@ use std::time::Duration;
 use super::clue_set_ui::ClueSetUI;
 use super::game_info_ui::GameInfoUI;
 use super::history_controls_ui::HistoryControlsUI;
-use super::layout_manager::{self, ClueStats, LayoutManager};
+use super::layout_manager::{ClueStats, LayoutManager};
 use super::puzzle_grid_ui::PuzzleGridUI;
 use super::ResourceSet;
+
+fn pause_screen() -> Rc<gtk::Box> {
+    let pause_label = Label::builder()
+        .label("PAUSED")
+        .css_classes(["pause-label"])
+        .visible(true)
+        .hexpand(true)
+        .vexpand(true)
+        .build();
+    let pause_screen_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .visible(false)
+        .build();
+    pause_screen_box.append(&pause_label);
+    Rc::new(pause_screen_box)
+}
 
 fn hint_button_handler(
     game_action_emitter: EventEmitter<GameActionEvent>,
@@ -105,12 +121,27 @@ pub fn build_ui(app: &Application) {
             .build(),
     );
 
+    let scrolled_window = gtk::ScrolledWindow::builder()
+        .hexpand_set(true)
+        .vexpand_set(true)
+        .build();
+
+    let pause_screen = pause_screen();
+    // Create game area with puzzle and horizontal clues side by side
+    let game_box = Rc::new(
+        gtk::Box::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(10)
+            .build(),
+    );
+
     let layout_manager = LayoutManager::new(
         window.clone(),
         global_event_emitter.clone(),
         game_action_observer.clone(),
         game_state_observer.clone(),
         resources.clone(),
+        scrolled_window.clone(),
         settings.borrow().difficulty,
     );
 
@@ -185,7 +216,11 @@ pub fn build_ui(app: &Application) {
     let history_controls_ui =
         HistoryControlsUI::new(game_state_observer.clone(), game_action_emitter.clone());
 
-    let game_info_ui = GameInfoUI::new(game_state_observer.clone());
+    let game_info_ui = GameInfoUI::new(
+        game_state_observer.clone(),
+        game_box.clone(),
+        pause_screen.clone(),
+    );
 
     let solve_button = Button::with_label("Solve");
     let hint_button = Button::from_icon_name("view-reveal-symbolic");
@@ -271,12 +306,6 @@ pub fn build_ui(app: &Application) {
 
     window.set_titlebar(Some(&header_bar));
 
-    // Create game area with puzzle and horizontal clues side by side
-    let game_box = gtk::Box::builder()
-        .orientation(Orientation::Horizontal)
-        .spacing(10)
-        .build();
-
     // Create a vertical box for puzzle grid and vertical clues
     let puzzle_vertical_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
@@ -325,13 +354,21 @@ pub fn build_ui(app: &Application) {
 
     game_box.append(&puzzle_vertical_box);
     game_box.append(&clue_set_ui.borrow().horizontal_grid);
-    game_box.append(&puzzle_grid_ui.borrow().pause_label);
 
-    {
-        let scrolled_window = &layout_manager.borrow().scrolled_window;
-        scrolled_window.set_child(Some(&game_box));
-        window.set_child(Some(scrolled_window));
-    }
+    let top_level_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .visible(true)
+        .hexpand(true)
+        .vexpand(true)
+        .build();
+
+    top_level_box.append(game_box.as_ref());
+    top_level_box.append(pause_screen.as_ref());
+
+    scrolled_window.set_child(Some(&top_level_box));
+    // window.set_child(Some(&top_level_box));
+    window.set_child(Some(&scrolled_window));
+
     window.present();
 
     // Add actions for keyboard shortcuts and menu items

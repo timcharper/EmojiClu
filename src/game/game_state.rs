@@ -167,7 +167,6 @@ impl GameState {
         self.is_paused = false;
         self.timer_state = TimerState::default();
         self.sync_board_display();
-        self.sync_clues_completion_state();
         self.game_state_emitter
             .emit(&GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
@@ -222,7 +221,6 @@ impl GameState {
             });
 
         self.sync_board_display();
-        self.sync_clues_completion_state();
     }
 
     fn undo(&mut self) {
@@ -230,7 +228,6 @@ impl GameState {
             self.history_index -= 1;
             self.current_board = self.history[self.history_index].clone();
             self.sync_board_display();
-            self.sync_clues_completion_state();
         }
 
         self.game_state_emitter
@@ -245,7 +242,6 @@ impl GameState {
             self.history_index += 1;
             self.current_board = self.history[self.history_index].clone();
             self.sync_board_display();
-            self.sync_clues_completion_state();
         }
 
         self.game_state_emitter
@@ -286,7 +282,6 @@ impl GameState {
             GameActionEvent::NewGame(difficulty) => self.new_game(difficulty),
             GameActionEvent::InitDisplay => {
                 self.sync_board_display();
-                self.sync_clues_completion_state();
             }
             GameActionEvent::Solve => self.try_solve(),
             GameActionEvent::RewindLastGood => self.rewind_last_good(),
@@ -454,14 +449,6 @@ impl GameState {
         stats
     }
 
-    fn sync_clues_completion_state(&self) {
-        self.game_state_emitter
-            .emit(&GameStateEvent::ClueVisibilityChanged {
-                horizontal_clues: self.current_board.completed_horizontal_clues.clone(),
-                vertical_clues: self.current_board.completed_vertical_clues.clone(),
-            });
-    }
-
     fn handle_horizontal_clue_click(&mut self, clue_idx: usize) {
         let mut current_board = self.current_board.as_ref().clone();
         current_board.toggle_horizontal_clue_completed(clue_idx);
@@ -484,8 +471,6 @@ impl GameState {
             self.timer_state.paused_timestamp = Some(Instant::now());
             self.game_state_emitter
                 .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
-            self.game_state_emitter
-                .emit(&GameStateEvent::PuzzleVisibilityChanged(false));
         }
     }
 
@@ -498,8 +483,6 @@ impl GameState {
                 self.game_state_emitter
                     .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
             }
-            self.game_state_emitter
-                .emit(&GameStateEvent::PuzzleVisibilityChanged(true));
         }
     }
 }

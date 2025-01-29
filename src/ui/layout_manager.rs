@@ -47,7 +47,7 @@ pub struct LayoutManager {
     game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
     resources: Rc<ResourceSet>,
     current_difficulty: Difficulty,
-    pub scrolled_window: gtk::ScrolledWindow,
+    scrolled_window: gtk::ScrolledWindow,
     container_dimensions: Option<Dimensions>,
     clue_stats: ClueStats,
     last_layout: Option<LayoutConfiguration>,
@@ -79,20 +79,16 @@ impl LayoutManager {
         game_action_observer: EventObserver<GameActionEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
         resources: Rc<ResourceSet>,
+        scrolled_window: gtk::ScrolledWindow,
         current_difficulty: Difficulty,
     ) -> Rc<RefCell<Self>> {
-        // Create main container
-        let scrolled_container = gtk::ScrolledWindow::builder()
-            .hexpand_set(true)
-            .vexpand_set(true)
-            .build();
         let dw = Rc::new(RefCell::new(Self {
             global_event_emitter,
             window: window.clone(),
             handle_surface_enter_monitor: None,
             handle_surface_layout: None,
             resources,
-            scrolled_window: scrolled_container,
+            scrolled_window,
             current_difficulty,
             game_action_subscription: None,
             game_state_subscription: None,

@@ -24,11 +24,6 @@ pub enum GameStateEvent {
         clue: ClueWithGrouping,
     },
     ClueSetUpdate(Rc<ClueSet>),
-    PuzzleVisibilityChanged(bool),
-    ClueVisibilityChanged {
-        horizontal_clues: HashSet<usize>,
-        vertical_clues: HashSet<usize>,
-    },
 }
 
 impl GameStateEvent {}
