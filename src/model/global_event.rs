@@ -6,7 +6,7 @@ use super::LayoutConfiguration;
 /// Events that are not specific to any one component of the game.
 #[derive(Debug)]
 pub enum GlobalEvent {
-    SettingsChanged(Rc<Settings>),
+    SettingsChanged(Settings),
     DimensionsChanged(Rc<ResourceSet>),
     LayoutChanged(LayoutConfiguration),
 }

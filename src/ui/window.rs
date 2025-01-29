@@ -337,11 +337,6 @@ pub fn build_ui(app: &Application) {
         Some(&gtk::glib::VariantType::new("s").unwrap()),
     );
 
-    // Initialize game with saved difficulty
-    game_state
-        .borrow_mut()
-        .handle_event(GameActionEvent::NewGame(settings.borrow().difficulty));
-
     // Add CSS for selected cells
     let provider = gtk::CssProvider::new();
     provider.load_from_resource("/org/gwatson/style.css");
@@ -453,19 +448,27 @@ pub fn build_ui(app: &Application) {
         &settings.borrow().clue_tooltips_enabled.to_variant(),
     );
     let settings_ref = Rc::clone(&settings);
-    let global_event_emitter = global_event_emitter.clone();
-    action_toggle_tooltips.connect_activate(move |action, _| {
-        let mut settings = settings_ref.borrow_mut();
-        settings.clue_tooltips_enabled = !settings.clue_tooltips_enabled;
-        action.set_state(&settings.clue_tooltips_enabled.to_variant());
-        let _ = settings.save();
-        global_event_emitter.emit(&GlobalEvent::SettingsChanged(Rc::new(settings.clone())));
-    });
-    window.add_action(&action_toggle_tooltips);
+    {
+        let global_event_emitter = global_event_emitter.clone();
+        action_toggle_tooltips.connect_activate(move |action, _| {
+            let mut settings = settings_ref.borrow_mut();
+            settings.clue_tooltips_enabled = !settings.clue_tooltips_enabled;
+            action.set_state(&settings.clue_tooltips_enabled.to_variant());
+            let _ = settings.save();
+            global_event_emitter.emit(&GlobalEvent::SettingsChanged(settings.clone()));
+        });
+        window.add_action(&action_toggle_tooltips);
+    }
 
     let submit_ui_cleanup = Rc::clone(&submit_ui);
     let puzzle_grid_ui_cleanup = Rc::clone(&puzzle_grid_ui);
     let clue_set_ui_cleanup = Rc::clone(&clue_set_ui);
+    // publish initial messages
+
+    // Initialize game with saved difficulty
+    game_action_emitter.emit(&GameActionEvent::NewGame(settings.borrow().difficulty));
+    global_event_emitter.emit(&GlobalEvent::SettingsChanged(settings.borrow().clone()));
+
     window.connect_destroy(move |_| {
         println!("Destroying window");
         history_controls_ui.borrow_mut().destroy();
