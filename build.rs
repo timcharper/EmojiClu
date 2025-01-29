@@ -20,6 +20,24 @@ fn main() {
     )
     .unwrap();
 
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
+        let res_output = target_dir.join("app.res");
+
+        println!("cargo:rerun-if-changed=app.rc");
+        let status = std::process::Command::new("x86_64-w64-mingw32-windres")
+            .args(&["app.rc", "-O", "coff", "-o"])
+            .arg(&res_output)
+            .status()
+            .expect("Failed to run windres");
+
+        if !status.success() {
+            panic!("windres failed with exit code: {:?}", status.code());
+        }
+
+        // Tell Cargo to link the generated app.res
+        println!("cargo:rustc-link-arg={}", res_output.display());
+    }
+
     // Tell cargo to rerun if resources change
     println!("cargo:rerun-if-changed=resources");
 }

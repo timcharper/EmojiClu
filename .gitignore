@@ -26,6 +26,12 @@ compiled.gresource
 # OS specific files
 .DS_Store
 Thumbs.db
-bundle
+/bundle/gtk
+/bundle/vulkan
+/bundle/gwatson
+/bundle/*.zip
 *.local.*
 *.local
+./app.res
+/bundle/*.exe
+*.tar.xz
