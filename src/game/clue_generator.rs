@@ -3,7 +3,7 @@ use super::clue_generator_state::{ClueEvaluation, ClueGeneratorState};
 pub const MAX_HORIZ_CLUES: usize = 48;
 pub const MAX_VERT_CLUES: usize = 20;
 
-use log::{info, trace};
+use log::{info, trace, warn};
 use rand::{
     seq::{IteratorRandom, SliceRandom},
     Rng,

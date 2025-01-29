@@ -304,15 +304,6 @@ impl LayoutManager {
 
     // TODO - get rid of inputs array
     fn calculate_layout(&self) -> LayoutConfiguration {
-        // fn get_layout_inputs(&self) -> LayoutInputs {
-        //     LayoutInputs {
-        //         difficulty: self.current_difficulty,
-        //         window: self.container_dimensions.clone(),
-        //         n_vertical_clues: self.clue_stats.n_vertical_clues,
-        //         n_horizontal_clues: self.clue_stats.n_horizontal_clues,
-        //     }
-        // }
-
         let base_layout =
             LayoutManager::unscaled_layout(self.current_difficulty, Some(self.clue_stats));
 
@@ -348,50 +339,55 @@ impl LayoutManager {
         let height_scale = available_height as f32 / total_required_height as f32;
 
         // Use the smaller scale factor to maintain aspect ratio
-        let scale = width_scale.min(height_scale).min(1.0);
+        let scale = width_scale.min(height_scale);
+        self.scale_layout(base_layout, scale)
+    }
 
+    fn scale_layout(&self, layout: LayoutConfiguration, scale: f32) -> LayoutConfiguration {
         // Apply scaling to cell dimensions
         let scaled_cell_sizing = GridCellSizing {
             dimensions: Dimensions {
-                width: (base_layout.grid.cell.dimensions.width as f32 * scale) as i32,
-                height: (base_layout.grid.cell.dimensions.height as f32 * scale) as i32,
+                width: (layout.grid.cell.dimensions.width as f32 * scale) as i32,
+                height: (layout.grid.cell.dimensions.height as f32 * scale) as i32,
             },
             solution_image: Dimensions {
-                width: (base_layout.grid.cell.solution_image.width as f32 * scale) as i32,
-                height: (base_layout.grid.cell.solution_image.height as f32 * scale) as i32,
+                width: (layout.grid.cell.solution_image.width as f32 * scale) as i32,
+                height: (layout.grid.cell.solution_image.height as f32 * scale) as i32,
             },
             candidate_image: Dimensions {
-                width: (base_layout.grid.cell.candidate_image.width as f32 * scale) as i32,
-                height: (base_layout.grid.cell.candidate_image.height as f32 * scale) as i32,
+                width: (layout.grid.cell.candidate_image.width as f32 * scale) as i32,
+                height: (layout.grid.cell.candidate_image.height as f32 * scale) as i32,
             },
-            padding: (base_layout.grid.cell.padding as f32 * scale) as i32,
+            padding: (layout.grid.cell.padding as f32 * scale) as i32,
         };
 
         // Scale spacing proportionally
-        let scaled_spacing = (base_layout.grid.column_spacing as f32 * scale) as i32;
+        let scaled_spacing = (layout.grid.column_spacing as f32 * scale) as i32;
 
         // Scale clue dimensions
         let scaled_clues = CluesSizing {
             clue_tile_size: Dimensions {
-                width: (base_layout.clues.clue_tile_size.width as f32 * scale) as i32,
-                height: (base_layout.clues.clue_tile_size.height as f32 * scale) as i32,
+                width: (layout.clues.clue_tile_size.width as f32 * scale) as i32,
+                height: (layout.clues.clue_tile_size.height as f32 * scale) as i32,
             },
-            horizontal_clue_panel_width: (base_layout.clues.horizontal_clue_panel_width as f32
-                * scale) as i32,
-            vertical_clue_panel_height: (base_layout.clues.vertical_clue_panel_height as f32
-                * scale) as i32,
+            horizontal_clue_panel_width: (layout.clues.horizontal_clue_panel_width as f32 * scale)
+                as i32,
+            vertical_clue_panel_height: (layout.clues.vertical_clue_panel_height as f32 * scale)
+                as i32,
             clue_annotation_size: Dimensions {
-                width: (base_layout.clues.clue_annotation_size.width as f32 * scale) as i32,
-                height: (base_layout.clues.clue_annotation_size.height as f32 * scale) as i32,
+                width: (layout.clues.clue_annotation_size.width as f32 * scale) as i32,
+                height: (layout.clues.clue_annotation_size.height as f32 * scale) as i32,
             },
-            horizontal_margin: (base_layout.clues.horizontal_margin as f32 * scale) as i32,
-            vertical_margin: (base_layout.clues.vertical_margin as f32 * scale) as i32,
-            horizontal_clue_column_spacing: (base_layout.clues.horizontal_clue_column_spacing
-                as f32
+            horizontal_margin: (layout.clues.horizontal_margin as f32 * scale) as i32,
+            vertical_margin: (layout.clues.vertical_margin as f32 * scale) as i32,
+            horizontal_clue_column_spacing: (layout.clues.horizontal_clue_column_spacing as f32
                 * scale) as i32,
-            vertical_clue_group_spacer: (base_layout.clues.vertical_clue_group_spacer as f32
-                * scale) as i32,
+            vertical_clue_group_spacer: (layout.clues.vertical_clue_group_spacer as f32 * scale)
+                as i32,
         };
+
+        let n_variants = layout.grid.n_variants;
+        let n_rows = layout.grid.n_rows;
 
         // Recompute grid dimensions based on scaled components to avoid rounding errors
         let scaled_grid_width = scaled_cell_sizing.dimensions.width * n_variants as i32
@@ -406,7 +402,7 @@ impl LayoutManager {
             grid: GridSizing {
                 column_spacing: scaled_spacing,
                 row_spacing: scaled_spacing,
-                outer_padding: (base_layout.grid.outer_padding as f32 * scale) as i32,
+                outer_padding: (layout.grid.outer_padding as f32 * scale) as i32,
                 cell: scaled_cell_sizing,
                 n_variants: n_variants,
                 n_rows: n_rows,
