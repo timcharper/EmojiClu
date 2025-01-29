@@ -36,17 +36,35 @@ fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> BTreeMap<Clu
                 "Looking for clues matching clue group {:?}",
                 clue_group
             );
+
+            // Keep track of unprocessed clues that need to be checked
+            let mut to_process: BTreeSet<&Clue> = BTreeSet::new();
+            let mut processed: BTreeSet<&Clue> = BTreeSet::from([clue]);
+
+            // Initialize with clues that intersect with the first clue
             for other_clue in clues.iter() {
-                if clue_group.iter().any(|c| c.intersects_positive(other_clue)) {
-                    trace!(
-                        target: "clue_set",
-                        "Adding clue {:?} to group {:?}",
-                        other_clue,
-                        clue_group
-                    );
-                    clue_group.push(other_clue);
+                if !processed.contains(other_clue) && clue.intersects_positive(other_clue) {
+                    to_process.insert(other_clue);
                 }
             }
+
+            // Process clues until no more intersections are found
+            while let Some(&next_clue) = to_process.iter().next() {
+                to_process.remove(&next_clue);
+                processed.insert(next_clue);
+                clue_group.push(next_clue);
+
+                // Check for new intersections with unprocessed clues
+                for other_clue in clues.iter() {
+                    if !processed.contains(other_clue)
+                        && !to_process.contains(other_clue)
+                        && next_clue.intersects_positive(other_clue)
+                    {
+                        to_process.insert(other_clue);
+                    }
+                }
+            }
+
             trace!(
                 target: "clue_set",
                 "Grouping is {:?}",
@@ -306,5 +324,19 @@ mod tests {
         for (idx, clue) in grouped_clues.iter().enumerate() {
             assert_eq!(clue, &clues[idx]);
         }
+    }
+
+    #[test]
+    fn test_group_clues_expand_grouping() {
+        let clues = vec![
+            Clue::parse_vertical("|+0a,+1b|"),
+            Clue::parse_vertical("|+2b,+4e|"),
+            Clue::parse_vertical("|+0a,-3f,+4e|"),
+        ];
+
+        let clue_grouping = assign_clue_grouping(&clues, false);
+        let clues_by_grouping = group_clues(clue_grouping.clone());
+
+        assert_eq!(clues_by_grouping.len(), 1);
     }
 }
