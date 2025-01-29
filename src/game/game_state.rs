@@ -155,6 +155,10 @@ impl GameState {
 
     fn new_game(&mut self, difficulty: Difficulty) {
         let board_set = GameState::new_board_set(difficulty);
+        println!(
+            "New game; difficulty: {:?}; seed: {:?}",
+            difficulty, board_set.board.solution.seed
+        );
         self.current_board = Rc::new(board_set.board);
         self.clue_set = board_set.clue_set;
         self.solution = board_set.solution;
@@ -416,6 +420,12 @@ impl GameState {
                 }
             }
             return true;
+        } else {
+            log::error!(
+                target: "game_state",
+                "No deduction result found; seed: {:?}",
+                self.current_board.solution.seed
+            );
         }
         false
     }

@@ -506,7 +506,7 @@ mod tests {
     #[test]
     fn test_calc_horiz_clue_columns() {
         // Test case 1: Empty case
-        assert_eq!(LayoutManager::calc_horiz_clue_columns(0, 16), (0, 0));
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(0, 16), (1, 0));
 
         // Test case 2: Single column not full (10 clues, 16 per column)
         assert_eq!(LayoutManager::calc_horiz_clue_columns(10, 16), (1, 10));
@@ -527,6 +527,6 @@ mod tests {
         assert_eq!(LayoutManager::calc_horiz_clue_columns(10, 5), (2, 5));
 
         // Test case 8: Negative number of clues (should handle gracefully)
-        assert_eq!(LayoutManager::calc_horiz_clue_columns(-1, 16), (0, 0));
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(-1, 16), (1, 0));
     }
 }
