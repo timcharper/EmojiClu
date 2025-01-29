@@ -85,9 +85,8 @@ image {
     opacity: 0.9;
 }
 
-.puzzle-grid {
+.puzzle-mat-board {
     background-color: black;
-    padding: 3px;
 }
 
 @keyframes blink-ready {

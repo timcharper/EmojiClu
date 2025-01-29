@@ -262,6 +262,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
         init_board,
         init_board.solution
     );
+    info!(target: "clue_generator", "Generating clues for seed {:?}", init_board.solution.seed);
     let mut state = ClueGeneratorState::new(init_board.clone());
     let three_adjacent_clue_generator = ClueGenerator {
         weight: 6,
@@ -465,7 +466,8 @@ mod tests {
         let n_iterations = std::env::var("CLUE_GEN_ITERATIONS").unwrap_or("1".to_string());
         let n_iterations = n_iterations.parse::<u64>().unwrap();
         for i in 0..n_iterations {
-            let solution = Solution::new(Difficulty::Hard, Some(i));
+            let broken_seed = 17492908155780939550;
+            let solution = Solution::new(Difficulty::Hard, Some(broken_seed));
             let init_board = GameBoard::new(solution.into());
             let result = generate_clues(&init_board);
             trace!(

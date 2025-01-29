@@ -34,4 +34,7 @@ pub use tile::Tile;
 pub use tile_assertion::TileAssertion;
 pub use timer_state::TimerState;
 
-pub use layout::{CluesSizing, Dimensions, GridCellSizing, GridSizing, LayoutConfiguration};
+pub use layout::{
+    CluesSizing, Dimensions, GridCellSizing, GridSizing, HorizontalCluePanelSizing,
+    LayoutConfiguration, VerticalCluePanelSizing,
+};

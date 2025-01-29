@@ -71,7 +71,7 @@ impl PuzzleGridUI {
 
         puzzle_grid_ui
             .borrow_mut()
-            .set_grid_size(layout.grid.n_rows, layout.grid.n_variants);
+            .set_grid_size(layout.grid.n_rows as usize, layout.grid.n_variants as usize);
 
         puzzle_grid_ui
     }
@@ -83,10 +83,11 @@ impl PuzzleGridUI {
         self.grid.set_row_spacing(layout.grid.row_spacing as u32);
         self.grid
             .set_column_spacing(layout.grid.column_spacing as u32);
-        self.grid.set_margin_start(layout.grid.outer_padding);
-        self.grid.set_margin_end(layout.grid.outer_padding);
-        self.grid.set_margin_top(layout.grid.outer_padding);
-        self.grid.set_margin_bottom(layout.grid.outer_padding);
+
+        self.grid.set_margin_start(layout.grid.outer_margin);
+        self.grid.set_margin_end(layout.grid.outer_margin);
+        self.grid.set_margin_top(layout.grid.outer_margin);
+        self.grid.set_margin_bottom(layout.grid.outer_margin);
 
         // Propagate to all cells
         for row in &mut self.cells {

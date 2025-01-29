@@ -22,6 +22,8 @@ enum TemplateElement {
     Tile(usize),
 }
 
+const NEW_GROUP_CSS_CLASS: &str = "new-group";
+
 pub struct ClueUI {
     pub frame: Frame,
     pub cells: Vec<ClueTileUI>,
@@ -269,28 +271,38 @@ impl ClueUI {
         }
     }
 
-    pub fn update_layout(&mut self, layout: &LayoutConfiguration) {
-        self.layout = layout.clues.clone();
-        // Update frame size based on orientation
+    fn apply_layout(&self) {
         match self.orientation {
             ClueOrientation::Horizontal => {
                 self.frame.set_size_request(
-                    layout.clues.horizontal_clue_panel_width,
-                    layout.clues.clue_tile_size.height,
+                    self.layout.horizontal_clue_panel.clue_dimensions.width,
+                    self.layout.horizontal_clue_panel.clue_dimensions.height,
                 );
             }
             ClueOrientation::Vertical => {
                 self.frame.set_size_request(
-                    layout.clues.clue_tile_size.width,
-                    layout.clues.vertical_clue_panel_height,
+                    self.layout.vertical_clue_panel.clue_dimensions.width,
+                    self.layout.vertical_clue_panel.clue_dimensions.height,
                 );
+
+                if self.frame.has_css_class(NEW_GROUP_CSS_CLASS) {
+                    self.frame
+                        .set_margin_start(self.layout.vertical_clue_panel.group_spacing);
+                } else {
+                    self.frame.set_margin_start(0);
+                }
             }
         }
 
         // Update individual tile sizes
         for cell in &self.cells {
-            cell.update_layout(&layout.clues);
+            cell.update_layout(&self.layout);
         }
+    }
+
+    pub(crate) fn update_layout(&mut self, layout: &LayoutConfiguration) {
+        self.layout = layout.clues.clone();
+        self.apply_layout();
     }
 
     pub fn set_clue(&self, clue: Option<&Clue>, is_new_group: bool) {
@@ -311,11 +323,11 @@ impl ClueUI {
             }
             self.frame.set_visible(true);
             if clue.is_vertical() && is_new_group {
-                self.frame
-                    .set_margin_start(self.layout.vertical_clue_group_spacer);
+                self.frame.add_css_class(NEW_GROUP_CSS_CLASS);
             } else {
-                self.frame.remove_css_class("new-group");
+                self.frame.remove_css_class(NEW_GROUP_CSS_CLASS);
             }
+            self.apply_layout();
         } else {
             *self.tooltip_data.borrow_mut() = None;
             *self.tooltip_widget.borrow_mut() = None;
@@ -325,7 +337,7 @@ impl ClueUI {
             }
 
             self.frame.set_visible(false);
-            self.frame.remove_css_class("new-group");
+            self.frame.remove_css_class(NEW_GROUP_CSS_CLASS);
         }
     }
 

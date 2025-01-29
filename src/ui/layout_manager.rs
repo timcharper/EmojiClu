@@ -12,9 +12,11 @@ use log::trace;
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
+    game::clue_generator::MAX_HORIZ_CLUES,
     model::{
         ClueSet, CluesSizing, Difficulty, Dimensions, GameActionEvent, GameStateEvent, GlobalEvent,
-        GridCellSizing, GridSizing, LayoutConfiguration,
+        GridCellSizing, GridSizing, HorizontalCluePanelSizing, LayoutConfiguration,
+        VerticalCluePanelSizing, MAX_GRID_SIZE,
     },
 };
 
@@ -22,20 +24,36 @@ use super::ResourceSet;
 
 // Base unit sizes
 const SPACING_SMALL: i32 = 2;
+const SPACING_MEDIUM: i32 = 5;
 const SPACING_LARGE: i32 = 10;
-
-// Derived sizes
-const FRAME_MARGIN: i32 = SPACING_SMALL;
 
 // Icon sizes
 const SOLUTION_IMG_SIZE: i32 = 128;
 const CANDIDATE_IMG_SIZE: i32 = SOLUTION_IMG_SIZE / 2;
+
+const CLUES_PER_COLUMN: i32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ClueStats {
     pub n_vertical_clues: usize,
     pub n_horizontal_clues: usize,
     pub n_vertical_clue_groups: usize,
+}
+
+struct HorizCluePanelSizingInputs {
+    n_rows: i32,
+    n_columns: i32,
+    row_spacing: i32,
+    column_spacing: i32,
+    margin_left: i32,
+    clue_img_size: i32,
+}
+
+struct VertCluePanelSizingInputs {
+    candidate_img_size: i32,
+    margin_top: i32,
+    column_spacing: i32,
+    group_spacing: i32,
 }
 
 pub struct LayoutManager {
@@ -163,7 +181,7 @@ impl LayoutManager {
         if self.container_dimensions != dimensions {
             trace!(target: "layout_manager", "update_dimensions; dimensions: {:?}", dimensions);
             self.container_dimensions = dimensions;
-            let new_layout = self.calculate_layout();
+            let new_layout = self.calculate_scaled_layout();
             self.maybe_publish_layout(new_layout);
         }
     }
@@ -171,7 +189,7 @@ impl LayoutManager {
     fn update_difficulty(&mut self, difficulty: Difficulty) {
         if self.current_difficulty != difficulty {
             self.current_difficulty = difficulty;
-            let new_layout = self.calculate_layout();
+            let new_layout = self.calculate_scaled_layout();
             self.maybe_publish_layout(new_layout);
         }
     }
@@ -191,7 +209,7 @@ impl LayoutManager {
         if self.clue_stats != clue_stats {
             trace!(target: "layout_manager", "update_clue_stats; clue_stats: {:?}", clue_stats);
             self.clue_stats = clue_stats;
-            let new_layout = self.calculate_layout();
+            let new_layout = self.calculate_scaled_layout();
             self.maybe_publish_layout(new_layout);
         }
     }
@@ -208,7 +226,7 @@ impl LayoutManager {
         }
     }
 
-    pub fn unscaled_layout(
+    pub fn calculate_layout(
         difficulty: Difficulty,
         clue_stats: Option<ClueStats>,
     ) -> LayoutConfiguration {
@@ -216,119 +234,96 @@ impl LayoutManager {
         let n_rows = difficulty.grid_size();
         let n_horizontal_clues = clue_stats.unwrap_or_default().n_horizontal_clues;
 
-        let base_cell_aspect_ratio_width = (n_variants as i32 + 1) / 2;
-        let base_cell_aspect_ratio_height = 2;
-
-        let base_cell_sizing = GridCellSizing {
-            dimensions: Dimensions {
-                width: SOLUTION_IMG_SIZE * base_cell_aspect_ratio_width
-                    / base_cell_aspect_ratio_height,
-                height: SOLUTION_IMG_SIZE,
-            },
-            solution_image: Dimensions {
-                width: SOLUTION_IMG_SIZE,
-                height: SOLUTION_IMG_SIZE,
-            },
-            candidate_image: Dimensions {
-                width: CANDIDATE_IMG_SIZE,
-                height: CANDIDATE_IMG_SIZE,
-            },
-            padding: FRAME_MARGIN,
+        let solution_image = Dimensions {
+            width: SOLUTION_IMG_SIZE,
+            height: SOLUTION_IMG_SIZE,
         };
 
-        // Calculate total grid dimensions without scaling
-        let total_grid_width = base_cell_sizing.dimensions.width * n_variants as i32
-            + SPACING_LARGE * (n_variants as i32 - 1)
-            + base_cell_sizing.padding * 2;
-
-        let grid_height = base_cell_sizing.dimensions.height * n_rows as i32
-            + SPACING_LARGE * (n_rows as i32 - 1)
-            + base_cell_sizing.padding * 2;
-
-        // Calculate vertical clues height (3 tiles high for each clue)
-        let base_vert_clue_height = CANDIDATE_IMG_SIZE * 3  // 3 tiles
-            + SPACING_LARGE * 2  // spacing between tiles
-            + FRAME_MARGIN * 2; // padding on both sides
-
-        // Calculate horizontal clues space needed (16 clues per column)
-        let horiz_clue_columns = (n_horizontal_clues as i32) / 16 + 1;
-
-        // Base width for a single clue column
-        let base_clue_panel_width = CANDIDATE_IMG_SIZE * 3  // 3 tiles
-            + SPACING_LARGE * 2  // spacing between tiles
-            + FRAME_MARGIN * 2; // padding on both sides
-
-        // Total width for all horizontal clue columns including spacing between columns
-        let horiz_clues_width = if horiz_clue_columns > 1 {
-            trace!(target: "layout_manager", "horiz_clues_width; horiz_clue_columns: {}; base_clue_panel_width: {}; SPACING_LARGE: {}; n_horizontal_clues: {}", horiz_clue_columns, base_clue_panel_width, SPACING_LARGE, n_horizontal_clues);
-            base_clue_panel_width * horiz_clue_columns + (horiz_clue_columns - 1) * SPACING_LARGE
-        } else {
-            base_clue_panel_width
+        let candidate_image = Dimensions {
+            width: CANDIDATE_IMG_SIZE,
+            height: CANDIDATE_IMG_SIZE,
         };
+
+        let (horiz_clue_columns, horiz_clue_rows) =
+            LayoutManager::calc_horiz_clue_columns(n_horizontal_clues as i32, CLUES_PER_COLUMN);
 
         LayoutConfiguration {
-            grid: GridSizing {
-                column_spacing: SPACING_LARGE,
-                row_spacing: SPACING_LARGE,
-                outer_padding: 3, // CSS padding
-                cell: base_cell_sizing,
-                n_variants: n_variants,
-                n_rows: n_rows,
-                total_dimensions: Dimensions {
-                    width: total_grid_width,
-                    height: grid_height,
-                },
-            },
+            grid: LayoutManager::calc_grid_sizing(GridSizingInputs {
+                solution_image: solution_image,
+                candidate_image: candidate_image,
+                n_variants: n_variants as i32,
+                n_rows: n_rows as i32,
+                candidate_spacing: SPACING_SMALL,
+                grid_column_spacing: SPACING_LARGE,
+                grid_row_spacing: SPACING_LARGE,
+                grid_outer_padding: SPACING_MEDIUM,
+            }),
             clues: CluesSizing {
                 clue_tile_size: Dimensions {
                     width: CANDIDATE_IMG_SIZE,
                     height: CANDIDATE_IMG_SIZE,
                 },
-                horizontal_clue_panel_width: horiz_clues_width,
-                vertical_clue_panel_height: base_vert_clue_height,
-                vertical_clue_group_spacer: SPACING_LARGE,
+                horizontal_clue_panel: LayoutManager::calc_horiz_clue_panel(
+                    HorizCluePanelSizingInputs {
+                        n_rows: horiz_clue_rows,
+                        n_columns: horiz_clue_columns,
+                        row_spacing: SPACING_LARGE,
+                        column_spacing: SPACING_LARGE * 2,
+                        margin_left: SPACING_LARGE * 2,
+                        clue_img_size: CANDIDATE_IMG_SIZE,
+                    },
+                ),
+                vertical_clue_panel: LayoutManager::calc_vert_clue_panel(
+                    VertCluePanelSizingInputs {
+                        candidate_img_size: CANDIDATE_IMG_SIZE,
+                        margin_top: SPACING_LARGE,
+                        column_spacing: SPACING_MEDIUM,
+                        group_spacing: SPACING_MEDIUM * 3,
+                    },
+                ),
                 clue_annotation_size: Dimensions {
                     width: CANDIDATE_IMG_SIZE / 3,
                     height: CANDIDATE_IMG_SIZE / 3,
                 },
-                horizontal_margin: 10,
-                vertical_margin: 10,
-                horizontal_clue_column_spacing: 10,
             },
         }
     }
 
     // TODO - get rid of inputs array
-    fn calculate_layout(&self) -> LayoutConfiguration {
+    fn calculate_scaled_layout(&self) -> LayoutConfiguration {
         let base_layout =
-            LayoutManager::unscaled_layout(self.current_difficulty, Some(self.clue_stats));
+            LayoutManager::calculate_layout(self.current_difficulty, Some(self.clue_stats));
 
         if self.container_dimensions.is_none() {
             return base_layout;
         }
 
-        let window = self.container_dimensions.as_ref().unwrap();
+        let surface = self.container_dimensions.as_ref().unwrap();
         let n_variants = self.current_difficulty.grid_size();
         let n_rows = self.current_difficulty.grid_size();
 
         // Calculate total required dimensions
         let total_grid_width = base_layout.grid.cell.dimensions.width * n_variants as i32
             + base_layout.grid.column_spacing * (n_variants as i32 - 1)
-            + base_layout.grid.cell.padding * 2;
+            + SPACING_MEDIUM * 2;
 
         let grid_height = base_layout.grid.cell.dimensions.height * n_rows as i32
             + base_layout.grid.row_spacing * (n_rows as i32 - 1)
-            + base_layout.grid.cell.padding * 2;
+            + SPACING_MEDIUM * 2;
 
-        let total_required_height =
-            grid_height + base_layout.clues.vertical_clue_panel_height + SPACING_LARGE;
-        let total_required_width =
-            total_grid_width + base_layout.clues.horizontal_clue_panel_width + SPACING_LARGE;
+        let grid_plus_vert_clues_height =
+            grid_height + base_layout.clues.vertical_clue_panel.height + SPACING_LARGE;
+
+        let total_required_height = grid_plus_vert_clues_height
+            .max(base_layout.clues.horizontal_clue_panel.dimensions.height);
+
+        let total_required_width = total_grid_width
+            + base_layout.clues.horizontal_clue_panel.dimensions.width
+            + SPACING_LARGE;
 
         // Calculate scaling factors based on window dimensions
-        let window_margin = 40; // pixels for window decorations
-        let available_width = window.width - window_margin;
-        let available_height = window.height - window_margin;
+        let available_width = surface.width;
+        let available_height = surface.height;
 
         // Calculate scale factors for both dimensions
         let width_scale = available_width as f32 / total_required_width as f32;
@@ -340,82 +335,198 @@ impl LayoutManager {
     }
 
     fn scale_layout(&self, layout: LayoutConfiguration, scale: f32) -> LayoutConfiguration {
-        // Apply scaling to cell dimensions
-        let scaled_cell_sizing = GridCellSizing {
-            dimensions: Dimensions {
-                width: (layout.grid.cell.dimensions.width as f32 * scale) as i32,
-                height: (layout.grid.cell.dimensions.height as f32 * scale) as i32,
-            },
-            solution_image: Dimensions {
-                width: (layout.grid.cell.solution_image.width as f32 * scale) as i32,
-                height: (layout.grid.cell.solution_image.height as f32 * scale) as i32,
-            },
-            candidate_image: Dimensions {
-                width: (layout.grid.cell.candidate_image.width as f32 * scale) as i32,
-                height: (layout.grid.cell.candidate_image.height as f32 * scale) as i32,
-            },
-            padding: (layout.grid.cell.padding as f32 * scale) as i32,
-        };
+        let candidate_image = layout.grid.cell.candidate_image.scale_by(scale);
+        let solution_image = layout.grid.cell.solution_image.scale_by(scale);
 
-        // Scale spacing proportionally
-        let scaled_spacing = (layout.grid.column_spacing as f32 * scale) as i32;
-
-        // Scale clue dimensions
         let scaled_clues = CluesSizing {
-            clue_tile_size: Dimensions {
-                width: (layout.clues.clue_tile_size.width as f32 * scale) as i32,
-                height: (layout.clues.clue_tile_size.height as f32 * scale) as i32,
-            },
-            horizontal_clue_panel_width: (layout.clues.horizontal_clue_panel_width as f32 * scale)
-                as i32,
-            vertical_clue_panel_height: (layout.clues.vertical_clue_panel_height as f32 * scale)
-                as i32,
-            clue_annotation_size: Dimensions {
-                width: (layout.clues.clue_annotation_size.width as f32 * scale) as i32,
-                height: (layout.clues.clue_annotation_size.height as f32 * scale) as i32,
-            },
-            horizontal_margin: (layout.clues.horizontal_margin as f32 * scale) as i32,
-            vertical_margin: (layout.clues.vertical_margin as f32 * scale) as i32,
-            horizontal_clue_column_spacing: (layout.clues.horizontal_clue_column_spacing as f32
-                * scale) as i32,
-            vertical_clue_group_spacer: (layout.clues.vertical_clue_group_spacer as f32 * scale)
-                as i32,
+            clue_tile_size: layout.clues.clue_tile_size.scale_by(scale),
+            horizontal_clue_panel: LayoutManager::calc_horiz_clue_panel(
+                HorizCluePanelSizingInputs {
+                    n_rows: layout.clues.horizontal_clue_panel.n_rows,
+                    n_columns: layout.clues.horizontal_clue_panel.n_columns,
+                    row_spacing: (layout.clues.horizontal_clue_panel.row_spacing as f32 * scale)
+                        as i32,
+                    column_spacing: (layout.clues.horizontal_clue_panel.column_spacing as f32
+                        * scale) as i32,
+                    margin_left: (layout.clues.horizontal_clue_panel.left_margin as f32 * scale)
+                        as i32,
+                    clue_img_size: candidate_image.width,
+                },
+            ),
+            vertical_clue_panel: LayoutManager::calc_vert_clue_panel(VertCluePanelSizingInputs {
+                candidate_img_size: candidate_image.width,
+                margin_top: (layout.clues.vertical_clue_panel.margin_top as f32 * scale) as i32,
+                column_spacing: (layout.clues.vertical_clue_panel.column_spacing as f32 * scale)
+                    as i32,
+                group_spacing: (layout.clues.vertical_clue_panel.group_spacing as f32 * scale)
+                    as i32,
+            }),
+            clue_annotation_size: layout.clues.clue_annotation_size.scale_by(scale),
         };
-
-        let n_variants = layout.grid.n_variants;
-        let n_rows = layout.grid.n_rows;
-
-        // Recompute grid dimensions based on scaled components to avoid rounding errors
-        let scaled_grid_width = scaled_cell_sizing.dimensions.width * n_variants as i32
-            + scaled_spacing * (n_variants as i32 - 1)
-            + scaled_cell_sizing.padding * 2;
-
-        let scaled_grid_height = scaled_cell_sizing.dimensions.height * n_rows as i32
-            + scaled_spacing * (n_rows as i32 - 1)
-            + scaled_cell_sizing.padding * 2;
 
         LayoutConfiguration {
-            grid: GridSizing {
-                column_spacing: scaled_spacing,
-                row_spacing: scaled_spacing,
-                outer_padding: (layout.grid.outer_padding as f32 * scale) as i32,
-                cell: scaled_cell_sizing,
-                n_variants: n_variants,
-                n_rows: n_rows,
-                total_dimensions: Dimensions {
-                    width: scaled_grid_width,
-                    height: scaled_grid_height,
-                },
-            },
+            grid: LayoutManager::calc_grid_sizing(GridSizingInputs {
+                solution_image: solution_image,
+                candidate_image: candidate_image,
+                n_variants: layout.grid.n_variants,
+                n_rows: layout.grid.n_rows,
+                candidate_spacing: (layout.grid.cell.candidate_spacing as f32 * scale) as i32,
+                grid_column_spacing: (layout.grid.column_spacing as f32 * scale) as i32,
+                grid_row_spacing: (layout.grid.row_spacing as f32 * scale) as i32,
+                grid_outer_padding: (layout.grid.outer_margin as f32 * scale) as i32,
+            }),
             clues: scaled_clues,
         }
     }
 
-    // fn set_appropriate_resource_size(&self, monitor: &Monitor) {
-    //     let scale_factor = monitor.scale_factor();
-    //     let max_dimensions = monitor.geometry();
-    //     // enough to fit 8 tiles
-    //     // let tile_width = self.resources.tile_width * scale_factor;
-    //     // let tile_height = self.resources.tile_height * scale_factor;
-    // }
+    fn calc_horiz_clue_columns(n_horizontal_clues: i32, clues_per_column: i32) -> (i32, i32) {
+        let n_cols =
+            (n_horizontal_clues - 1/* 16 clues is still 1 column */) / clues_per_column + 1;
+        let n_rows = n_horizontal_clues.clamp(0, clues_per_column);
+        (n_cols, n_rows)
+    }
+
+    fn calc_horiz_clue_panel(inputs: HorizCluePanelSizingInputs) -> HorizontalCluePanelSizing {
+        let base_clue_panel_width = inputs.clue_img_size * 3  // 3 tiles
+            + inputs.margin_left; // padding on both sides
+
+        let max_columns = MAX_HORIZ_CLUES as i32 / CLUES_PER_COLUMN;
+        let n_horiz_spacers = inputs.n_rows.clamp(1, CLUES_PER_COLUMN) - 1;
+        let n_vert_spacers = inputs.n_columns.clamp(1, max_columns) - 1;
+
+        // Total width for all horizontal clue columns including spacing between columns
+        let horiz_clues_width =
+            (base_clue_panel_width * inputs.n_columns) + (n_vert_spacers * inputs.column_spacing);
+
+        let horiz_clues_height =
+            inputs.clue_img_size * inputs.n_rows + (inputs.row_spacing * n_horiz_spacers);
+
+        HorizontalCluePanelSizing {
+            dimensions: Dimensions {
+                width: horiz_clues_width,
+                height: horiz_clues_height,
+            },
+            row_spacing: inputs.row_spacing,
+            column_spacing: inputs.column_spacing,
+            left_margin: inputs.margin_left,
+            n_rows: inputs.n_rows,
+            n_columns: inputs.n_columns,
+            clue_dimensions: Dimensions {
+                width: inputs.clue_img_size * 3, // no spacing
+                height: inputs.clue_img_size,
+            },
+        }
+    }
+
+    fn calc_vert_clue_panel(inputs: VertCluePanelSizingInputs) -> VerticalCluePanelSizing {
+        // Calculate vertical clues height (3 tiles high for each clue)
+        let base_vert_clue_height = inputs.candidate_img_size * 3  // 3 tiles
+            + inputs.margin_top;
+
+        VerticalCluePanelSizing {
+            height: base_vert_clue_height,
+            margin_top: inputs.margin_top,
+            column_spacing: inputs.column_spacing,
+            group_spacing: inputs.group_spacing,
+            clue_dimensions: Dimensions {
+                width: inputs.candidate_img_size,
+                height: inputs.candidate_img_size * 3, // no spacing
+            },
+        }
+    }
+
+    fn calc_grid_sizing(inputs: GridSizingInputs) -> GridSizing {
+        let n_variants = inputs.n_variants;
+        let n_rows = inputs.n_rows;
+
+        let candidate_n_rows = (n_variants as i32 + 1) / 2;
+        let candidate_n_columns = n_variants as i32;
+
+        let base_cell_aspect_ratio_width = (n_variants as i32 + 1) / 2;
+        let base_cell_aspect_ratio_height = 2;
+
+        let cell_width = (inputs.solution_image.width * base_cell_aspect_ratio_width
+            / base_cell_aspect_ratio_height)
+            + inputs.candidate_spacing * (candidate_n_columns - 1);
+
+        let cell_height =
+            inputs.solution_image.height + inputs.candidate_spacing * (candidate_n_rows - 1);
+
+        let base_cell_sizing = GridCellSizing {
+            dimensions: Dimensions {
+                width: cell_width,
+                height: cell_height,
+            },
+            solution_image: inputs.solution_image,
+            candidate_image: inputs.candidate_image,
+            candidate_spacing: inputs.candidate_spacing,
+            candidate_rows: candidate_n_rows,
+            candidate_columns: candidate_n_columns,
+        };
+
+        // Calculate total grid dimensions without scaling
+        let total_grid_width = base_cell_sizing.dimensions.width * n_variants as i32
+            + inputs.grid_column_spacing * (n_variants as i32 - 1)
+            + inputs.grid_outer_padding * 2;
+
+        let grid_height = base_cell_sizing.dimensions.height * n_rows as i32
+            + inputs.grid_row_spacing * (n_rows.clamp(1, MAX_GRID_SIZE as i32) - 1)
+            + inputs.grid_outer_padding * 2;
+
+        GridSizing {
+            column_spacing: inputs.grid_column_spacing,
+            row_spacing: inputs.grid_row_spacing,
+            outer_margin: inputs.grid_outer_padding,
+            cell: base_cell_sizing,
+            n_variants: inputs.n_variants,
+            n_rows: inputs.n_rows,
+            total_dimensions: Dimensions {
+                width: total_grid_width,
+                height: grid_height,
+            },
+        }
+    }
+}
+
+struct GridSizingInputs {
+    solution_image: Dimensions,
+    candidate_image: Dimensions,
+    n_variants: i32,
+    n_rows: i32,
+    candidate_spacing: i32, // space between candidate tiles
+    grid_column_spacing: i32,
+    grid_row_spacing: i32,
+    grid_outer_padding: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calc_horiz_clue_columns() {
+        // Test case 1: Empty case
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(0, 16), (0, 0));
+
+        // Test case 2: Single column not full (10 clues, 16 per column)
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(10, 16), (1, 10));
+
+        // Test case 3: Single column exactly full (16 clues, 16 per column)
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(16, 16), (1, 16));
+
+        // Test case 4: Two columns needed (17 clues, 16 per column)
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(17, 16), (2, 16));
+
+        // Test case 5: Two columns with partial second column (20 clues, 16 per column)
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(20, 16), (2, 16));
+
+        // Test case 6: Three full columns (48 clues, 16 per column)
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(48, 16), (3, 16));
+
+        // Test case 7: Different clues_per_column value
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(10, 5), (2, 5));
+
+        // Test case 8: Negative number of clues (should handle gracefully)
+        assert_eq!(LayoutManager::calc_horiz_clue_columns(-1, 16), (0, 0));
+    }
 }

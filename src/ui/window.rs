@@ -7,9 +7,9 @@ use crate::model::{Difficulty, GameActionEvent, GameStateEvent, GlobalEvent};
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
-use glib::timeout_add_local_once;
+use glib::{timeout_add_local_once, HasParamSpec};
 use gtk::gdk::{Display, Monitor};
-use gtk::prelude::*;
+use gtk::{prelude::*, Frame};
 use gtk::{Application, ApplicationWindow, Button, Label, Orientation};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -24,6 +24,7 @@ use super::ResourceSet;
 
 fn pause_screen() -> Rc<gtk::Box> {
     let pause_label = Label::builder()
+        .name("pause-label")
         .label("PAUSED")
         .css_classes(["pause-label"])
         .visible(true)
@@ -31,6 +32,7 @@ fn pause_screen() -> Rc<gtk::Box> {
         .vexpand(true)
         .build();
     let pause_screen_box = gtk::Box::builder()
+        .name("pause-screen")
         .orientation(Orientation::Vertical)
         .visible(false)
         .build();
@@ -130,6 +132,7 @@ pub fn build_ui(app: &Application) {
     // Create game area with puzzle and horizontal clues side by side
     let game_box = Rc::new(
         gtk::Box::builder()
+            .name("game-box")
             .orientation(Orientation::Horizontal)
             .spacing(10)
             .build(),
@@ -169,6 +172,7 @@ pub fn build_ui(app: &Application) {
 
     // Create difficulty selector dropdown with label
     let difficulty_box = gtk::Box::builder()
+        .name("difficulty-box")
         .orientation(Orientation::Horizontal)
         .spacing(5)
         .build();
@@ -229,7 +233,7 @@ pub fn build_ui(app: &Application) {
     hint_button.set_tooltip_text(Some("Show Hint"));
 
     let default_layout =
-        LayoutManager::unscaled_layout(settings.borrow().difficulty, Some(ClueStats::default()));
+        LayoutManager::calculate_layout(settings.borrow().difficulty, Some(ClueStats::default()));
 
     // Create puzzle grid and clue set UI first
     let puzzle_grid_ui = PuzzleGridUI::new(
@@ -264,6 +268,7 @@ pub fn build_ui(app: &Application) {
 
     // Create left side box for timer and hints
     let left_box = gtk::Box::builder()
+        .name("left-box")
         .orientation(Orientation::Horizontal)
         .spacing(10) // Slightly larger spacing between groups
         .build();
@@ -281,6 +286,7 @@ pub fn build_ui(app: &Application) {
 
     // Create right side box for controls
     let right_box = gtk::Box::builder()
+        .name("right-box")
         .orientation(Orientation::Horizontal)
         .spacing(5)
         .css_classes(["menu-box"])
@@ -308,6 +314,7 @@ pub fn build_ui(app: &Application) {
 
     // Create a vertical box for puzzle grid and vertical clues
     let puzzle_vertical_box = gtk::Box::builder()
+        .name("puzzle-vertical-box")
         .orientation(Orientation::Vertical)
         .spacing(10)
         .build();
@@ -347,8 +354,13 @@ pub fn build_ui(app: &Application) {
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
 
+    let puzzle_background = Frame::builder()
+        .name("puzzle-mat-board")
+        .css_classes(["puzzle-mat-board"])
+        .child(&puzzle_grid_ui.borrow().grid)
+        .build();
     // Assemble the UI
-    puzzle_vertical_box.append(&puzzle_grid_ui.borrow().grid);
+    puzzle_vertical_box.append(&puzzle_background);
     puzzle_vertical_box.append(&clue_set_ui.borrow().vertical_grid);
     puzzle_vertical_box.set_hexpand(false);
 
@@ -356,6 +368,7 @@ pub fn build_ui(app: &Application) {
     game_box.append(&clue_set_ui.borrow().horizontal_grid);
 
     let top_level_box = gtk::Box::builder()
+        .name("top-level-box")
         .orientation(Orientation::Vertical)
         .visible(true)
         .hexpand(true)

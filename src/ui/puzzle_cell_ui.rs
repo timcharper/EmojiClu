@@ -138,9 +138,9 @@ impl PuzzleCellUI {
 
         // Update grid spacing
         self.candidates_grid
-            .set_row_spacing(self.current_layout.cell.padding as u32);
+            .set_row_spacing(self.current_layout.cell.candidate_spacing as u32);
         self.candidates_grid
-            .set_column_spacing(self.current_layout.cell.padding as u32);
+            .set_column_spacing(self.current_layout.cell.candidate_spacing as u32);
     }
 
     pub fn update_layout(&mut self, layout: &GridSizing) {
@@ -279,10 +279,10 @@ impl PuzzleCellUI {
         }
 
         let col = (grid_x
-            / (candidate_image.width as f64 + self.current_layout.cell.padding as f64))
+            / (candidate_image.width as f64 + self.current_layout.cell.candidate_spacing as f64))
             .floor() as usize; // Add 2px for gap
         let row = (grid_y
-            / (candidate_image.height as f64 + self.current_layout.cell.padding as f64))
+            / (candidate_image.height as f64 + self.current_layout.cell.candidate_spacing as f64))
             .floor() as usize; // Add 2px for gap
 
         trace!(target: "puzzle_cell_ui", "Calculated grid position: row={}, col={}", row, col);

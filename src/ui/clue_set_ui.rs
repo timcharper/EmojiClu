@@ -56,24 +56,25 @@ impl ClueSetUI {
         resources: &Rc<ResourceSet>,
         layout: LayoutConfiguration,
     ) -> Rc<RefCell<Self>> {
-        let horizontal_clues_grid = Grid::new();
-        horizontal_clues_grid.set_row_spacing(0);
-        horizontal_clues_grid.set_column_spacing(10);
-        horizontal_clues_grid.set_margin_start(10);
-        horizontal_clues_grid.set_margin_end(10);
-        horizontal_clues_grid.set_hexpand(true);
-        horizontal_clues_grid.set_vexpand(true);
-        horizontal_clues_grid.set_css_classes(&["horizontal-clues"]);
+        let horizontal_clues_grid = Grid::builder()
+            .row_spacing(layout.clues.horizontal_clue_panel.row_spacing)
+            .column_spacing(layout.clues.horizontal_clue_panel.column_spacing)
+            .margin_start(layout.clues.horizontal_clue_panel.left_margin)
+            .hexpand(true)
+            .vexpand(true)
+            .name("horizontal-clues-panel")
+            .css_classes(["horizontal-clues"])
+            .build();
 
         // Create vertical clues area (bottom)
-        let vertical_clues_grid = Grid::new();
-        vertical_clues_grid.set_row_spacing(0);
-        vertical_clues_grid.set_column_spacing(0);
-        vertical_clues_grid.set_margin_top(10);
-        vertical_clues_grid.set_margin_bottom(10);
-        vertical_clues_grid.set_hexpand(true);
-        vertical_clues_grid.set_vexpand(true);
-        vertical_clues_grid.set_css_classes(&["vertical-clues"]);
+        let vertical_clues_grid = Grid::builder()
+            .column_spacing(layout.clues.vertical_clue_panel.column_spacing)
+            .margin_top(layout.clues.vertical_clue_panel.margin_top)
+            .hexpand(true)
+            .vexpand(true)
+            .name("vertical-clues-panel")
+            .css_classes(["vertical-clues"])
+            .build();
 
         let clue_set_ui = Rc::new(RefCell::new(Self {
             horizontal_grid: horizontal_clues_grid,
@@ -204,12 +205,7 @@ impl ClueSetUI {
         }
     }
 
-    pub fn highlight_clue(
-        &self,
-        orientation: ClueOrientation,
-        clue_idx: usize,
-        duration: Duration,
-    ) {
+    fn highlight_clue(&self, orientation: ClueOrientation, clue_idx: usize, duration: Duration) {
         match orientation {
             ClueOrientation::Horizontal => {
                 self.horizontal_clue_uis[clue_idx].highlight_for(duration);
@@ -220,17 +216,7 @@ impl ClueSetUI {
         }
     }
 
-    pub(crate) fn hide(&self) {
-        self.horizontal_grid.set_visible(false);
-        self.vertical_grid.set_visible(false);
-    }
-
-    pub(crate) fn show(&self) {
-        self.horizontal_grid.set_visible(true);
-        self.vertical_grid.set_visible(true);
-    }
-
-    pub(crate) fn set_clues(&self, clue_set: &ClueSet) {
+    fn set_clues(&self, clue_set: &ClueSet) {
         let mut previous_clue: Option<&ClueWithGrouping> = None;
         for (idx, clue_ui) in self.horizontal_clue_uis.iter().enumerate() {
             let clue = clue_set.horizontal_clues().get(idx);
@@ -251,11 +237,9 @@ impl ClueSetUI {
             clue_ui.set_clue(clue.map(|c| &c.clue), is_new_group);
             previous_clue = clue;
         }
-        let n_horiz_clues = clue_set.horizontal_clues().len();
-        let n_horiz_cols = (n_horiz_clues + 1) / CLUES_PER_COLUMN;
-        let min_width =
-            self.current_layout.clues.horizontal_clue_panel_width * (n_horiz_cols as i32);
-        self.horizontal_grid.set_size_request(min_width, -1);
+        let horiz_dim = &self.current_layout.clues.horizontal_clue_panel.dimensions;
+        self.horizontal_grid
+            .set_size_request(horiz_dim.width, horiz_dim.height);
     }
 
     fn set_horiz_completion(&self, completed_clues: &HashSet<usize>) {
@@ -284,23 +268,24 @@ impl ClueSetUI {
 
         // Update horizontal clues grid
         self.horizontal_grid
-            .set_row_spacing(layout.clues.horizontal_margin as u32);
+            .set_row_spacing(layout.clues.horizontal_clue_panel.row_spacing as u32);
         self.horizontal_grid
-            .set_column_spacing(layout.clues.horizontal_clue_column_spacing as u32);
+            .set_column_spacing(layout.clues.horizontal_clue_panel.column_spacing as u32);
         self.horizontal_grid
-            .set_margin_start(layout.clues.horizontal_margin);
+            .set_margin_start(layout.clues.horizontal_clue_panel.left_margin);
+        let horiz_dim = &self.current_layout.clues.horizontal_clue_panel.dimensions;
         self.horizontal_grid
-            .set_margin_end(layout.clues.horizontal_margin);
+            .set_size_request(horiz_dim.width, horiz_dim.height);
 
         // Update vertical clues grid
         self.vertical_grid
-            .set_row_spacing(layout.clues.vertical_margin as u32);
+            .set_row_spacing(layout.clues.vertical_clue_panel.height as u32);
         self.vertical_grid
-            .set_column_spacing(layout.clues.vertical_margin as u32);
+            .set_column_spacing(layout.clues.vertical_clue_panel.column_spacing as u32);
         self.vertical_grid
-            .set_margin_top(layout.clues.vertical_margin);
+            .set_margin_top(layout.clues.vertical_clue_panel.margin_top);
         self.vertical_grid
-            .set_margin_bottom(layout.clues.vertical_margin);
+            .set_size_request(-1, self.current_layout.clues.vertical_clue_panel.height);
 
         // Update individual clue UIs
         for clue_ui in self.horizontal_clue_uis.iter_mut() {
