@@ -329,8 +329,8 @@ impl Clue {
             ClueType::Vertical(v_type) => match v_type {
                 VerticalClueType::OneMatchesEither => {
                     format!(
-                        "{} is in the same column as exactly one of {} or {}",
-                        self.assertions[0].tile.to_string(),
+                        "|{:?},?{},?{}|",
+                        self.assertions[0],
                         self.assertions[1].tile.to_string(),
                         self.assertions[2].tile.to_string()
                     )
@@ -345,6 +345,64 @@ impl Clue {
                     format!("|{}|", assertions)
                 }
             },
+        }
+    }
+
+    #[cfg(test)]
+    pub fn parse_vertical(s: &str) -> Self {
+        let content = s.trim_matches('|');
+        let assertions: Vec<_> = content.split(',').collect();
+
+        // Handle one_matches_either case which uses ? notation
+        if assertions.iter().any(|a| a.starts_with('?')) {
+            assert_eq!(
+                assertions.len(),
+                3,
+                "One matches either must have exactly 3 assertions"
+            );
+            let tiles: Vec<_> = assertions
+                .iter()
+                .map(|a| TileAssertion::parse(a).tile)
+                .collect();
+            return Clue::one_matches_either(tiles[0], tiles[1], tiles[2]);
+        }
+
+        // Parse regular assertions
+        let tile_assertions: Vec<TileAssertion> =
+            assertions.iter().map(|a| TileAssertion::parse(a)).collect();
+
+        // Determine clue type based on number of assertions and their types
+        match tile_assertions.len() {
+            2 => {
+                if tile_assertions.iter().all(|a| a.assertion) {
+                    Clue::two_in_column(tile_assertions[0].tile, tile_assertions[1].tile)
+                } else {
+                    Clue::two_not_in_same_column(tile_assertions[0].tile, tile_assertions[1].tile)
+                }
+            }
+            3 => {
+                if tile_assertions.iter().all(|a| a.assertion) {
+                    Clue::three_in_column(
+                        tile_assertions[0].tile,
+                        tile_assertions[1].tile,
+                        tile_assertions[2].tile,
+                    )
+                } else {
+                    let positive_tiles: Vec<_> = tile_assertions
+                        .iter()
+                        .filter(|a| a.assertion)
+                        .map(|a| a.tile)
+                        .collect();
+                    let negative_tile = tile_assertions
+                        .iter()
+                        .find(|a| !a.assertion)
+                        .map(|a| a.tile)
+                        .unwrap();
+
+                    Clue::two_in_column_without(positive_tiles[0], negative_tile, positive_tiles[1])
+                }
+            }
+            _ => panic!("Invalid number of assertions for vertical clue"),
         }
     }
 
@@ -627,5 +685,74 @@ mod tests {
 
         assert_eq!(merged[1].assertions[0].tile, Tile::parse("0a"));
         assert_eq!(merged[1].assertions[1].tile, Tile::parse("2a"));
+    }
+
+    #[test]
+    fn test_parse_vertical() {
+        // Test two_in_column
+        let clue = Clue::parse_vertical("|+0a,+1b|");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Vertical(VerticalClueType::TwoInColumn)
+        );
+        assert_eq!(clue.assertions.len(), 2);
+        assert_eq!(clue.assertions[0].tile, Tile::new(0, 'a'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(1, 'b'));
+        assert_eq!(clue.assertions[1].assertion, true);
+
+        // Test three_in_column
+        let clue = Clue::parse_vertical("|+0f,+3b,+5a|");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Vertical(VerticalClueType::ThreeInColumn)
+        );
+        assert_eq!(clue.assertions.len(), 3);
+        assert_eq!(clue.assertions[0].tile, Tile::new(0, 'f'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(3, 'b'));
+        assert_eq!(clue.assertions[1].assertion, true);
+        assert_eq!(clue.assertions[2].tile, Tile::new(5, 'a'));
+        assert_eq!(clue.assertions[2].assertion, true);
+
+        // Test two_in_column_without
+        let clue = Clue::parse_vertical("|+0f,-3b,+5a|");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Vertical(VerticalClueType::TwoInColumnWithout)
+        );
+        assert_eq!(clue.assertions.len(), 3);
+        assert_eq!(clue.assertions[0].tile, Tile::new(0, 'f'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(3, 'b'));
+        assert_eq!(clue.assertions[1].assertion, false);
+        assert_eq!(clue.assertions[2].tile, Tile::new(5, 'a'));
+        assert_eq!(clue.assertions[2].assertion, true);
+
+        // Test one_matches_either
+        let clue = Clue::parse_vertical("|+1f,?3c,?4b|");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Vertical(VerticalClueType::OneMatchesEither)
+        );
+        assert_eq!(clue.assertions.len(), 3);
+        assert_eq!(clue.assertions[0].tile, Tile::new(1, 'f'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(3, 'c'));
+        assert_eq!(clue.assertions[1].assertion, true);
+        assert_eq!(clue.assertions[2].tile, Tile::new(4, 'b'));
+        assert_eq!(clue.assertions[2].assertion, true);
+
+        // Test two_not_in_same_column
+        let clue = Clue::parse_vertical("|+1a,-3f|");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Vertical(VerticalClueType::NotInSameColumn)
+        );
+        assert_eq!(clue.assertions.len(), 2);
+        assert_eq!(clue.assertions[0].tile, Tile::new(1, 'a'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(3, 'f'));
+        assert_eq!(clue.assertions[1].assertion, false);
     }
 }

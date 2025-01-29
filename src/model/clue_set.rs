@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use log::trace;
 
@@ -11,11 +11,12 @@ pub struct ClueSet {
     all_clues: Vec<ClueWithGrouping>,
 }
 
-fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> HashMap<Clue, usize> {
-    let mut clue_grouping: HashMap<Clue, usize> = HashMap::new();
+fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> BTreeMap<Clue, usize> {
+    let mut clue_grouping: BTreeMap<Clue, usize> = BTreeMap::new();
 
     for (idx, clue) in clues.iter().enumerate() {
         if clue_grouping.contains_key(clue) {
+            trace!(target: "clue_set", "Skipping clue {:?} because it already has a grouping", clue);
             continue;
         }
 
@@ -30,12 +31,34 @@ fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> HashMap<Clue
         } else {
             // For vertical clues, group all intersecting clues
             let mut clue_group = vec![clue];
+            trace!(
+                target: "clue_set",
+                "Looking for clues matching clue group {:?}",
+                clue_group
+            );
             for other_clue in clues.iter() {
                 if clue_group.iter().any(|c| c.intersects_positive(other_clue)) {
+                    trace!(
+                        target: "clue_set",
+                        "Adding clue {:?} to group {:?}",
+                        other_clue,
+                        clue_group
+                    );
                     clue_group.push(other_clue);
                 }
             }
+            trace!(
+                target: "clue_set",
+                "Grouping is {:?}",
+                clue_group
+            );
             for c in clue_group.into_iter() {
+                trace!(
+                    target: "clue_set",
+                    "Adding clue {:?} to grouping {:?}",
+                    c,
+                    idx
+                );
                 clue_grouping.insert(c.clone(), idx);
             }
         }
@@ -44,16 +67,14 @@ fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> HashMap<Clue
     clue_grouping
 }
 
-fn group_clues(clues: HashMap<Clue, usize>) -> HashMap<usize, Vec<Clue>> {
-    let mut groups: HashMap<usize, Vec<Clue>> = HashMap::new();
+fn group_clues(clues: BTreeMap<Clue, usize>) -> BTreeMap<usize, Vec<Clue>> {
+    let mut groups: BTreeMap<usize, Vec<Clue>> = BTreeMap::new();
     for (clue, group) in clues.into_iter() {
-        if groups.len() <= group {
-            groups.insert(group, Vec::new());
-        }
         groups.entry(group).or_default().push(clue);
     }
     groups
 }
+
 /// find a merge; return the merged clue and the indices of clues to delete
 fn find_mergable_clue(clues: &mut Vec<Clue>) -> Option<(Vec<Clue>, usize, usize)> {
     let mut merge_found = true;
@@ -87,7 +108,7 @@ fn compress_vertical_clues(clues: &mut Vec<Clue>) {
 }
 
 fn remove_redundant_clues(clues: &mut Vec<Clue>) {
-    let mut all_positive_assertion_rows: HashSet<usize> = HashSet::new();
+    let mut all_positive_assertion_rows: BTreeSet<usize> = BTreeSet::new();
     // look for all positive assertion rows
     for clue in clues.iter() {
         for assertion in clue.assertions.iter() {
@@ -117,15 +138,20 @@ fn remove_redundant_clues(clues: &mut Vec<Clue>) {
 
 fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithGrouping> {
     vert_clues.sort_by(|a, b| a.sort_index.cmp(&b.sort_index));
+    trace!(target: "clue_set", "before assigning clue grouping: {:?}", vert_clues);
     let clue_grouping = assign_clue_grouping(vert_clues, false);
+
+    trace!(target: "clue_set", "Clue grouping: {:?}", clue_grouping);
 
     let mut clues_by_grouping = group_clues(clue_grouping);
 
+    trace!(target: "clue_set", "Clues by grouping: {:?}", clues_by_grouping);
+
     clues_by_grouping.values_mut().for_each(|clues| {
         trace!(target: "clue_set", "--------------------------------");
-        trace!(target: "clue_set", "before removing redundant clues: {:?}", clues);
+        trace!(target: "clue_set", "before removing redundant clues:  {:?}", clues);
         remove_redundant_clues(clues);
-        trace!(target: "clue_set", "after removing redundant clues: {:?}", clues);
+        trace!(target: "clue_set", "after removing redundant clues:   {:?}", clues);
         compress_vertical_clues(clues);
         trace!(target: "clue_set", "after compressing vertical clues: {:?}", clues);
     });
@@ -154,6 +180,7 @@ fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithGrouping> {
         clue_grouping.index = idx;
     }
 
+    trace!(target: "clue_set", "after sorting vertical clues: {:?}", clue_grouping);
     clue_grouping
 }
 
@@ -247,5 +274,37 @@ mod tests {
             clues[1],
             Clue::three_in_column(Tile::parse("0a"), Tile::parse("1a"), Tile::parse("2a"))
         );
+    }
+
+    #[test]
+    fn test_group_clues_no_clues_should_go_missing() {
+        let mut clues = vec![
+            Clue::parse_vertical("|+1f,+3c,+4b|"),
+            Clue::parse_vertical("|+1a,+3f,+4c|"),
+            Clue::parse_vertical("|+0a,+1b|"),
+            Clue::parse_vertical("|+1a,+2d|"),
+            Clue::parse_vertical("|+1d,+2e,+3e|"),
+            Clue::parse_vertical("|+0c,+5c|"),
+            Clue::parse_vertical("|+2c,+3c|"),
+            Clue::parse_vertical("|+0f,-3b,+5a|"),
+            Clue::parse_vertical("|+0a,-3f,+4e|"),
+            Clue::parse_vertical("|-0e,+2e,+5c|"),
+            Clue::parse_vertical("|+2b,+4e|"),
+            Clue::parse_vertical("|+0e,+4f|"),
+        ];
+        clues.sort();
+
+        let clue_grouping = assign_clue_grouping(&clues, false);
+        let clues_by_grouping = group_clues(clue_grouping.clone());
+
+        let mut grouped_clues = clues_by_grouping
+            .into_values()
+            .flatten()
+            .collect::<Vec<_>>();
+        grouped_clues.sort();
+        assert_eq!(grouped_clues.len(), clues.len());
+        for (idx, clue) in grouped_clues.iter().enumerate() {
+            assert_eq!(clue, &clues[idx]);
+        }
     }
 }

@@ -467,7 +467,7 @@ mod tests {
         let n_iterations = n_iterations.parse::<u64>().unwrap();
         for i in 0..n_iterations {
             let broken_seed = 17492908155780939550;
-            let solution = Solution::new(Difficulty::Hard, Some(broken_seed));
+            let solution = Solution::new(Difficulty::Hard, Some(broken_seed + i));
             let init_board = GameBoard::new(solution.into());
             let result = generate_clues(&init_board);
             trace!(
@@ -478,13 +478,29 @@ mod tests {
             assert!(result.clues.len() > 0);
             // assert solvable
             let mut board = result.board.clone();
-            while perform_evaluation_step(&mut board, &result.clues)
-                != EvaluationStepResult::Nothing
-            {
+            let clue_set = ClueSet::new(result.clues.clone());
+            let mut clues = clue_set
+                .all_clues()
+                .into_iter()
+                .map(|c| c.clue.clone())
+                .collect::<Vec<_>>();
+            clues.sort();
+            let mut unprocessed_clues = result.clues.clone();
+            unprocessed_clues.sort();
+            println!("Unprocessed clues are {:?}", unprocessed_clues);
+            println!("Clues are {:?}", clues);
+            loop {
+                println!("===================");
+                let result = perform_evaluation_step(&mut board, &clues);
+                if result == EvaluationStepResult::Nothing {
+                    break;
+                }
+                println!("Result is {:?}", result);
+                println!("Board is {:?}", board);
                 board.auto_solve_all();
             }
             println!("Board is {:?}", board);
-            println!("Clues are {:?}", result.clues);
+            println!("Clues are {:?}", clues);
             assert!(board.is_complete(), "Board is not solvable");
         }
     }
