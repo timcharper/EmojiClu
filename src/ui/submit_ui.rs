@@ -106,7 +106,7 @@ impl SubmitUI {
                     &stats_manager,
                     Some(stats),
                     move || {
-                        game_action_emitter.emit(&GameActionEvent::NewGame(difficulty));
+                        game_action_emitter.emit(&GameActionEvent::NewGame(difficulty, None));
                     },
                 );
             }

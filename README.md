@@ -10,7 +10,7 @@ TODO
 [ ] Selectable theme
 [ ] auto-rescale assets for optimal display on HD displays
   - react to fractional scaling, etc.
-[ ] Show seed in UI, copy button, allow new puzzle from seed option
+[x] Show seed in UI, copy button, allow new puzzle from seed option
 
 # Good seeds
 

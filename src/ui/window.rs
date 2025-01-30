@@ -4,6 +4,7 @@ use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
 use crate::model::{Difficulty, GameActionEvent, GameStateEvent, GlobalEvent};
+use crate::ui::seed_dialog::SeedDialog;
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
@@ -21,6 +22,12 @@ use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
 use super::puzzle_grid_ui::PuzzleGridUI;
 use super::ResourceSet;
+
+fn seed_from_env() -> Option<u64> {
+    std::env::var("SEED")
+        .map(|v| v.parse::<u64>().unwrap())
+        .ok()
+}
 
 fn pause_screen() -> Rc<gtk::Box> {
     let pause_label = Label::builder()
@@ -157,6 +164,7 @@ pub fn build_ui(app: &Application) {
     app.set_accels_for_action("win.redo", &["<Control><Shift>z"]);
     app.set_accels_for_action("win.new-game", &["<Control>n"]);
     app.set_accels_for_action("win.pause", &["space"]);
+    app.set_accels_for_action("win.restart", &["<Control>r"]);
 
     // Create menu model for hamburger menu
     let menu = gtk::gio::Menu::new();
@@ -167,7 +175,9 @@ pub fn build_ui(app: &Application) {
 
     // Add all menu items
     menu.append(Some("New Game"), Some("win.new-game"));
+    menu.append(Some("Restart"), Some("win.restart"));
     menu.append(Some("Statistics"), Some("win.statistics"));
+    menu.append(Some("Seed"), Some("win.seed"));
     menu.append_submenu(Some("Settings"), &settings_menu);
     menu.append(Some("About"), Some("win.about"));
 
@@ -216,7 +226,7 @@ pub fn build_ui(app: &Application) {
         };
         settings_ref.borrow_mut().difficulty = new_difficulty;
         let _ = settings_ref.borrow().save();
-        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(new_difficulty));
+        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(new_difficulty, None));
     });
 
     header_bar.pack_start(&difficulty_box);
@@ -406,7 +416,7 @@ pub fn build_ui(app: &Application) {
     let game_action_emitter_new_game = game_action_emitter.clone();
     action_new_game.connect_activate(move |_, _| {
         let difficulty = settings_ref.borrow().difficulty;
-        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(difficulty));
+        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(difficulty, None));
     });
     window.add_action(&action_new_game);
 
@@ -472,11 +482,36 @@ pub fn build_ui(app: &Application) {
     let submit_ui_cleanup = Rc::clone(&submit_ui);
     let puzzle_grid_ui_cleanup = Rc::clone(&puzzle_grid_ui);
     let clue_set_ui_cleanup = Rc::clone(&clue_set_ui);
+    let seed_dialog = SeedDialog::new(
+        &window,
+        game_action_emitter.clone(),
+        game_state_observer.clone(),
+    );
+
     // publish initial messages
 
     // Initialize game with saved difficulty
-    game_action_emitter.emit(&GameActionEvent::NewGame(settings.borrow().difficulty));
+    game_action_emitter.emit(&GameActionEvent::NewGame(
+        settings.borrow().difficulty,
+        seed_from_env(),
+    ));
     global_event_emitter.emit(&GlobalEvent::SettingsChanged(settings.borrow().clone()));
+
+    // Add seed action
+    let action_seed = gtk::gio::SimpleAction::new("seed", None);
+    let seed_dialog_ref = seed_dialog.clone();
+    action_seed.connect_activate(move |_, _| {
+        seed_dialog_ref.borrow().show_seed();
+    });
+    window.add_action(&action_seed);
+
+    // Add restart action
+    let action_restart = gtk::gio::SimpleAction::new("restart", None);
+    let game_action_emitter_restart = game_action_emitter.clone();
+    action_restart.connect_activate(move |_, _| {
+        game_action_emitter_restart.emit(&GameActionEvent::Restart);
+    });
+    window.add_action(&action_restart);
 
     window.connect_destroy(move |_| {
         println!("Destroying window");
@@ -488,5 +523,6 @@ pub fn build_ui(app: &Application) {
         clue_set_ui_cleanup.borrow_mut().destroy();
         timer_button.borrow_mut().destroy();
         layout_manager.borrow_mut().destroy();
+        seed_dialog.borrow_mut().destroy();
     });
 }

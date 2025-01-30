@@ -84,14 +84,8 @@ impl GameState {
         std::env::var("DEBUG").map(|v| v == "1").unwrap_or(false)
     }
 
-    pub fn seed_from_env() -> Option<u64> {
-        std::env::var("SEED")
-            .map(|v| v.parse::<u64>().unwrap())
-            .ok()
-    }
-
-    pub fn new_board_set(difficulty: Difficulty) -> GameBoardSet {
-        let solution = Rc::new(Solution::new(difficulty, GameState::seed_from_env()));
+    pub fn new_board_set(difficulty: Difficulty, seed: Option<u64>) -> GameBoardSet {
+        let solution = Rc::new(Solution::new(difficulty, seed));
         trace!(target: "game_state", "Generated solution: {:?}", solution);
         let blank_board = GameBoard::new(Rc::clone(&solution));
         let ClueGeneratorResult {
@@ -152,8 +146,8 @@ impl GameState {
         game_state.borrow_mut().subscription_id = Some(subscription_id);
     }
 
-    fn new_game(&mut self, difficulty: Difficulty) {
-        let board_set = GameState::new_board_set(difficulty);
+    fn new_game(&mut self, difficulty: Difficulty, seed: Option<u64>) {
+        let board_set = GameState::new_board_set(difficulty, seed);
         println!(
             "New game; difficulty: {:?}; seed: {:?}",
             difficulty, board_set.board.solution.seed
@@ -282,7 +276,7 @@ impl GameState {
             GameActionEvent::VerticalClueClick(clue_idx) => {
                 self.handle_vertical_clue_click(clue_idx)
             }
-            GameActionEvent::NewGame(difficulty) => self.new_game(difficulty),
+            GameActionEvent::NewGame(difficulty, seed) => self.new_game(difficulty, seed),
             GameActionEvent::InitDisplay => {
                 self.sync_board_display();
             }
@@ -299,6 +293,12 @@ impl GameState {
             GameActionEvent::Quit => (),
             GameActionEvent::Submit => todo!(),
             GameActionEvent::CompletePuzzle => self.complete_puzzle(),
+            GameActionEvent::Restart => {
+                // Start a new game with current difficulty and seed
+                let current_seed = self.current_board.solution.seed;
+                let current_difficulty = self.current_board.solution.difficulty;
+                self.new_game(current_difficulty, Some(current_seed));
+            }
         }
     }
 

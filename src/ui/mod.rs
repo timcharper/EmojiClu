@@ -8,6 +8,7 @@ mod layout_manager;
 mod puzzle_cell_ui;
 mod puzzle_grid_ui;
 mod resource_set;
+mod seed_dialog;
 mod stats_dialog;
 mod submit_ui;
 mod timer_button_ui;

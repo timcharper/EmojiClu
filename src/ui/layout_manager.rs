@@ -165,7 +165,7 @@ impl LayoutManager {
 
     fn handle_game_action_event(&mut self, event: &GameActionEvent) {
         match event {
-            GameActionEvent::NewGame(difficulty) => self.update_difficulty(*difficulty),
+            GameActionEvent::NewGame(difficulty, _) => self.update_difficulty(*difficulty),
             _ => (),
         }
     }
