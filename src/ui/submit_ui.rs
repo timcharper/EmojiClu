@@ -1,4 +1,5 @@
 use glib::timeout_add_local_once;
+use gtk::glib::SignalHandlerId;
 use gtk::prelude::*;
 use gtk::{ApplicationWindow, Button};
 use std::cell::RefCell;
@@ -9,23 +10,29 @@ use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::events::EventObserver;
 use crate::events::Unsubscriber;
-use crate::game::game_state::GameState;
 use crate::game::stats_manager::StatsManager;
-use crate::model::GameActionEvent;
-use crate::model::GameStateEvent;
+use crate::model::{GameActionEvent, PuzzleCompletionState};
+use crate::model::{GameStateEvent, GameStats};
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::ResourceSet;
 
 pub struct SubmitUI {
     pub submit_button: Rc<Button>,
     subscription_id: Option<Unsubscriber<GameStateEvent>>,
-    game_state_observer: EventObserver<GameStateEvent>,
+    stats_manager: Rc<RefCell<StatsManager>>,
+    resources: Rc<ResourceSet>,
+    submit_button_clicked_signal: Option<SignalHandlerId>,
+    window: Rc<ApplicationWindow>,
+    game_action_emitter: EventEmitter<GameActionEvent>,
 }
 
 impl Destroyable for SubmitUI {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.subscription_id.take() {
             subscription_id.unsubscribe();
+        }
+        if let Some(submit_button_clicked_signal) = self.submit_button_clicked_signal.take() {
+            self.submit_button.disconnect(submit_button_clicked_signal);
         }
     }
 }
@@ -34,83 +41,32 @@ impl SubmitUI {
     pub fn new(
         game_state_observer: EventObserver<GameStateEvent>,
         game_action_emitter: EventEmitter<GameActionEvent>,
-        game_state: &Rc<RefCell<GameState>>,
         stats_manager: &Rc<RefCell<StatsManager>>,
         resources: &Rc<ResourceSet>,
+        window: &Rc<ApplicationWindow>,
     ) -> Rc<RefCell<Self>> {
         // Create submit button
         let submit_button = Rc::new(Button::with_label("Submit"));
         submit_button.set_tooltip_text(Some("Submit puzzle solution"));
         submit_button.set_action_name(Some("win.submit"));
 
-        // Wire up submit button with handler
-        let game_action_emitter_submit = game_action_emitter.clone();
-        let game_state_submit = Rc::clone(game_state);
-        let stats_manager_submit = Rc::clone(stats_manager);
-        let resources_submit = Rc::clone(resources);
-        submit_button.connect_clicked(move |button| {
-            let state = game_state_submit.try_borrow().ok().and_then(|gs| {
-                stats_manager_submit
-                    .try_borrow_mut()
-                    .ok()
-                    .and_then(|sm| Some((gs, sm)))
+        let submit_button_clicked_signal: SignalHandlerId;
+
+        {
+            let game_action_emitter_submit = game_action_emitter.clone();
+            submit_button_clicked_signal = submit_button.connect_clicked(move |_| {
+                game_action_emitter_submit.emit(&GameActionEvent::CompletePuzzle);
             });
-            if let Some((state, mut stats_manager)) = state {
-                if state.current_board.is_complete() && !state.current_board.is_incorrect() {
-                    button.remove_css_class("submit-ready"); // Stop blinking once clicked
-                    let media = resources_submit.random_win_sound();
-                    media.play();
-
-                    // Record completion and show stats
-                    let stats = state.get_game_stats();
-                    let difficulty = state.current_board.solution.difficulty;
-
-                    if let Err(e) = stats_manager.record_game(&stats) {
-                        log::error!(target: "window", "Failed to record game stats: {}", e);
-                    }
-
-                    if let Some(window) = button
-                        .root()
-                        .and_then(|r| r.downcast::<ApplicationWindow>().ok())
-                    {
-                        // Drop the mutable borrow before showing stats
-                        let game_action_emitter = game_action_emitter_submit.clone();
-                        StatsDialog::show(&window, &state, &stats_manager, Some(stats), move || {
-                            game_action_emitter.emit(&GameActionEvent::NewGame(difficulty));
-                        });
-                    }
-                } else {
-                    let dialog = gtk::MessageDialog::new(
-                        button
-                            .root()
-                            .and_then(|r| r.downcast::<gtk::Window>().ok())
-                            .as_ref(),
-                        gtk::DialogFlags::MODAL,
-                        gtk::MessageType::Info,
-                        gtk::ButtonsType::OkCancel,
-                        "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
-                    );
-
-                    // Play game over sound using a MediaStream
-                    let media = resources_submit.random_lose_sound();
-                    media.play();
-
-                    let game_action_emitter = game_action_emitter_submit.clone();
-                    dialog.connect_response(move |dialog, response| {
-                        if response == gtk::ResponseType::Ok {
-                            game_action_emitter.emit(&GameActionEvent::RewindLastGood);
-                        }
-                        dialog.close();
-                    });
-                    dialog.show();
-                }
-            }
-        });
+        }
 
         let submit_ui = Rc::new(RefCell::new(Self {
             submit_button,
-            game_state_observer: game_state_observer.clone(),
             subscription_id: None,
+            stats_manager: Rc::clone(stats_manager),
+            resources: Rc::clone(resources),
+            submit_button_clicked_signal: Some(submit_button_clicked_signal),
+            window: Rc::clone(window),
+            game_action_emitter: game_action_emitter,
         }));
 
         // Initialize button state
@@ -125,14 +81,72 @@ impl SubmitUI {
         submit_ui
     }
 
+    fn handle_game_completion(&self, completion_state: &PuzzleCompletionState) {
+        match completion_state {
+            PuzzleCompletionState::Incomplete => {
+                // just ignore
+            }
+            PuzzleCompletionState::Correct(stats) => {
+                self.submit_button.remove_css_class("submit-ready"); // Stop blinking once clicked
+                let media = self.resources.random_win_sound();
+                media.play();
+
+                let difficulty = stats.difficulty;
+
+                if let Err(e) = self.stats_manager.borrow_mut().record_game(&stats) {
+                    log::error!(target: "window", "Failed to record game stats: {}", e);
+                }
+
+                // Drop the mutable borrow before showing stats
+                let game_action_emitter = self.game_action_emitter.clone();
+                let stats_manager = self.stats_manager.as_ref().borrow_mut();
+                StatsDialog::show(
+                    &self.window,
+                    difficulty,
+                    &stats_manager,
+                    Some(stats),
+                    move || {
+                        game_action_emitter.emit(&GameActionEvent::NewGame(difficulty));
+                    },
+                );
+            }
+            PuzzleCompletionState::Incorrect => {
+                let dialog = gtk::MessageDialog::new(
+                    Some(self.window.as_ref()),
+                    gtk::DialogFlags::MODAL,
+                    gtk::MessageType::Info,
+                    gtk::ButtonsType::OkCancel,
+                    "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
+                );
+
+                // Play game over sound using a MediaStream
+                let media = self.resources.random_lose_sound();
+                media.play();
+
+                let game_action_emitter = self.game_action_emitter.clone();
+                dialog.connect_response(move |dialog, response| {
+                    if response == gtk::ResponseType::Ok {
+                        game_action_emitter.emit(&GameActionEvent::RewindLastGood);
+                    }
+                    dialog.close();
+                });
+                dialog.show();
+            }
+            _ => (),
+        }
+    }
+
     fn connect_observer(
         submit_ui: Rc<RefCell<Self>>,
         game_state_observer: EventObserver<GameStateEvent>,
     ) {
         let submit_ui_moved = submit_ui.clone();
         let subscription_id = game_state_observer.subscribe(move |event| match event {
-            GameStateEvent::PuzzleCompletionStateChanged(all_cells_filled) => {
+            GameStateEvent::PuzzleSubmissionReadyChanged(all_cells_filled) => {
                 submit_ui_moved.borrow().update_button(*all_cells_filled)
+            }
+            GameStateEvent::PuzzleSuccessfullyCompleted(state) => {
+                submit_ui_moved.borrow().handle_game_completion(state);
             }
             _ => (),
         });

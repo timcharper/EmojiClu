@@ -8,6 +8,7 @@ pub enum GameActionEvent {
     VerticalClueClick(usize),   // clue_idx
     NewGame(Difficulty),        // grid rows, grid columns
     InitDisplay,
+    CompletePuzzle,
     Solve,
     RewindLastGood,
     IncrementHintsUsed,

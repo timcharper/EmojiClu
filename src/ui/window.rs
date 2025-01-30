@@ -135,6 +135,10 @@ pub fn build_ui(app: &Application) {
             .name("game-box")
             .orientation(Orientation::Horizontal)
             .spacing(10)
+            .halign(gtk::Align::Center)
+            .hexpand(true)
+            .margin_start(10)
+            .margin_end(10)
             .build(),
     );
 
@@ -261,9 +265,9 @@ pub fn build_ui(app: &Application) {
     let submit_ui = SubmitUI::new(
         game_state_observer.clone(),
         game_action_emitter.clone(),
-        &game_state,
         &stats_manager,
         &resources,
+        &window,
     );
 
     // Create left side box for timer and hints
@@ -368,6 +372,8 @@ pub fn build_ui(app: &Application) {
         .visible(true)
         .hexpand(true)
         .vexpand(true)
+        .halign(gtk::Align::Fill)
+        .valign(gtk::Align::Center)
         .build();
 
     top_level_box.append(game_box.as_ref());
@@ -408,23 +414,26 @@ pub fn build_ui(app: &Application) {
     let game_state_stats = Rc::clone(&game_state);
     let stats_manager_stats = Rc::clone(&stats_manager);
     let submit_ui_stats = Rc::clone(&submit_ui);
-    action_statistics.connect_activate(move |_, _| {
-        if let Some(window) = game_state_stats.try_borrow().ok().and_then(|_| {
-            submit_ui_stats
-                .borrow()
-                .submit_button
-                .root()
-                .and_then(|r| r.downcast::<ApplicationWindow>().ok())
-        }) {
-            StatsDialog::show(
-                &window,
-                &game_state_stats.borrow(),
-                &stats_manager_stats.borrow_mut(),
-                None,
-                || {},
-            );
-        }
-    });
+    {
+        let settings_ref = Rc::clone(&settings);
+        action_statistics.connect_activate(move |_, _| {
+            if let Some(window) = game_state_stats.try_borrow().ok().and_then(|_| {
+                submit_ui_stats
+                    .borrow()
+                    .submit_button
+                    .root()
+                    .and_then(|r| r.downcast::<ApplicationWindow>().ok())
+            }) {
+                StatsDialog::show(
+                    &window,
+                    settings_ref.borrow().difficulty,
+                    &stats_manager_stats.borrow_mut(),
+                    None,
+                    || {},
+                );
+            }
+        });
+    }
     window.add_action(&action_statistics);
 
     let action_about = gtk::gio::SimpleAction::new("about", None);

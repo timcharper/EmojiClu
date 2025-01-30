@@ -3,8 +3,8 @@ TODO
 [ ] generate puzzle in thread
 [ ] new icon set
   - configurable icon set!
-[ ] stop timer when puzzle completed
-[ ] center puzzle
+[x] stop timer when puzzle completed
+[x] center puzzle
 [ ] random strategy for different varieties of puzzle generation (use more left of clues, more 1 but not both, etc.)
   - Maybe add heuristic to reinforce certain decisions
 [ ] Selectable theme

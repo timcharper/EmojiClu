@@ -1,6 +1,13 @@
 use super::{ClueSet, ClueWithGrouping, TimerState};
-use crate::model::GameBoard;
-use std::{collections::HashSet, rc::Rc};
+use crate::model::{GameBoard, GameStats};
+use std::rc::Rc;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PuzzleCompletionState {
+    Incomplete,
+    Correct(GameStats),
+    Incorrect,
+}
 
 #[derive(Debug)]
 pub enum GameStateEvent {
@@ -19,7 +26,8 @@ pub enum GameStateEvent {
     },
     HintUsageChanged(u32),
     TimerStateChanged(TimerState),
-    PuzzleCompletionStateChanged(bool),
+    PuzzleSubmissionReadyChanged(bool),
+    PuzzleSuccessfullyCompleted(PuzzleCompletionState),
     ClueHintHighlight {
         clue: ClueWithGrouping,
     },

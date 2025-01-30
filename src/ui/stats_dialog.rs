@@ -3,9 +3,8 @@ use gtk::prelude::*;
 use gtk::{ApplicationWindow, Grid, Label, Orientation};
 use std::time::Duration;
 
-use crate::game::game_state::GameState;
-use crate::game::stats_manager::{GameStats, StatsManager};
-use crate::model::Difficulty;
+use crate::game::stats_manager::StatsManager;
+use crate::model::{Difficulty, GameStats};
 
 pub struct StatsDialog;
 
@@ -24,7 +23,7 @@ impl StatsDialog {
     }
 
     fn create_high_scores_grid(
-        game_state: &GameState,
+        difficulty: Difficulty,
         this_game_stats: Option<&GameStats>,
         stats_manager: &StatsManager,
     ) -> Grid {
@@ -52,7 +51,7 @@ impl StatsDialog {
         // }
         //     let high_scores = stats_manager.get_high_scores();
         for (i, score) in stats_manager
-            .get_high_scores(game_state.get_difficulty(), 20)
+            .get_high_scores(difficulty, 20)
             .into_iter()
             .enumerate()
         {
@@ -160,9 +159,9 @@ impl StatsDialog {
 
     pub fn show<F>(
         window: &ApplicationWindow,
-        game_state: &GameState,
+        difficulty: Difficulty,
         stats_manager: &StatsManager,
-        this_game_stats: Option<GameStats>,
+        this_game_stats: Option<&GameStats>,
         on_close: F,
     ) where
         F: Fn() + 'static,
@@ -189,8 +188,7 @@ impl StatsDialog {
         vbox.append(&high_scores_label);
 
         // Add high scores grid
-        let scores_grid =
-            Self::create_high_scores_grid(game_state, this_game_stats.as_ref(), stats_manager);
+        let scores_grid = Self::create_high_scores_grid(difficulty, this_game_stats, stats_manager);
         vbox.append(&scores_grid);
 
         // Add separator
@@ -205,7 +203,7 @@ impl StatsDialog {
         global_stats_label.set_margin_bottom(10);
         vbox.append(&global_stats_label);
 
-        let stats_grid = Self::create_global_stats_grid(stats_manager, game_state.get_difficulty());
+        let stats_grid = Self::create_global_stats_grid(stats_manager, difficulty);
         vbox.append(&stats_grid);
 
         content_area.append(&vbox);

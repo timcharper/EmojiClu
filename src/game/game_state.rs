@@ -3,15 +3,14 @@ use std::cell::RefCell;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use super::clue_generator::ClueGeneratorResult;
 use super::solver::{deduce_hidden_pairs, perform_evaluation_step, EvaluationStepResult};
-use super::stats_manager::GameStats;
 use super::{deduce_clue, generate_clues};
 use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
+use crate::game::clue_generator::ClueGeneratorResult;
 use crate::model::{
     CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameActionEvent, GameBoard,
-    GameStateEvent, Solution, TimerState,
+    GameStateEvent, GameStats, PuzzleCompletionState, Solution, TimerState,
 };
 use std::rc::Rc;
 
@@ -263,7 +262,7 @@ impl GameState {
         // Emit completion state event
         let all_cells_filled = self.current_board.is_complete();
         self.game_state_emitter
-            .emit(&GameStateEvent::PuzzleCompletionStateChanged(
+            .emit(&GameStateEvent::PuzzleSubmissionReadyChanged(
                 all_cells_filled,
             ));
     }
@@ -299,6 +298,32 @@ impl GameState {
             GameActionEvent::Resume => self.resume_game(),
             GameActionEvent::Quit => (),
             GameActionEvent::Submit => todo!(),
+            GameActionEvent::CompletePuzzle => self.complete_puzzle(),
+        }
+    }
+
+    fn complete_puzzle(&mut self) {
+        if self.current_board.is_complete() {
+            if self.current_board.is_incorrect() {
+                self.game_state_emitter
+                    .emit(&GameStateEvent::PuzzleSuccessfullyCompleted(
+                        PuzzleCompletionState::Incorrect,
+                    ));
+            } else {
+                self.game_state_emitter
+                    .emit(&GameStateEvent::PuzzleSuccessfullyCompleted(
+                        PuzzleCompletionState::Correct(self.get_game_stats()),
+                    ));
+
+                self.timer_state.ended_timestamp = Some(Instant::now());
+                self.game_state_emitter
+                    .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+            }
+        } else {
+            self.game_state_emitter
+                .emit(&GameStateEvent::PuzzleSuccessfullyCompleted(
+                    PuzzleCompletionState::Incomplete,
+                ));
         }
     }
 
