@@ -208,9 +208,14 @@ impl StatsDialog {
 
         content_area.append(&vbox);
 
-        dialog.connect_response(move |dialog, _| {
-            on_close();
-            dialog.close();
+        dialog.connect_response(move |dialog, response| {
+            match response {
+                // window actually got closed
+                gtk::ResponseType::DeleteEvent => on_close(),
+                // user clicked Close button
+                gtk::ResponseType::Close => dialog.close(),
+                _ => panic!("Unexpected response type: {:?}", response),
+            }
         });
         dialog.show();
     }
