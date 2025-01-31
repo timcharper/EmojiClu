@@ -220,6 +220,7 @@ fn generic_starter_evidence(state: &mut ClueGeneratorState, init_board: &GameBoa
 
 pub trait PuzzleVariant: Debug + PuzzleVariantCloneBox {
     fn get_clue_weights(&self) -> Vec<WeightedClueType>;
+
     /// score a clue based on the deductions; smaller score = better
     fn score_clue(&self, clue: &Clue, deducations: &Vec<Deduction>) -> usize;
     fn get_variant_type(&self) -> PuzzleVariantType;
@@ -259,6 +260,7 @@ impl PuzzleVariant for NarrowingPuzzleVariant {
     }
 
     fn score_clue(&self, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
+        // its enough to just change the clue weights, we don't need to boost certain clue types, although perhaps experiment with it later
         generic_score_clue(clue, deducations)
     }
 
@@ -283,16 +285,16 @@ impl PuzzleVariant for StripingPuzzleVariant {
         }
 
         // if deduction columns are even, or odd, boost clue
-        let mut deductions_per_row: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
+        let mut deductions_per_variant: BTreeMap<char, BTreeSet<usize>> = BTreeMap::new();
 
         for deduction in deductions {
-            deductions_per_row
-                .entry(deduction.tile.row)
+            deductions_per_variant
+                .entry(deduction.tile.variant)
                 .or_insert(BTreeSet::new())
                 .insert(deduction.column);
         }
 
-        let all_striped = deductions_per_row.iter().all(|(_, columns)| {
+        let all_striped = deductions_per_variant.iter().all(|(_, columns)| {
             if columns.len() <= 1 {
                 return true;
             }
@@ -300,10 +302,15 @@ impl PuzzleVariant for StripingPuzzleVariant {
             let all_odd = columns.iter().all(|&c| c % 2 == 1);
             all_even || all_odd
         });
+        let max_columns = deductions_per_variant
+            .values()
+            .map(|c| c.len())
+            .max()
+            .unwrap_or(1);
 
         if all_striped {
-            // we really want these, so reduce their score by a factor of 6 so they float to the top.
-            score / 6
+            // we really want these, so reduce their score by a factor of up to 6 so they float to the top.
+            score / max_columns * 3
         } else {
             score
         }
