@@ -4,6 +4,14 @@ GnomeClu is a graphical implementation of the [Zebra Puzzle](https://en.wikipedi
 
 # How to Play
 
+## Video Tutorial:
+
+(GitHub mutes audio by default, be sure to unmute sound using the video volume control)
+
+https://github.com/user-attachments/assets/61fe3d10-efc5-4cf0-80ea-c69454759b0e
+
+## Text Tutorial for Those Who Hate Video
+
 ![GnomeClu Hard Puzzle](docs/6x6-screeen.png)
 
 GnomeClu is a logical deduction style puzzle, similar to Suduko. Your goal is to find out the correct location of tiles in the puzzle grid, using deductions derived from the provided clues.
@@ -50,6 +58,13 @@ Planned differences:
 If you enjoy this game, please buy Everett's mobile version for your phone / iPad. He's a smart guy and it's worth your money. Also, check out his other puzzle games.
 
 There are no plans to make a mobile version of GnomeClu.
+
+# Credits Etc
+
+- [https://openmoji.org/] - OpenMoji provided the glyphs used for the tile set.
+- [https://github.com/gtk-rs/gtk4-rs] - gtk4-rs for the amazing Rust GTK bindings 
+- [https://www.gnome.org/] - Gnome, for GTK.
+- [https://www.youtube.com/user/Davie504] - Davie504, for the win/lose sounds. Pls don't sue thx.
 
 # Building
 
