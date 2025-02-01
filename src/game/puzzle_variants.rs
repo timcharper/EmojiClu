@@ -210,7 +210,7 @@ fn generic_starter_evidence(state: &mut ClueGeneratorState, init_board: &GameBoa
             let seed = tiles.choose(&mut state.rng).unwrap().clone();
             trace!(target: "clue_generator", "Seed: {:?}", seed);
             let clue = state
-                .generate_random_clue_type(&starter_clue_generators, seed)
+                .generate_random_clue_type(&starter_clue_generators, Some(seed))
                 .unwrap();
             let deductions = deduce_clue(&state.board, &clue);
             state.add_clue(&clue, &deductions);

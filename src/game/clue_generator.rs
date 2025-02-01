@@ -72,9 +72,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
         /* TODO - need to make the clue generation guided to try to choose at least one unsolved tile. */
         {
             clue_generation_loops += 1;
-            let seed = state.random_tile_with_evidence();
-            let (col, _) = state.board.solution.find_tile(&seed);
-            if let Some(clue) = state.generate_random_clue_type(&clue_weights, seed) {
+            if let Some(clue) = state.generate_random_clue_type(&clue_weights, None) {
                 if state.would_exceed_usage_limits(&clue) {
                     trace!(
                         target: "clue_generator",
@@ -128,9 +126,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
             } else {
                 trace!(
                     target: "clue_generator",
-                    "Failed to generate clue for seed {:?} in col {:?}, trying again",
-                    seed,
-                    col
+                    "Failed to generate clue, trying again"
                 );
             }
         }
