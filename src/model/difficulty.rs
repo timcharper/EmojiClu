@@ -20,7 +20,7 @@ impl Difficulty {
             Difficulty::Easy => 4,
             Difficulty::Moderate => 5,
             Difficulty::Hard => 6,
-            Difficulty::Veteran => 7,
+            Difficulty::Veteran => 8,
         }
     }
 

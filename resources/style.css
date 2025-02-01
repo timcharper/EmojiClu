@@ -86,6 +86,10 @@ image {
 }
 
 .puzzle-mat-board {
+    background-color: #444;
+}
+
+.puzzle-cell-frame {
     background-color: black;
 }
 
