@@ -4,7 +4,7 @@ use rand::{
     seq::{IteratorRandom, SliceRandom},
     Rng, RngCore, SeedableRng,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
@@ -21,24 +21,14 @@ pub const MAX_VERT_CLUES: usize = 32;
 const MAX_HORIZONTAL_TILE_USAGE: usize = 3;
 const MAX_VERTICAL_TILE_USAGE: usize = 2;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ClueGeneratorStats {
     pub n_rejected_no_deductions: usize,
-    pub n_rejected_exceeds_usage_limits: usize,
-    pub n_rejected_exceeds_max_vert_clues: usize,
-    pub n_rejected_exceeds_max_horiz_clues: usize,
+    pub n_rejected_tile_usage_horiz: usize,
+    pub n_rejected_tile_usage_vert: usize,
+    pub n_rejected_max_vert: usize,
+    pub n_rejected_max_horiz: usize,
     pub n_rejected_non_singleton_intersecting_clues: usize,
-}
-impl Default for ClueGeneratorStats {
-    fn default() -> Self {
-        ClueGeneratorStats {
-            n_rejected_exceeds_usage_limits: 0,
-            n_rejected_exceeds_max_vert_clues: 0,
-            n_rejected_exceeds_max_horiz_clues: 0,
-            n_rejected_no_deductions: 0,
-            n_rejected_non_singleton_intersecting_clues: 0,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -55,8 +45,6 @@ pub struct ClueGeneratorState {
     pub tiles_without_evidence: BTreeSet<(usize, Tile)>,
     pub clues: Vec<Clue>,
     pub rng: Box<dyn RngCore>,
-    pub horizontal_usage: HashMap<Tile, usize>,
-    pub vertical_usage: HashMap<Tile, usize>,
     pub horizontal_clues: usize,
     pub vertical_clues: usize,
     pub unsolved_columns: BTreeSet<usize>,
@@ -64,8 +52,10 @@ pub struct ClueGeneratorState {
     pub selection_count_by_row: Vec<usize>,
     pub selection_count_by_column: Vec<usize>,
     pub unsolved_tiles: BTreeSet<Tile>,
-    pub unsolved_tiles_by_column: HashMap<usize, BTreeSet<Tile>>,
-    pub unsolved_tiles_by_row: HashMap<usize, BTreeSet<Tile>>,
+    pub unsolved_tiles_by_column: BTreeMap<usize, BTreeSet<Tile>>,
+    pub unsolved_tiles_by_row: BTreeMap<usize, BTreeSet<Tile>>,
+    pub tile_horiz_usage_remaining: BTreeMap<Tile, usize>,
+    pub tile_vert_usage_remaining: BTreeMap<Tile, usize>,
     pub stats: ClueGeneratorStats,
 }
 
@@ -77,9 +67,11 @@ impl ClueGeneratorState {
         let unsolved_columns: BTreeSet<usize> = (0..board.solution.n_variants).collect();
         let unsolved_rows: BTreeSet<usize> = (0..board.solution.n_rows).collect();
         let unsolved_tiles: BTreeSet<Tile> = board.solution.all_tiles().into_iter().collect();
-        let mut unsolved_tiles_by_column: HashMap<usize, BTreeSet<Tile>> = HashMap::new();
-        let mut unsolved_tiles_by_row: HashMap<usize, BTreeSet<Tile>> = HashMap::new();
+        let mut unsolved_tiles_by_column: BTreeMap<usize, BTreeSet<Tile>> = BTreeMap::new();
+        let mut unsolved_tiles_by_row: BTreeMap<usize, BTreeSet<Tile>> = BTreeMap::new();
         let mut tiles_without_evidence: BTreeSet<(usize, Tile)> = BTreeSet::new();
+        let mut tile_horiz_usage_remaining: BTreeMap<Tile, usize> = BTreeMap::new();
+        let mut tile_vert_usage_remaining: BTreeMap<Tile, usize> = BTreeMap::new();
 
         for row in 0..board.solution.n_rows {
             for col in 0..board.solution.n_variants {
@@ -93,6 +85,8 @@ impl ClueGeneratorState {
                     .entry(row)
                     .or_insert(BTreeSet::new())
                     .insert(tile);
+                tile_horiz_usage_remaining.insert(tile, MAX_HORIZONTAL_TILE_USAGE);
+                tile_vert_usage_remaining.insert(tile, MAX_VERTICAL_TILE_USAGE);
             }
         }
 
@@ -107,8 +101,6 @@ impl ClueGeneratorState {
             tiles_without_evidence,
             clues: Vec::new(),
             rng,
-            horizontal_usage: HashMap::new(),
-            vertical_usage: HashMap::new(),
             horizontal_clues: 0,
             vertical_clues: 0,
             unsolved_columns,
@@ -116,6 +108,8 @@ impl ClueGeneratorState {
             unsolved_tiles,
             unsolved_tiles_by_column,
             unsolved_tiles_by_row,
+            tile_horiz_usage_remaining,
+            tile_vert_usage_remaining,
             stats: ClueGeneratorStats::default(),
         }
     }
@@ -138,55 +132,80 @@ impl ClueGeneratorState {
             .unwrap()
     }
 
-    fn increment_horizontal_usage(&mut self, tile: &Tile) {
-        *self.horizontal_usage.entry(tile.clone()).or_insert(0) += 1;
+    fn consume_horiz_tile(&mut self, tile: &Tile) {
+        let remaining = self.tile_horiz_usage_remaining.get_mut(tile).unwrap();
+        if *remaining <= 1 {
+            self.tile_horiz_usage_remaining.remove(tile);
+        } else {
+            *remaining -= 1;
+        }
     }
 
     fn increment_vertical_usage(&mut self, tile: &Tile) {
-        *self.vertical_usage.entry(tile.clone()).or_insert(0) += 1;
-    }
-
-    fn get_horizontal_usage(&self, tile: &Tile) -> usize {
-        *self.horizontal_usage.get(tile).unwrap_or(&0)
-    }
-
-    fn get_vertical_usage(&self, tile: &Tile) -> usize {
-        *self.vertical_usage.get(tile).unwrap_or(&0)
+        trace!(
+            target: "clue_generator",
+            "increment_vertical_usage: {:?}",
+            tile
+        );
+        let remaining = self.tile_vert_usage_remaining.get_mut(tile).unwrap();
+        if *remaining <= 1 {
+            trace!(
+                target: "clue_generator",
+                "increment_vertical_usage: removing {:?}",
+                tile
+            );
+            self.tile_vert_usage_remaining.remove(tile);
+        } else {
+            trace!(
+                target: "clue_generator",
+                "increment_vertical_usage: decrementing {:?}",
+                tile
+            );
+            *remaining -= 1;
+        }
     }
 
     pub(crate) fn would_exceed_usage_limits(&mut self, clue: &Clue) -> bool {
-        // too many clues?
-        if clue.is_horizontal() && self.horizontal_clues >= MAX_HORIZ_CLUES {
-            self.stats.n_rejected_exceeds_max_horiz_clues += 1;
-            return true;
-        }
-        if clue.is_vertical() && self.vertical_clues >= MAX_VERT_CLUES {
-            self.stats.n_rejected_exceeds_max_vert_clues += 1;
-            return true;
-        }
-        // too many hints on the same tile?
-        let result = if clue.is_horizontal() {
-            clue.assertions
+        if clue.is_horizontal() {
+            // too many clues?
+            if self.horizontal_clues >= MAX_HORIZ_CLUES {
+                self.stats.n_rejected_max_horiz += 1;
+                return true;
+            }
+            // too many hints on the same tile?
+            let exceeds = clue
+                .assertions
                 .iter()
                 .filter(|a| a.assertion)
-                .any(|a| self.get_horizontal_usage(&a.tile) >= MAX_HORIZONTAL_TILE_USAGE)
+                .any(|a| !self.tile_horiz_usage_remaining.contains_key(&a.tile));
+            if exceeds {
+                self.stats.n_rejected_tile_usage_horiz += 1;
+            }
+            exceeds
         } else {
-            clue.assertions
+            // too many clues?
+            if self.vertical_clues >= MAX_VERT_CLUES {
+                self.stats.n_rejected_max_vert += 1;
+                return true;
+            }
+            // too many hints on the same tile?
+            let exceeds = clue
+                .assertions
                 .iter()
                 .filter(|a| a.assertion)
-                .any(|a| self.get_vertical_usage(&a.tile) >= MAX_VERTICAL_TILE_USAGE)
-        };
-        if result {
-            self.stats.n_rejected_exceeds_usage_limits += 1;
+                .any(|a| !self.tile_vert_usage_remaining.contains_key(&a.tile));
+            if exceeds {
+                self.stats.n_rejected_tile_usage_vert += 1;
+            }
+            exceeds
         }
-        result
     }
 
     fn record_clue_usage(&mut self, clue: &Clue) {
         if clue.is_horizontal() {
             for TileAssertion { tile, assertion } in clue.assertions.iter() {
                 if *assertion {
-                    self.increment_horizontal_usage(&tile);
+                    self.consume_horiz_tile(&tile);
                 }
             }
         } else {
@@ -210,12 +229,18 @@ impl ClueGeneratorState {
             }
             self.unsolved_tiles.remove(&tile);
             self.unsolved_tiles_by_column
-                .entry(col)
-                .or_insert(BTreeSet::new())
+                .get_mut(&col)
+                .expect(&format!(
+                    "Error - unsolved tiles not populated in column {}",
+                    col
+                ))
                 .remove(&tile);
             self.unsolved_tiles_by_row
-                .entry(tile.row)
-                .or_insert(BTreeSet::new())
+                .get_mut(&tile.row)
+                .expect(&format!(
+                    "Error - unsolved tiles not populated in row {}",
+                    tile.row
+                ))
                 .remove(&tile);
         }
     }

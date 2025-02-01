@@ -73,6 +73,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
         {
             clue_generation_loops += 1;
             let seed = state.random_tile_with_evidence();
+            let (col, _) = state.board.solution.find_tile(&seed);
             if let Some(clue) = state.generate_random_clue_type(&clue_weights, seed) {
                 if state.would_exceed_usage_limits(&clue) {
                     trace!(
@@ -124,6 +125,13 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
                     evaluation.deductions.len()
                 );
                 possible_clues.push(evaluation);
+            } else {
+                trace!(
+                    target: "clue_generator",
+                    "Failed to generate clue for seed {:?} in col {:?}, trying again",
+                    seed,
+                    col
+                );
             }
         }
         info!(
