@@ -1,18 +1,14 @@
 use super::{
     clue_generator_state::{ClueEvaluation, ClueGeneratorState},
-    puzzle_variants::{random_puzzle_variant, PuzzleVariant, WeightedClueType},
+    puzzle_variants::{random_puzzle_variant, PuzzleVariant},
 };
 
 use log::{info, trace, warn};
-use rand::{
-    seq::{IteratorRandom, SliceRandom},
-    Rng,
-};
 use std::rc::Rc;
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
-    model::{Clue, ClueSet, ClueType, GameBoard, HorizontalClueType, Tile, VerticalClueType},
+    model::{Clue, ClueSet, GameBoard, Tile},
 };
 
 use super::deduce_clue;

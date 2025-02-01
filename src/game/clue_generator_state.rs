@@ -64,6 +64,8 @@ pub struct ClueGeneratorState {
     pub selection_count_by_row: Vec<usize>,
     pub selection_count_by_column: Vec<usize>,
     pub unsolved_tiles: BTreeSet<Tile>,
+    pub unsolved_tiles_by_column: HashMap<usize, BTreeSet<Tile>>,
+    pub unsolved_tiles_by_row: HashMap<usize, BTreeSet<Tile>>,
     pub stats: ClueGeneratorStats,
 }
 
@@ -75,12 +77,22 @@ impl ClueGeneratorState {
         let unsolved_columns: BTreeSet<usize> = (0..board.solution.n_variants).collect();
         let unsolved_rows: BTreeSet<usize> = (0..board.solution.n_rows).collect();
         let unsolved_tiles: BTreeSet<Tile> = board.solution.all_tiles().into_iter().collect();
+        let mut unsolved_tiles_by_column: HashMap<usize, BTreeSet<Tile>> = HashMap::new();
+        let mut unsolved_tiles_by_row: HashMap<usize, BTreeSet<Tile>> = HashMap::new();
         let mut tiles_without_evidence: BTreeSet<(usize, Tile)> = BTreeSet::new();
 
         for row in 0..board.solution.n_rows {
             for col in 0..board.solution.n_variants {
                 let tile = board.solution.get(row, col);
                 tiles_without_evidence.insert((col, tile));
+                unsolved_tiles_by_column
+                    .entry(col)
+                    .or_insert(BTreeSet::new())
+                    .insert(tile);
+                unsolved_tiles_by_row
+                    .entry(row)
+                    .or_insert(BTreeSet::new())
+                    .insert(tile);
             }
         }
 
@@ -102,6 +114,8 @@ impl ClueGeneratorState {
             unsolved_columns,
             unsolved_rows,
             unsolved_tiles,
+            unsolved_tiles_by_column,
+            unsolved_tiles_by_row,
             stats: ClueGeneratorStats::default(),
         }
     }
@@ -195,6 +209,14 @@ impl ClueGeneratorState {
                 self.unsolved_rows.remove(&tile.row);
             }
             self.unsolved_tiles.remove(&tile);
+            self.unsolved_tiles_by_column
+                .entry(col)
+                .or_insert(BTreeSet::new())
+                .remove(&tile);
+            self.unsolved_tiles_by_row
+                .entry(tile.row)
+                .or_insert(BTreeSet::new())
+                .remove(&tile);
         }
     }
 
@@ -337,6 +359,7 @@ impl ClueGeneratorState {
     /// - Vec<Tile> contains the seed tile followed by `count` adjacent tiles in the chosen direction
     /// - Vec<usize> are the corresponding columns chosen
     fn get_random_horiz_tiles(&mut self, count: usize, seed: &Tile) -> (Vec<Tile>, Vec<usize>) {
+        let mut num_unsolved_tiles = 0; // try to get at least one unsolved tile.
         let mut tiles = Vec::new();
         let (row, col) = self.board.solution.find_tile(seed);
 
@@ -361,8 +384,22 @@ impl ClueGeneratorState {
         columns.push(col);
         for _ in 0..count {
             next_col = next_col + direction;
-            let next_row = self.rng.gen_range(0..self.board.solution.n_rows);
-            let tile = self.board.solution.get(next_row, next_col as usize);
+            let unsolved_tiles_in_column = self
+                .unsolved_tiles_by_column
+                .get(&(next_col as usize))
+                .expect("No unsolved tiles in column");
+            let tile = if num_unsolved_tiles == 0 && !unsolved_tiles_in_column.is_empty() {
+                num_unsolved_tiles += 1;
+                unsolved_tiles_in_column
+                    .iter()
+                    .choose(&mut self.rng)
+                    .unwrap()
+                    .clone()
+            } else {
+                let next_row = self.rng.gen_range(0..self.board.solution.n_rows);
+                self.board.solution.get(next_row, next_col as usize)
+            };
+
             tiles.push(tile);
             columns.push(next_col as usize);
         }
@@ -370,7 +407,8 @@ impl ClueGeneratorState {
     }
 
     fn get_random_vertical_tiles(&mut self, seed: &Tile, count: usize) -> Vec<Tile> {
-        let mut tiles = Vec::new();
+        let mut tiles: Vec<Tile> = Vec::new();
+        let mut num_unsolved_tiles = 0; // try to get at least one unsolved tile.
         let (row, col) = self.board.solution.find_tile(seed);
 
         let mut possible_rows = (0..self.board.solution.n_rows)
@@ -378,22 +416,43 @@ impl ClueGeneratorState {
             .collect::<Vec<_>>();
 
         possible_rows.shuffle(&mut self.rng);
-        let rows = possible_rows.iter().take(count).collect::<Vec<_>>();
+
+        for _ in 0..count {
+            let unsolved_tiles = self
+                .unsolved_tiles_by_column
+                .get(&col)
+                .expect("No unsolved tiles in column");
+
+            let mut maybe_unsolved_tile: Option<Tile> = None;
+            if num_unsolved_tiles == 0 && !unsolved_tiles.is_empty() {
+                maybe_unsolved_tile = unsolved_tiles
+                    .iter()
+                    .filter(|t| possible_rows.contains(&t.row))
+                    .choose(&mut self.rng)
+                    .map(|t| t.clone());
+                if maybe_unsolved_tile.is_some() {
+                    num_unsolved_tiles += 1;
+                }
+            }
+
+            let selected_tile = maybe_unsolved_tile.unwrap_or_else(|| {
+                let next_row = possible_rows
+                    .choose(&mut self.rng)
+                    .expect("no remaining possible rows; this shouldn't happen");
+                self.board.solution.get(*next_row, col)
+            });
+
+            possible_rows.retain(|r| r != &selected_tile.row);
+            tiles.push(selected_tile);
+        }
 
         trace!(
             target: "clue_generator",
-            "Possible rows {:?}, count: {:?}",
+            "Possible rows {:?}, count: {:?}, tiles: {:?}",
             possible_rows,
-            count
+            count,
+            tiles
         );
-        for row in rows {
-            trace!(
-                target: "clue_generator",
-                "Adding tile: {:?}",
-                self.board.solution.get(*row, col)
-            );
-            tiles.push(self.board.solution.get(*row, col));
-        }
         tiles
     }
 
