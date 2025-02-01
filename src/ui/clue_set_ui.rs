@@ -16,7 +16,7 @@ use crate::{
 };
 use crate::{model::LayoutConfiguration, ui::clue_ui::ClueUI};
 
-const CLUES_PER_COLUMN: usize = 18;
+const CLUES_PER_COLUMN: usize = 16;
 
 pub struct ClueSetUI {
     pub horizontal_grid: Grid,

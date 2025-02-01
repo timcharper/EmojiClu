@@ -437,6 +437,13 @@ impl GameBoard {
         }
         false
     }
+
+    pub fn get_selected_tiles(&self) -> Vec<Tile> {
+        self.selected
+            .iter()
+            .flat_map(|row| row.iter().filter_map(|tile| tile.clone()))
+            .collect()
+    }
 }
 
 #[cfg(test)]

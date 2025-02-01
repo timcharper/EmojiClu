@@ -15,7 +15,7 @@ pub struct ClueTileUI {
     pub image: Image,       // Main tile image
     pub x_image: Image,     // Red X for negative assertions
     pub maybe_image: Image, // Question mark for maybe assertions
-    pub triple_dot: Image,  // Triple dot for LeftOf clues
+    pub left_of: Image,     // LeftOf clues
     pub highlight_frame: Arc<Frame>,
     pub decoration_frame: Arc<Frame>, // For red border on negative assertions or yellow for maybe
     pub resources: Rc<ResourceSet>,
@@ -45,10 +45,10 @@ impl ClueTileUI {
         maybe_image.set_halign(gtk::Align::Start);
         maybe_image.set_valign(gtk::Align::Start);
 
-        let triple_dot = Image::new();
-        triple_dot.set_visible(false);
-        triple_dot.set_halign(gtk::Align::Center);
-        triple_dot.set_valign(gtk::Align::Center);
+        let left_of = Image::new();
+        left_of.set_visible(false);
+        left_of.set_halign(gtk::Align::Center);
+        left_of.set_valign(gtk::Align::Center);
 
         let highlight_frame = Frame::new(None);
         highlight_frame.set_visible(false);
@@ -61,7 +61,7 @@ impl ClueTileUI {
         overlay.set_child(Some(&image));
         overlay.add_overlay(&x_image);
         overlay.add_overlay(&maybe_image);
-        overlay.add_overlay(&triple_dot);
+        overlay.add_overlay(&left_of);
         overlay.add_overlay(highlight_frame.upcast_ref::<Widget>());
         overlay.add_overlay(decoration_frame.upcast_ref::<Widget>());
 
@@ -73,7 +73,7 @@ impl ClueTileUI {
             image,
             x_image,
             maybe_image,
-            triple_dot,
+            left_of,
             highlight_frame: Arc::new(highlight_frame),
             decoration_frame: Arc::new(decoration_frame),
             resources,
@@ -84,7 +84,7 @@ impl ClueTileUI {
     pub fn update_layout(&self, layout: &CluesSizing) {
         // Update main image size
         self.image.set_pixel_size(layout.clue_tile_size.width);
-        self.triple_dot.set_pixel_size(layout.clue_tile_size.width);
+        self.left_of.set_pixel_size(layout.clue_tile_size.width);
 
         // Update decoration sizes and force a queue_resize
         self.x_image
@@ -99,7 +99,7 @@ impl ClueTileUI {
         self.highlight_frame.set_visible(false);
         self.maybe_image.set_visible(false);
         self.x_image.set_visible(false);
-        self.triple_dot.set_visible(false);
+        self.left_of.set_visible(false);
         self.decoration_frame.set_visible(false);
 
         if let Some(assertion) = assertion {
@@ -115,10 +115,10 @@ impl ClueTileUI {
         }
     }
 
-    pub fn show_triple_dot(&self) {
-        let dot_pixbuf = self.resources.get_triple_dot();
-        self.triple_dot.set_from_pixbuf(Some(&dot_pixbuf));
-        self.triple_dot.set_visible(true);
+    pub fn show_left_of(&self) {
+        let dot_pixbuf = self.resources.get_left_of();
+        self.left_of.set_from_pixbuf(Some(&dot_pixbuf));
+        self.left_of.set_visible(true);
     }
 
     fn set_negative(&self) {
@@ -185,7 +185,7 @@ impl Drop for ClueTileUI {
         // Unparent all overlays
         self.overlay.remove_overlay(&self.x_image);
         self.overlay.remove_overlay(&self.maybe_image);
-        self.overlay.remove_overlay(&self.triple_dot);
+        self.overlay.remove_overlay(&self.left_of);
         self.overlay.remove_overlay(self.highlight_frame.as_ref());
         self.overlay.remove_overlay(self.decoration_frame.as_ref());
 

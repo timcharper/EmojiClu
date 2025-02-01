@@ -64,25 +64,25 @@ image {
 }
 
 .negative-assertion-frame {
-    border: 3px solid #e01b24;  /* Thicker red border */
+    border: 5px solid #e01b24;  /* Thicker red border */
     background: transparent;
     margin: 0;  /* Ensure border aligns with tile edges */
 }
 
 .negative-assertion-x {
     margin: 4px;  /* Space from top-left corner */
-    opacity: 0.9;
+    opacity: 1.0;
 }
 
 .maybe-assertion-frame {
-    border: 3px solid #f6d32d;  /* Yellow border */
+    border: 5px solid #f6d32d;  /* Yellow border */
     background: transparent;
     margin: 0;  /* Ensure border aligns with tile edges */
 }
 
 .maybe-assertion-mark {
     margin: 4px;  /* Space from top-left corner */
-    opacity: 0.9;
+    opacity: 0.8;
 }
 
 .puzzle-mat-board {

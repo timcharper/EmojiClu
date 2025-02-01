@@ -367,7 +367,7 @@ impl ClueUI {
                 self.cells[1].set_tile(None);
                 self.cells[2].set_tile(clue.assertions.get(1));
 
-                self.cells[1].show_triple_dot();
+                self.cells[1].show_left_of();
             }
             _ => {
                 for tile_idx in 0..3 {

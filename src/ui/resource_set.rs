@@ -12,7 +12,7 @@ const SOLUTION_IMG_SIZE: i32 = 128;
 pub struct ResourceSet {
     icons: HashMap<(i32, i32), Rc<Pixbuf>>,
     negative_assertion: Rc<Pixbuf>,
-    triple_dot: Rc<Pixbuf>,
+    left_of: Rc<Pixbuf>,
     maybe_assertion: Rc<Pixbuf>,
     lose_sounds: Vec<Rc<MediaFile>>,
     win_sounds: Vec<Rc<MediaFile>>,
@@ -46,7 +46,7 @@ impl ResourceSet {
         let mut set = Self {
             icons,
             negative_assertion: empty_pixbuf.clone(),
-            triple_dot: empty_pixbuf.clone(),
+            left_of: empty_pixbuf.clone(),
             maybe_assertion: empty_pixbuf.clone(),
             lose_sounds,
             win_sounds,
@@ -62,35 +62,39 @@ impl ResourceSet {
         for row in 0..8 {
             for col in 0..8 {
                 let resource_path = format!("/org/gwatson/assets/icons/{}/{}.png", row, col);
-                let original_image = Pixbuf::from_resource(&resource_path);
-                let scaled_image = original_image.ok().and_then(|pixbuf| {
-                    pixbuf.scale_simple(
-                        SOLUTION_IMG_SIZE,
-                        SOLUTION_IMG_SIZE,
-                        gtk::gdk_pixbuf::InterpType::Bilinear,
-                    )
-                });
-                if let Some(pixbuf) = scaled_image {
-                    self.icons.insert((row, col), Rc::new(pixbuf));
-                }
+                let original_image = Pixbuf::from_resource(&resource_path)
+                    .expect(&format!("Failed to load icon {} {}", row, col));
+                let scaled_image = self.rescale_icon(&original_image);
+                self.icons.insert((row, col), Rc::new(scaled_image));
             }
         }
 
         // Load special icons
-        self.negative_assertion = Rc::new(
+        let negative_assertion =
             Pixbuf::from_resource("/org/gwatson/assets/icons/negative-assertion.png")
-                .expect("Failed to load negative assertion icon"),
-        );
+                .expect("Failed to load negative assertion icon");
+        let scaled_negative_assertion = self.rescale_icon(&negative_assertion);
+        self.negative_assertion = Rc::new(scaled_negative_assertion);
 
-        self.triple_dot = Rc::new(
-            Pixbuf::from_resource("/org/gwatson/assets/icons/triple-dot.png")
-                .expect("Failed to load triple dot icon"),
-        );
+        let left_of = Pixbuf::from_resource("/org/gwatson/assets/icons/left-of.png")
+            .expect("Failed to load left-of icon");
+        let scaled_left_of = self.rescale_icon(&left_of);
+        self.left_of = Rc::new(scaled_left_of);
 
-        self.maybe_assertion = Rc::new(
+        let maybe_assertion =
             Pixbuf::from_resource("/org/gwatson/assets/icons/maybe-assertion.png")
-                .expect("Failed to load maybe assertion icon"),
+                .expect("Failed to load maybe assertion icon");
+        let scaled_maybe_assertion = self.rescale_icon(&maybe_assertion);
+        self.maybe_assertion = Rc::new(scaled_maybe_assertion);
+    }
+
+    fn rescale_icon(&self, pixbuf: &Pixbuf) -> Pixbuf {
+        let scaled_image = pixbuf.scale_simple(
+            SOLUTION_IMG_SIZE,
+            SOLUTION_IMG_SIZE,
+            gtk::gdk_pixbuf::InterpType::Bilinear,
         );
+        scaled_image.expect("Failed to scale icon")
     }
 
     pub fn get_icon(&self, row: i32, col: i32) -> Option<Rc<Pixbuf>> {
@@ -105,8 +109,8 @@ impl ResourceSet {
         Rc::clone(&self.negative_assertion)
     }
 
-    pub fn get_triple_dot(&self) -> Rc<Pixbuf> {
-        Rc::clone(&self.triple_dot)
+    pub fn get_left_of(&self) -> Rc<Pixbuf> {
+        Rc::clone(&self.left_of)
     }
 
     pub fn get_maybe_assertion(&self) -> Rc<Pixbuf> {

@@ -282,8 +282,8 @@ impl LayoutManager {
                     },
                 ),
                 clue_annotation_size: Dimensions {
-                    width: CANDIDATE_IMG_SIZE / 3,
-                    height: CANDIDATE_IMG_SIZE / 3,
+                    width: CANDIDATE_IMG_SIZE / 2,
+                    height: CANDIDATE_IMG_SIZE / 2,
                 },
             },
         }
