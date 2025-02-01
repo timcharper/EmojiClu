@@ -16,8 +16,8 @@ use crate::{
 
 use super::puzzle_variants::WeightedClueType;
 
-pub const MAX_HORIZ_CLUES: usize = 48;
-pub const MAX_VERT_CLUES: usize = 32;
+pub const MAX_HORIZ_CLUES: usize = 96;
+pub const MAX_VERT_CLUES: usize = 48;
 const MAX_HORIZONTAL_TILE_USAGE: usize = 3;
 const MAX_VERTICAL_TILE_USAGE: usize = 2;
 
@@ -255,12 +255,15 @@ impl ClueGeneratorState {
         }
     }
 
-    pub(crate) fn add_selected_tile(&mut self, tile: Tile, column: usize) {
+    pub(crate) fn add_selected_tile(&mut self, tile: Tile) {
         trace!(
             target: "clue_generator",
             "Adding selected tile: {:?}",
             tile
         );
+        let (_, column) = self.board.solution.find_tile(&tile);
+
+        self.board.select_tile_from_solution(tile);
         self.board.select_tile_from_solution(tile);
         self.revealed_tiles.insert(tile);
         self.tiles_with_evidence.insert((column, tile));
@@ -313,12 +316,36 @@ impl ClueGeneratorState {
         self.tiles_without_evidence.remove(&(column, tile));
     }
 
-    pub fn prune_clues(&mut self, board: &GameBoard, revealed_tiles: BTreeSet<Tile>) {
+    pub fn quick_prune(&mut self, board: &GameBoard) {
+        // solve puzzle backwards, any unused clues, discard
         let mut board = board.clone();
-        revealed_tiles.into_iter().for_each(|t| {
-            board.select_tile_from_solution(t);
-        });
+        let reversed_clues = self.clues.clone().into_iter().rev().collect::<Vec<_>>();
+        let mut used_clues = BTreeSet::new();
+        while !board.is_complete() {
+            let deduction = perform_evaluation_step(&mut board, &reversed_clues);
+            match deduction {
+                EvaluationStepResult::Nothing => {
+                    panic!("Puzzle not solvable! {:?}", board);
+                }
+                EvaluationStepResult::DeductionsFound(clue) => {
+                    used_clues.insert(clue);
+                }
+                EvaluationStepResult::HiddenPairsFound => {
+                    // nothing
+                }
+            }
+            board.auto_solve_all();
+        }
+        info!(
+            target: "clue_generator",
+            "Quick prune reduced clues from {} to {}",
+            self.clues.len(),
+            used_clues.len()
+        );
+        self.clues.retain(|c| used_clues.contains(c));
+    }
 
+    pub fn deep_prune_clues(&mut self, board: &GameBoard) {
         let original_clue_count = self.clues.len();
 
         trace!(
@@ -330,6 +357,11 @@ impl ClueGeneratorState {
         // Try removing each clue one at a time
         let mut i = 0;
         while i < self.clues.len() {
+            info!(
+                target: "clue_generator",
+                "Deep prune cycles remaining: {}",
+                self.clues.len() - i
+            );
             let clue = self.clues.remove(i);
             let mut test_board = board.clone();
 
@@ -394,7 +426,7 @@ impl ClueGeneratorState {
     /// - Vec<Tile> contains the seed tile followed by `count` adjacent tiles in the chosen direction
     /// - Vec<usize> are the corresponding columns chosen
     fn get_random_horiz_tiles(&mut self, count: usize, seed: &Tile) -> (Vec<Tile>, Vec<usize>) {
-        let mut num_unsolved_tiles = 0; // try to get at least one unsolved tile.
+        let mut num_unsolved_tiles = 1; // try to get at least one unsolved tile.
         let mut tiles = Vec::new();
         let (row, col) = self.board.solution.find_tile(seed);
 
@@ -423,17 +455,21 @@ impl ClueGeneratorState {
                 .unsolved_tiles_by_column
                 .get(&(next_col as usize))
                 .expect("No unsolved tiles in column");
-            let tile = if num_unsolved_tiles == 0 && !unsolved_tiles_in_column.is_empty() {
-                num_unsolved_tiles += 1;
-                unsolved_tiles_in_column
+            let mut maybe_tile: Option<Tile> = None;
+            if num_unsolved_tiles == 0 && !unsolved_tiles_in_column.is_empty() {
+                maybe_tile = unsolved_tiles_in_column
                     .iter()
+                    .filter(|t| self.tile_horiz_usage_remaining.contains_key(t))
                     .choose(&mut self.rng)
-                    .unwrap()
-                    .clone()
-            } else {
+                    .map(|t| t.clone());
+                if maybe_tile.is_some() {
+                    num_unsolved_tiles += 1;
+                }
+            }
+            let tile = maybe_tile.unwrap_or_else(|| {
                 let next_row = self.rng.gen_range(0..self.board.solution.n_rows);
                 self.board.solution.get(next_row, next_col as usize)
-            };
+            });
 
             tiles.push(tile);
             columns.push(next_col as usize);
@@ -610,5 +646,13 @@ impl ClueGeneratorState {
             }
         }
         clue
+    }
+
+    pub(crate) fn random_unsolved_tile(&mut self) -> Tile {
+        self.unsolved_tiles
+            .iter()
+            .choose(&mut self.rng)
+            .unwrap()
+            .clone()
     }
 }

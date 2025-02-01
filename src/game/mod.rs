@@ -1,5 +1,5 @@
 pub mod clue_generator;
-mod clue_generator_state;
+pub mod clue_generator_state;
 pub mod game_state;
 mod puzzle_variants;
 pub mod settings;

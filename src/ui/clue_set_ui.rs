@@ -11,13 +11,12 @@ use crate::{
     model::{ClueOrientation, ClueSet, GameActionEvent, GameStateEvent, GlobalEvent},
 };
 use crate::{
-    game::clue_generator::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
+    game::clue_generator_state::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
     model::ClueWithGrouping,
 };
 use crate::{model::LayoutConfiguration, ui::clue_ui::ClueUI};
 
-// Create horizontal clue cells (3 tiles wide for each clue, in 2 columns)
-const CLUES_PER_COLUMN: usize = (MAX_HORIZ_CLUES + 1) / 3; // Round up to handle odd numbers
+const CLUES_PER_COLUMN: usize = 18;
 
 pub struct ClueSetUI {
     pub horizontal_grid: Grid,

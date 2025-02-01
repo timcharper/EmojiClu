@@ -8,13 +8,10 @@ use std::rc::Rc;
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
-    model::{Clue, ClueSet, GameBoard, Tile},
+    model::{Clue, ClueSet, Difficulty, GameBoard, Tile},
 };
 
 use super::deduce_clue;
-
-pub const MAX_HORIZ_CLUES: usize = 48;
-pub const MAX_VERT_CLUES: usize = 20;
 
 fn evaluate_clue(
     board: &GameBoard,
@@ -57,6 +54,16 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
     );
 
     puzzle_variant.populate_starter_evidence(&mut state, &init_board);
+    if state.board.solution.difficulty == Difficulty::Veteran {
+        while state.revealed_tiles.len() < 3 {
+            // veteran puzzles need at least three tiles selected, otherwise the clue count is too high
+            let tile = state.random_unsolved_tile();
+            state.add_selected_tile(tile);
+        }
+    }
+
+    // need to get init_board again as we may have selected more tiles
+    let init_board = state.board.clone();
 
     while !state.board.is_complete() {
         info!(
@@ -157,14 +164,14 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
         } else {
             warn!(target: "clue_generator", "Stats: {:?}", state.stats);
             panic!(
-                "Failed to generate valid clues after {} attempts.",
-                clue_generation_loops
+                "Failed to generate valid clues after {} attempts. Board is {:?}",
+                clue_generation_loops, state.board
             );
         }
     }
 
-    state.prune_clues(&init_board, state.revealed_tiles.clone());
-
+    state.quick_prune(&init_board);
+    state.deep_prune_clues(&init_board);
     trace!(
         target: "clue_generator",
         "Solved board: {:?}",
@@ -205,6 +212,8 @@ mod tests {
         let n_iterations = n_iterations.parse::<u64>().unwrap();
         for i in 0..n_iterations {
             let broken_seed = 17492908155780939550;
+            // we'd test Veteran if we had all day... needs compiler optimizations to run at reasonable speed
+            // let solution = Solution::new(Difficulty::Veteran, Some(broken_seed + i));
             let solution = Solution::new(Difficulty::Hard, Some(broken_seed + i));
             let init_board = GameBoard::new(solution.into());
             let result = generate_clues(&init_board);

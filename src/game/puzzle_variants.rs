@@ -188,10 +188,8 @@ fn generic_starter_evidence(state: &mut ClueGeneratorState, init_board: &GameBoa
     if state.rng.gen_bool(0.5) {
         let n_tiles = state.rng.gen_range(1..=2);
         for _ in 0..n_tiles {
-            let row = state.rng.gen_range(0..init_board.solution.n_rows);
-            let col = state.rng.gen_range(0..init_board.solution.n_variants);
-            let tile = init_board.solution.get(row, col);
-            state.add_selected_tile(tile, col);
+            let tile = state.random_unsolved_tile();
+            state.add_selected_tile(tile);
         }
     } else {
         let starter_clue_generators = vec![
@@ -323,7 +321,7 @@ impl PuzzleVariant for StripingPuzzleVariant {
     /// select a tile and then add a three-in-a-row clue with it that can go either direction
     fn populate_starter_evidence(&self, state: &mut ClueGeneratorState, init_board: &GameBoard) {
         let randomly_chosen_rows = (0..init_board.solution.n_variants)
-            .map(|col| state.rng.gen_range(0..init_board.solution.n_rows))
+            .map(|_| state.rng.gen_range(0..init_board.solution.n_rows))
             .collect::<Vec<usize>>();
 
         // select a tile in the middle
@@ -338,13 +336,15 @@ impl PuzzleVariant for StripingPuzzleVariant {
             middle_col_min, randomly_chosen_rows
         );
 
-        let selected_col = middle_col_min + state.rng.gen_range(0..=1);
-        let selected_row = randomly_chosen_rows[selected_col as usize];
+        // let selected_col = middle_col_min + state.rng.gen_range(0..=1);
+        // let selected_row = randomly_chosen_rows[selected_col as usize];
 
-        let seed_tile = init_board.solution.get(selected_row, selected_col as usize);
-        state.add_selected_tile(seed_tile, selected_col as usize);
+        let seed_tile = state.random_unsolved_tile();
+        let (_, selected_col) = init_board.solution.find_tile(&seed_tile);
+        let selected_col = selected_col as i32;
+        state.add_selected_tile(seed_tile);
 
-        let possible_offsets = vec![-2, -1, 0]
+        let possible_offsets: Vec<i32> = vec![-2, -1, 0]
             .into_iter()
             .filter(|&offset| {
                 let left_col = selected_col + offset;

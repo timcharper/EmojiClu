@@ -12,7 +12,7 @@ use log::trace;
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
-    game::clue_generator::MAX_HORIZ_CLUES,
+    game::clue_generator_state::MAX_HORIZ_CLUES,
     model::{
         ClueSet, CluesSizing, Difficulty, Dimensions, GameActionEvent, GameStateEvent, GlobalEvent,
         GridCellSizing, GridSizing, HorizontalCluePanelSizing, LayoutConfiguration,
