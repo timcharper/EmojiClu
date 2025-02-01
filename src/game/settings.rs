@@ -45,7 +45,7 @@ impl Settings {
 
     fn settings_path() -> PathBuf {
         let data_dir = glib::user_data_dir();
-        let mut path = data_dir.join("gwatson");
+        let mut path = data_dir.join("gnomeclu");
         path.push("settings.json");
         path
     }

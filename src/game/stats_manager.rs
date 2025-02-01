@@ -12,7 +12,7 @@ pub struct StatsManager {
 
 impl StatsManager {
     pub fn new() -> Self {
-        let data_dir = glib::user_data_dir().join("gwatson");
+        let data_dir = glib::user_data_dir().join("gnomeclu");
         if !data_dir.exists() {
             let _ = fs::create_dir_all(&data_dir);
         }

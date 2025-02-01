@@ -28,14 +28,14 @@ impl ResourceSet {
 
         let mut lose_sounds = Vec::new();
         for n in 1..=2 {
-            let resource_path = format!("/org/gwatson/assets/sounds/lose-{}.mp3", n);
+            let resource_path = format!("/org/gnomeclu/assets/sounds/lose-{}.mp3", n);
             let media = MediaFile::for_resource(&resource_path);
             lose_sounds.push(Rc::new(media));
         }
 
         let mut win_sounds = Vec::new();
         for n in 1..=3 {
-            let resource_path = format!("/org/gwatson/assets/sounds/win-{}.mp3", n);
+            let resource_path = format!("/org/gnomeclu/assets/sounds/win-{}.mp3", n);
             let media = MediaFile::for_resource(&resource_path);
             win_sounds.push(Rc::new(media));
         }
@@ -61,7 +61,7 @@ impl ResourceSet {
         // Load all icon variants (8x8 grid of icons)
         for row in 0..8 {
             for col in 0..8 {
-                let resource_path = format!("/org/gwatson/assets/icons/{}/{}.png", row, col);
+                let resource_path = format!("/org/gnomeclu/assets/icons/{}/{}.png", row, col);
                 let original_image = Pixbuf::from_resource(&resource_path)
                     .expect(&format!("Failed to load icon {} {}", row, col));
                 let scaled_image = self.rescale_icon(&original_image);
@@ -71,18 +71,18 @@ impl ResourceSet {
 
         // Load special icons
         let negative_assertion =
-            Pixbuf::from_resource("/org/gwatson/assets/icons/negative-assertion.png")
+            Pixbuf::from_resource("/org/gnomeclu/assets/icons/negative-assertion.png")
                 .expect("Failed to load negative assertion icon");
         let scaled_negative_assertion = self.rescale_icon(&negative_assertion);
         self.negative_assertion = Rc::new(scaled_negative_assertion);
 
-        let left_of = Pixbuf::from_resource("/org/gwatson/assets/icons/left-of.png")
+        let left_of = Pixbuf::from_resource("/org/gnomeclu/assets/icons/left-of.png")
             .expect("Failed to load left-of icon");
         let scaled_left_of = self.rescale_icon(&left_of);
         self.left_of = Rc::new(scaled_left_of);
 
         let maybe_assertion =
-            Pixbuf::from_resource("/org/gwatson/assets/icons/maybe-assertion.png")
+            Pixbuf::from_resource("/org/gnomeclu/assets/icons/maybe-assertion.png")
                 .expect("Failed to load maybe assertion icon");
         let scaled_maybe_assertion = self.rescale_icon(&maybe_assertion);
         self.maybe_assertion = Rc::new(scaled_maybe_assertion);

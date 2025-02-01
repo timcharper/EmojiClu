@@ -1,11 +1,11 @@
-!define APPNAME "gwatson"
+!define APPNAME "gnomeclu"
 !define APPVERSION "1.0.0"
 !define COMPANY "YourCompany"
-!define OUTFILE "gwatson-installer.exe"
-!define EXECUTABLE "bin\gwatson.exe"
+!define OUTFILE "gnomeclu-installer.exe"
+!define EXECUTABLE "bin\gnomeclu.exe"
 
 ; Product name for installer
-!define PRODUCT_NAME "GWatson"
+!define PRODUCT_NAME "gnomeclu"
 !define MUI_PRODUCT ${PRODUCT_NAME}
 
 ; Include Modern UI
@@ -17,8 +17,8 @@ RequestExecutionLevel highest
 
 ; MUI Settings
 !define MUI_ABORTWARNING
-!define MUI_ICON "gwatson\icon.ico"
-!define MUI_UNICON "gwatson\icon.ico"
+!define MUI_ICON "gnomeclu\icon.ico"
+!define MUI_UNICON "gnomeclu\icon.ico"
 
 ; Welcome page settings
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${PRODUCT_NAME} Setup"
@@ -32,7 +32,7 @@ RequestExecutionLevel highest
 !define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} has been installed on your computer.$\r$\n$\r$\nClick Finish to close Setup."
 
 Outfile ${OUTFILE}
-Icon "gwatson\icon.ico"
+Icon "gnomeclu\icon.ico"
 
 Var INSTALL_TYPE ; Variable to store installation type (0=current user, 1=all users)
 
@@ -92,10 +92,10 @@ Function InstallTypePageLeave
     ${EndIf}
 FunctionEnd
 
-Section "GWatson Game" SecCore
+Section "gnomeclu Game" SecCore
     SectionIn RO ; Main application is required
     SetOutPath $INSTDIR
-    File /r "gwatson\*.*"
+    File /r "gnomeclu\*.*"
     WriteUninstaller $INSTDIR\uninstall.exe
     
     ; Write registry keys for uninstaller

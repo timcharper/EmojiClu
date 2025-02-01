@@ -1,5 +1,5 @@
 [package]
-name = "gwatson"
+name = "gnomeclu"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
@@ -26,7 +26,4 @@ glib-build-tools = "0.17"
 
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"
-rustflags = [
-    "-L/home/tim/src/oss/gwatson/bundle/gtk/lib",
-    "-L/home/tim/src/oss/gwatson/bundle/gtk/bin",
-]
+rustflags = ["-L./bundle/gtk/lib", "-L./bundle/gtk/bin"]

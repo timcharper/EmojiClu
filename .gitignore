@@ -28,7 +28,7 @@ compiled.gresource
 Thumbs.db
 /bundle/gtk
 /bundle/vulkan
-/bundle/gwatson
+/bundle/gnomeclu
 /bundle/*.zip
 *.local.*
 *.local

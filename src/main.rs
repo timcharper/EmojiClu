@@ -1,11 +1,11 @@
-use gwatson::ui;
+use gnomeclu::ui;
 
 use gio::glib::Bytes;
 
 use gtk::prelude::*;
 use gtk::Application;
 
-const APP_ID: &str = "org.gwatson.LogicPuzzle";
+const APP_ID: &str = "org.gnomeclu.LogicPuzzle";
 
 // At the top of the file, include the compiled resources
 const RESOURCES: &[u8] = include_bytes!("../target/resources/compiled.gresource");

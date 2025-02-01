@@ -116,13 +116,13 @@ pub fn build_ui(app: &Application) {
     let monitor_width = monitor_geometry.width();
     let monitor_height = monitor_geometry.height();
     let desired_height = (monitor_height * 8) / 10;
-    let desired_width = (monitor_height * 3) / 2;
+    let desired_width = (monitor_height * 4) / 3;
     let max_desired_width = (monitor_width * 8) / 10;
 
     let window = Rc::new(
         ApplicationWindow::builder()
             .application(app)
-            .title("GWatson Logic Puzzle")
+            .title("GnomeClu")
             .resizable(true)
             .decorated(true)
             .default_height(desired_height as i32)
@@ -353,7 +353,7 @@ pub fn build_ui(app: &Application) {
 
     // Add CSS for selected cells
     let provider = gtk::CssProvider::new();
-    provider.load_from_resource("/org/gwatson/style.css");
+    provider.load_from_resource("/org/gnomeclu/style.css");
 
     gtk::style_context_add_provider_for_display(
         Display::default()
@@ -449,10 +449,10 @@ pub fn build_ui(app: &Application) {
     let action_about = gtk::gio::SimpleAction::new("about", None);
     action_about.connect_activate(move |_, _| {
         let dialog = gtk::AboutDialog::builder()
-            .program_name("GWatson Logic Puzzle")
+            .program_name("GnomeClu")
             .version("1.0")
             .authors(vec!["Tim Harper"])
-            .website("https://github.com/timcharper/gwatson")
+            .website("https://github.com/timcharper/gnomeclu")
             .website_label("GitHub Repository")
             .license_type(gtk::License::MitX11)
             .build();

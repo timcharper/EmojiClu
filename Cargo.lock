@@ -585,6 +585,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "gnomeclu"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "env_logger",
+ "gdk-pixbuf 0.17.10",
+ "gio 0.17.10",
+ "glib 0.17.10",
+ "glib-build-tools",
+ "gtk4",
+ "itertools",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "test-context",
+ "uuid",
+]
+
+[[package]]
 name = "gobject-sys"
 version = "0.17.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -712,26 +732,6 @@ dependencies = [
  "libc",
  "pango-sys",
  "system-deps",
-]
-
-[[package]]
-name = "gwatson"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "env_logger",
- "gdk-pixbuf 0.17.10",
- "gio 0.17.10",
- "glib 0.17.10",
- "glib-build-tools",
- "gtk4",
- "itertools",
- "log",
- "rand",
- "serde",
- "serde_json",
- "test-context",
- "uuid",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/org/gwatson">
+  <gresource prefix="/org/gnomeclu">
     <file>style.css</file>
     <file>assets/icons/0/0.png</file>
     <file>assets/icons/0/1.png</file>
