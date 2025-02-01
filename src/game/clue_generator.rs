@@ -4,7 +4,7 @@ use super::{
 };
 
 use log::{info, trace, warn};
-use std::rc::Rc;
+use std::{collections::BTreeSet, rc::Rc};
 
 use crate::{
     game::solver::{perform_evaluation_step, EvaluationStepResult},
@@ -35,6 +35,14 @@ pub struct ClueGeneratorResult {
     pub board: GameBoard,
 }
 
+pub fn apply_selections(board: &GameBoard, tiles: &BTreeSet<Tile>) -> GameBoard {
+    let mut board = board.clone();
+    for tile in tiles {
+        board.select_tile_from_solution(*tile);
+    }
+    board
+}
+
 pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
     trace!(
         target: "clue_generator",
@@ -61,9 +69,8 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
             state.add_selected_tile(tile);
         }
     }
-
-    // need to get init_board again as we may have selected more tiles
-    let init_board = state.board.clone();
+    let seeded_tiles = state.revealed_tiles.clone();
+    let init_board = apply_selections(&init_board, &seeded_tiles);
 
     while !state.board.is_complete() {
         info!(
@@ -205,16 +212,16 @@ mod tests {
 
     #[test_context(UsingLogger)]
     #[test]
-    fn test_generate_clues(_: &mut UsingLogger) {
+    fn test_generate_clues_solvable(_: &mut UsingLogger) {
         // CLUE_GEN_ITERATIONS=100 RUST_LOG=info cargo test game::clue_generator::tests::test_generate_clues -- --nocapture --exact
 
         let n_iterations = std::env::var("CLUE_GEN_ITERATIONS").unwrap_or("1".to_string());
         let n_iterations = n_iterations.parse::<u64>().unwrap();
+        let start_seed = 979700061949446372;
         for i in 0..n_iterations {
-            let broken_seed = 17492908155780939550;
             // we'd test Veteran if we had all day... needs compiler optimizations to run at reasonable speed
             // let solution = Solution::new(Difficulty::Veteran, Some(broken_seed + i));
-            let solution = Solution::new(Difficulty::Hard, Some(broken_seed + i));
+            let solution = Solution::new(Difficulty::Hard, Some(start_seed + i));
             let init_board = GameBoard::new(solution.into());
             let result = generate_clues(&init_board);
             trace!(
@@ -253,10 +260,12 @@ mod tests {
     }
 
     // for some reason, our deterministic generation isn't working.
+    #[test_context(UsingLogger)]
     #[test]
-    fn test_generate_clues_deterministic() {
+    fn test_generate_clues_deterministic(_: &mut UsingLogger) {
         let solution = Solution::new(Difficulty::Easy, Some(42));
         let board = GameBoard::new(solution.into());
+        println!("Board is {:?}", board);
 
         // Generate clues twice with same seed
         let result1 = generate_clues(&board);

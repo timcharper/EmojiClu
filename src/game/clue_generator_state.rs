@@ -317,6 +317,13 @@ impl ClueGeneratorState {
     }
 
     pub fn quick_prune(&mut self, board: &GameBoard) {
+        info!(
+            target: "clue_generator",
+            "Quick pruning {} clues; board is {:?}",
+            self.clues.len(),
+            board
+        );
+
         // solve puzzle backwards, any unused clues, discard
         let mut board = board.clone();
         let reversed_clues = self.clues.clone().into_iter().rev().collect::<Vec<_>>();
