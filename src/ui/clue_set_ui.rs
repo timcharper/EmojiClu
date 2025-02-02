@@ -1,4 +1,4 @@
-use gtk::{
+use gtk4::{
     prelude::{GestureSingleExt, GridExt, WidgetExt},
     Grid,
 };
@@ -184,7 +184,7 @@ impl ClueSetUI {
         // Wire up horizontal clue handlers
         for (clue_idx, clue_set) in self.horizontal_clue_uis.iter().enumerate() {
             let game_action_emitter = self.game_action_emitter.clone();
-            let gesture_right = gtk::GestureClick::new();
+            let gesture_right = gtk4::GestureClick::new();
             gesture_right.set_button(3);
             gesture_right.connect_pressed(move |_gesture, _, _, _| {
                 game_action_emitter.emit(GameActionEvent::HorizontalClueClick(clue_idx));
@@ -195,7 +195,7 @@ impl ClueSetUI {
         // Wire up vertical clue handlers
         for (clue_idx, clue_set) in self.vertical_clue_uis.iter().enumerate() {
             let game_action_emitter = self.game_action_emitter.clone();
-            let gesture_right = gtk::GestureClick::new();
+            let gesture_right = gtk4::GestureClick::new();
             gesture_right.set_button(3);
             gesture_right.connect_pressed(move |_gesture, _, _, _| {
                 game_action_emitter.emit(GameActionEvent::VerticalClueClick(clue_idx));

@@ -1,11 +1,11 @@
-use gtk::prelude::*;
-use gtk::{ApplicationWindow, Button};
+use gtk4::{prelude::*, ApplicationWindow, Button};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::model::GameActionEvent;
+use gio::SimpleAction;
 
 pub struct TimerButtonUI {
     pub button: Button,
@@ -35,7 +35,7 @@ impl TimerButtonUI {
             game_action_emitter,
         }));
 
-        let action_pause = gtk::gio::SimpleAction::new("pause", None);
+        let action_pause = SimpleAction::new("pause", None);
 
         {
             let timer_button_ui = timer_button_ui.clone();

@@ -1,6 +1,6 @@
 use glib::timeout_add_local_once;
-use gtk::prelude::*;
-use gtk::Button;
+use gtk4::prelude::*;
+use gtk4::Button;
 use log::trace;
 use std::cell::RefCell;
 use std::rc::Rc;

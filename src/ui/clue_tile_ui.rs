@@ -3,9 +3,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::model::{CluesSizing, TileAssertion};
-use gtk::glib::{timeout_add_local_once, SourceId};
-use gtk::prelude::*;
-use gtk::{Frame, Image, Overlay, Widget};
+use gdk_pixbuf::Pixbuf;
+use gtk4::glib::{timeout_add_local_once, SourceId};
+use gtk4::prelude::*;
+use gtk4::{Frame, Image, Overlay, Widget};
 
 use super::ResourceSet;
 
@@ -33,8 +34,8 @@ impl ClueTileUI {
         let x_image = Image::builder()
             .visible(false)
             .css_classes(["negative-assertion-x"])
-            .halign(gtk::Align::Start)
-            .valign(gtk::Align::Start)
+            .halign(gtk4::Align::Start)
+            .valign(gtk4::Align::Start)
             .hexpand(false)
             .vexpand(false)
             .build();
@@ -42,13 +43,13 @@ impl ClueTileUI {
         let maybe_image = Image::new();
         maybe_image.set_visible(false);
         maybe_image.set_css_classes(&["maybe-assertion-mark"]);
-        maybe_image.set_halign(gtk::Align::Start);
-        maybe_image.set_valign(gtk::Align::Start);
+        maybe_image.set_halign(gtk4::Align::Start);
+        maybe_image.set_valign(gtk4::Align::Start);
 
         let left_of = Image::new();
         left_of.set_visible(false);
-        left_of.set_halign(gtk::Align::Center);
-        left_of.set_valign(gtk::Align::Center);
+        left_of.set_halign(gtk4::Align::Center);
+        left_of.set_valign(gtk4::Align::Center);
 
         let highlight_frame = Frame::new(None);
         highlight_frame.set_visible(false);
@@ -190,9 +191,9 @@ impl Drop for ClueTileUI {
         self.overlay.remove_overlay(self.decoration_frame.as_ref());
 
         // Unparent the main image from overlay
-        self.overlay.set_child(None::<&gtk::Widget>);
+        self.overlay.set_child(None::<&Widget>);
 
         // Finally unparent the overlay from frame
-        self.frame.set_child(None::<&gtk::Widget>);
+        self.frame.set_child(None::<&Widget>);
     }
 }

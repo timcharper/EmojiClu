@@ -1,7 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use gtk::prelude::*;
-use gtk::{ApplicationWindow, Dialog, Entry};
+use gtk4::{prelude::*, ApplicationWindow, Dialog, Entry, ResponseType};
 
 use crate::{
     destroyable::Destroyable,
@@ -60,8 +59,8 @@ impl SeedDialog {
             .modal(true)
             .build();
 
-        dialog.add_button("OK", gtk::ResponseType::Ok);
-        dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+        dialog.add_button("OK", ResponseType::Ok);
+        dialog.add_button("Cancel", ResponseType::Cancel);
 
         let content_area = dialog.content_area();
         let entry = Entry::builder()
@@ -74,7 +73,7 @@ impl SeedDialog {
         let current_difficulty = self.current_difficulty;
 
         dialog.connect_response(move |dialog, response| {
-            if response == gtk::ResponseType::Ok {
+            if response == ResponseType::Ok {
                 if let Ok(new_seed) = entry.text().as_str().parse::<u64>() {
                     if Some(new_seed) != current_seed {
                         game_action_emitter

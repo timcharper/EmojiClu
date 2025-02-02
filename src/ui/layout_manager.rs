@@ -1,7 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
-use gtk::{
-    glib::{ObjectExt, SignalHandlerId},
+use glib::object::ObjectExt;
+use gtk4::{
+    glib::SignalHandlerId,
     prelude::{MonitorExt, NativeExt, SurfaceExt, WidgetExt},
     ApplicationWindow,
 };
@@ -64,7 +65,7 @@ pub struct LayoutManager {
     game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
     resources: Rc<ResourceSet>,
     current_difficulty: Difficulty,
-    scrolled_window: gtk::ScrolledWindow,
+    scrolled_window: gtk4::ScrolledWindow,
     container_dimensions: Option<Dimensions>,
     clue_stats: ClueStats,
     last_layout: Option<LayoutConfiguration>,
@@ -81,10 +82,14 @@ impl Destroyable for LayoutManager {
 impl Drop for LayoutManager {
     fn drop(&mut self) {
         if let Some(handle) = self.handle_surface_enter_monitor.take() {
-            self.window.surface().disconnect(handle);
+            if let Some(surface) = self.window.surface() {
+                surface.disconnect(handle);
+            }
         }
         if let Some(handle) = self.handle_surface_layout.take() {
-            self.window.surface().disconnect(handle);
+            if let Some(surface) = self.window.surface() {
+                surface.disconnect(handle);
+            }
         }
     }
 }
@@ -96,7 +101,7 @@ impl LayoutManager {
         game_action_observer: EventObserver<GameActionEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
         resources: Rc<ResourceSet>,
-        scrolled_window: gtk::ScrolledWindow,
+        scrolled_window: gtk4::ScrolledWindow,
         current_difficulty: Difficulty,
     ) -> Rc<RefCell<Self>> {
         let dw = Rc::new(RefCell::new(Self {
@@ -138,23 +143,24 @@ impl LayoutManager {
             {
                 let dw = dw.clone();
                 window.connect_realize(move |window| {
-                    let surface = window.surface();
-                    trace!(target: "layout_manager", "realized; surface: {:?}", surface);
-                    let handle = surface.connect_enter_monitor(move |_, monitor| {
-                        trace!(target: "layout_manager", "Entering monitor {:?}; geometry: {:?}, scale_factor: {}", monitor.display(), monitor.geometry(), monitor.scale_factor());
-                    });
+                    if let Some(surface) = window.surface() {
+                        trace!(target: "layout_manager", "realized; surface: {:?}", surface);
+                        let handle = surface.connect_enter_monitor(move |_, monitor| {
+                            trace!(target: "layout_manager", "Entering monitor {:?}; geometry: {:?}, scale_factor: {}", monitor.display(), monitor.geometry(), monitor.scale_factor());
+                        });
 
-                    let d2_handle2 = dw.clone();
-                    let handle2 = surface.connect_layout(move |_, _, _| {
-                        let mut dw = RefCell::borrow_mut(&d2_handle2);
-                        let dimensions = Dimensions {
-                            width: dw.scrolled_window.allocated_width(),
-                            height: dw.scrolled_window.allocated_height(),
-                        };
-                        dw.update_dimensions(Some(dimensions));
-                    });
-                    dw.borrow_mut().handle_surface_enter_monitor = Some(handle);
-                    dw.borrow_mut().handle_surface_layout = Some(handle2);
+                        let d2_handle2 = dw.clone();
+                        let handle2 = surface.connect_layout(move |_, _, _| {
+                            let mut dw = RefCell::borrow_mut(&d2_handle2);
+                            let dimensions = Dimensions {
+                                width: dw.scrolled_window.allocated_width(),
+                                height: dw.scrolled_window.allocated_height(),
+                            };
+                            dw.update_dimensions(Some(dimensions));
+                        });
+                        dw.borrow_mut().handle_surface_enter_monitor = Some(handle);
+                        dw.borrow_mut().handle_surface_layout = Some(handle2);
+                    }
                 });
             }
         }

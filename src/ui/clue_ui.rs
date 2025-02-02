@@ -1,5 +1,4 @@
-use gtk::prelude::*;
-use gtk::{Box, Frame, Grid, Label, Orientation};
+use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Widget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -29,7 +28,7 @@ pub struct ClueUI {
     pub cells: Vec<ClueTileUI>,
     pub orientation: ClueOrientation,
     tooltip_data: Rc<RefCell<Option<ClueTooltipData>>>,
-    tooltip_widget: Rc<RefCell<Option<gtk::Box>>>,
+    tooltip_widget: Rc<RefCell<Option<Box>>>,
     resources: Rc<ResourceSet>,
     layout: CluesSizing,
 }
@@ -75,8 +74,8 @@ impl ClueUI {
         elements
     }
 
-    fn parse_template(&self, template: &str, clue_data: &ClueTooltipData) -> gtk::Box {
-        let box_container = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+    fn parse_template(&self, template: &str, clue_data: &ClueTooltipData) -> Box {
+        let box_container = Box::new(Orientation::Horizontal, 5);
 
         // Transform TemplateElements into GTK widgets
         self.parse_template_elements(template)
@@ -87,7 +86,7 @@ impl ClueUI {
                     label.set_markup(&text);
                     label.set_wrap(true);
                     label.set_max_width_chars(40);
-                    Some(label.upcast::<gtk::Widget>())
+                    Some(label.upcast::<Widget>())
                 }
                 TemplateElement::Tile(tile_idx) => {
                     // Get the tile assertion and create an image if it exists
@@ -96,8 +95,8 @@ impl ClueUI {
                         .and_then(|_| clue_data.clue.assertions.get(tile_idx))
                         .and_then(|ta| self.resources.get_tile_icon(&ta.tile))
                         .map(|pixbuf| {
-                            let image = gtk::Image::from_pixbuf(Some(&pixbuf));
-                            image.upcast::<gtk::Widget>()
+                            let image = gtk4::Image::from_pixbuf(Some(&pixbuf));
+                            image.upcast::<Widget>()
                         })
                 }
             })
@@ -106,7 +105,7 @@ impl ClueUI {
         box_container
     }
 
-    fn create_tooltip_widget(&self) -> gtk::Box {
+    fn create_tooltip_widget(&self) -> Box {
         let tooltip_box = Box::new(Orientation::Vertical, 5);
         let clue_data = self.tooltip_data.borrow();
         if clue_data.is_none() {
@@ -409,7 +408,7 @@ impl Drop for ClueUI {
                 }
             }
             // Unparent the grid from frame
-            self.frame.set_child(None::<&gtk::Widget>);
+            self.frame.set_child(None::<&Widget>);
         }
     }
 }

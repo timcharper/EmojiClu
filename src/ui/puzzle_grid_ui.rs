@@ -1,4 +1,4 @@
-use gtk::{
+use gtk4::{
     prelude::{GridExt, WidgetExt},
     Grid,
 };
@@ -14,7 +14,7 @@ use crate::{
 use super::{puzzle_cell_ui::PuzzleCellUI, ResourceSet};
 
 pub struct PuzzleGridUI {
-    pub grid: gtk::Grid,
+    pub grid: Grid,
     pub cells: Vec<Vec<Rc<RefCell<PuzzleCellUI>>>>,
     game_action_emitter: EventEmitter<GameActionEvent>,
     resources: Rc<ResourceSet>,

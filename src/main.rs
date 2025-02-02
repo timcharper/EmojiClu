@@ -1,34 +1,34 @@
-use gnomeclu::ui;
-
-use gio::glib::Bytes;
-
-use gtk::prelude::*;
-use gtk::Application;
+use gio::prelude::*;
+use gio::ApplicationFlags;
+use glib::{Bytes, ExitCode};
+use gnomeclu::ui::build_ui;
+use gtk4::Application;
 
 const APP_ID: &str = "org.gnomeclu.LogicPuzzle";
 
-// At the top of the file, include the compiled resources
+#[cfg(target_os = "windows")]
 const RESOURCES: &[u8] = include_bytes!("../target/resources/compiled.gresource");
 
-fn init_logging() {
-    env_logger::init();
-}
+#[cfg(not(target_os = "windows"))]
+const RESOURCES: &[u8] = include_bytes!("../target/resources/compiled.gresource");
 
-fn main() {
+fn main() -> ExitCode {
+    // Initialize logger
+    env_logger::init();
+
     #[cfg(target_os = "windows")]
     {
-        use gtk::ffi::gtk_icon_theme_get_search_path;
-        use gtk::gdk::Display;
+        use gtk4::gdk::Display;
         use std::env;
         use std::path::Path;
         env::set_var("GTK_THEME", "Adwaita");
-        gtk::init().unwrap();
+        gtk4::init().unwrap();
 
         // // let icons = gtk::IconTheme::default();
         let exe_path = env::current_exe().expect("Failed to get current executable path");
         // println!("exe_path: {:?}", exe_path);
 
-        let icons = gtk::IconTheme::for_display(
+        let icons = gtk4::IconTheme::for_display(
             &Display::default().expect("Could not connect to a display."),
         );
 
@@ -37,17 +37,18 @@ fn main() {
         );
     }
 
-    init_logging();
-
     // Register resources before creating the application
     gio::resources_register(&gio::Resource::from_data(&Bytes::from_static(RESOURCES)).unwrap());
 
     // Create a new application
-    let app = Application::builder().application_id(APP_ID).build();
+    let app = Application::builder()
+        .application_id(APP_ID)
+        .flags(ApplicationFlags::empty())
+        .build();
 
     // Connect to "activate" signal
-    app.connect_activate(ui::build_ui);
+    app.connect_activate(|app| build_ui(app));
 
     // Run the application
-    app.run();
+    app.run()
 }

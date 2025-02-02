@@ -3,7 +3,7 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use glib::{timeout_add_local, SourceId};
-use gtk::{prelude::WidgetExt, Label};
+use gtk4::{prelude::*, Box, Label};
 
 use crate::{
     destroyable::Destroyable,
@@ -17,8 +17,8 @@ pub struct GameInfoUI {
     pub timer_label: Label,
     pub hints_label: Label,
     timer: Option<SourceId>,
-    game_box: Rc<gtk::Box>,
-    pause_screen: Rc<gtk::Box>,
+    game_box: Rc<Box>,
+    pause_screen: Rc<Box>,
     game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
 }
 
@@ -36,8 +36,8 @@ impl Destroyable for GameInfoUI {
 impl GameInfoUI {
     pub fn new(
         game_state_observer: EventObserver<GameStateEvent>,
-        game_box: Rc<gtk::Box>,
-        pause_screen: Rc<gtk::Box>,
+        game_box: Rc<Box>,
+        pause_screen: Rc<Box>,
     ) -> Rc<RefCell<Self>> {
         // Create timer label with monospace font
         let timer_label = Label::new(None);

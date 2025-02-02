@@ -6,8 +6,8 @@ use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::model::{Candidate, CandidateState, GameActionEvent, GridSizing, Tile};
 use glib::timeout_add_local_once;
-use gtk::{prelude::*, GestureClick};
-use gtk::{Frame, Grid, Image, Overlay, Widget};
+use gtk4::{prelude::*, GestureClick, Widget};
+use gtk4::{Frame, Grid, Image, Overlay};
 use log::{trace, warn};
 
 use super::ResourceSet;
@@ -50,8 +50,8 @@ impl PuzzleCellUI {
         frame.set_css_classes(&["puzzle-cell-frame"]);
 
         let candidates_grid = Grid::new();
-        candidates_grid.set_halign(gtk::Align::Center);
-        candidates_grid.set_valign(gtk::Align::Center);
+        candidates_grid.set_halign(gtk4::Align::Center);
+        candidates_grid.set_valign(gtk4::Align::Center);
         candidates_grid.set_hexpand(false);
         candidates_grid.set_vexpand(false);
 
@@ -157,7 +157,7 @@ impl PuzzleCellUI {
 
         // Left click handler
 
-        let gesture_click = gtk::GestureClick::new();
+        let gesture_click = gtk4::GestureClick::new();
         {
             let cell_ui = Rc::downgrade(&cell_ui);
             let game_action_emitter = game_action_emitter.clone();
@@ -173,7 +173,7 @@ impl PuzzleCellUI {
         }
 
         // Right click handler
-        let gesture_right = gtk::GestureClick::new();
+        let gesture_right = gtk4::GestureClick::new();
         gesture_right.set_button(3);
         {
             let game_action_emitter = game_action_emitter.clone();
@@ -223,7 +223,7 @@ impl PuzzleCellUI {
 
     pub fn set_solution(&self, tile: Option<&Tile>) {
         // First, remove current child to ensure clean state
-        self.frame.set_child(Option::<&gtk::Widget>::None);
+        self.frame.set_child(Option::<&Widget>::None);
 
         if let Some(tile) = tile {
             if let Some(pixbuf) = self

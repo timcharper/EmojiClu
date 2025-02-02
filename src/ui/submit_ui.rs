@@ -1,7 +1,9 @@
 use glib::timeout_add_local_once;
-use gtk::glib::SignalHandlerId;
-use gtk::prelude::*;
-use gtk::{ApplicationWindow, Button};
+use gtk4::glib::SignalHandlerId;
+use gtk4::prelude::*;
+use gtk4::{
+    ApplicationWindow, Button, ButtonsType, DialogFlags, MessageDialog, MessageType, ResponseType,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -111,11 +113,11 @@ impl SubmitUI {
                 );
             }
             PuzzleCompletionState::Incorrect => {
-                let dialog = gtk::MessageDialog::new(
+                let dialog = MessageDialog::new(
                     Some(self.window.as_ref()),
-                    gtk::DialogFlags::MODAL,
-                    gtk::MessageType::Info,
-                    gtk::ButtonsType::OkCancel,
+                    DialogFlags::MODAL,
+                    MessageType::Info,
+                    ButtonsType::OkCancel,
                     "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
                 );
 
@@ -125,7 +127,7 @@ impl SubmitUI {
 
                 let game_action_emitter = self.game_action_emitter.clone();
                 dialog.connect_response(move |dialog, response| {
-                    if response == gtk::ResponseType::Ok {
+                    if response == ResponseType::Ok {
                         game_action_emitter.emit(GameActionEvent::RewindLastGood);
                     }
                     dialog.close();

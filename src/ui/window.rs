@@ -8,10 +8,15 @@ use crate::ui::seed_dialog::SeedDialog;
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
+use gio::{Menu, SimpleAction};
+use glib::prelude::ToVariant;
 use glib::timeout_add_local_once;
-use gtk::gdk::{Display, Monitor};
-use gtk::{prelude::*, Frame};
-use gtk::{Application, ApplicationWindow, Button, Label, Orientation};
+use gtk4::gdk::{Display, Monitor};
+use gtk4::{
+    prelude::*, AboutDialog, Align, Application, ApplicationWindow, Box, Button, ButtonsType,
+    CssProvider, DialogFlags, HeaderBar, Label, License, MenuButton, MessageDialog, MessageType,
+    Orientation, ScrolledWindow, Widget, Window, STYLE_PROVIDER_PRIORITY_APPLICATION,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -29,7 +34,7 @@ fn seed_from_env() -> Option<u64> {
         .ok()
 }
 
-fn pause_screen() -> Rc<gtk::Box> {
+fn pause_screen() -> Rc<gtk4::Box> {
     let pause_label = Label::builder()
         .name("pause-label")
         .label("PAUSED")
@@ -38,7 +43,7 @@ fn pause_screen() -> Rc<gtk::Box> {
         .hexpand(true)
         .vexpand(true)
         .build();
-    let pause_screen_box = gtk::Box::builder()
+    let pause_screen_box = gtk4::Box::builder()
         .name("pause-screen")
         .orientation(Orientation::Vertical)
         .visible(false)
@@ -66,20 +71,20 @@ fn hint_button_handler(
             media.play();
 
             // show dialog
-            let dialog = gtk::MessageDialog::new(
+            let dialog = MessageDialog::new(
                 button
                     .root()
-                    .and_then(|r| r.downcast::<gtk::Window>().ok())
+                    .and_then(|r| r.downcast::<gtk4::Window>().ok())
                     .as_ref(),
-                gtk::DialogFlags::MODAL,
-                gtk::MessageType::Info,
-                gtk::ButtonsType::OkCancel,
+                DialogFlags::MODAL,
+                MessageType::Info,
+                ButtonsType::OkCancel,
                 "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
             );
             let game_action_emitter = game_action_emitter.clone();
             dialog.connect_response(move |dialog, response| {
                 log::trace!(target: "window", "Dialog response: {:?}", response);
-                if response == gtk::ResponseType::Ok {
+                if response == gtk4::ResponseType::Ok {
                     game_action_emitter.emit(GameActionEvent::RewindLastGood);
                 }
                 dialog.close();
@@ -130,7 +135,7 @@ pub fn build_ui(app: &Application) {
             .build(),
     );
 
-    let scrolled_window = gtk::ScrolledWindow::builder()
+    let scrolled_window = gtk4::ScrolledWindow::builder()
         .hexpand_set(true)
         .vexpand_set(true)
         .build();
@@ -138,11 +143,11 @@ pub fn build_ui(app: &Application) {
     let pause_screen = pause_screen();
     // Create game area with puzzle and horizontal clues side by side
     let game_box = Rc::new(
-        gtk::Box::builder()
+        gtk4::Box::builder()
             .name("game-box")
             .orientation(Orientation::Horizontal)
             .spacing(10)
-            .halign(gtk::Align::Center)
+            .halign(gtk4::Align::Center)
             .hexpand(true)
             .margin_start(10)
             .margin_end(10)
@@ -167,10 +172,10 @@ pub fn build_ui(app: &Application) {
     app.set_accels_for_action("win.restart", &["<Control>r"]);
 
     // Create menu model for hamburger menu
-    let menu = gtk::gio::Menu::new();
+    let menu = Menu::new();
 
     // Create Settings submenu
-    let settings_menu = gtk::gio::Menu::new();
+    let settings_menu = Menu::new();
     settings_menu.append(Some("Show Clue Tooltips"), Some("win.toggle-tooltips"));
 
     // Add all menu items
@@ -182,19 +187,19 @@ pub fn build_ui(app: &Application) {
     menu.append(Some("About"), Some("win.about"));
 
     // Add menu button to header bar
-    let header_bar = gtk::HeaderBar::new();
+    let header_bar = HeaderBar::new();
 
     // Create difficulty selector dropdown with label
-    let difficulty_box = gtk::Box::builder()
+    let difficulty_box = gtk4::Box::builder()
         .name("difficulty-box")
         .orientation(Orientation::Horizontal)
         .spacing(5)
         .build();
 
-    let difficulty_label = gtk::Label::new(Some("Difficulty:"));
+    let difficulty_label = gtk4::Label::new(Some("Difficulty:"));
     difficulty_box.append(&difficulty_label);
 
-    let difficulty_selector = gtk::DropDown::from_strings(&[
+    let difficulty_selector = gtk4::DropDown::from_strings(&[
         &Difficulty::Easy.to_string(),
         &Difficulty::Moderate.to_string(),
         &Difficulty::Hard.to_string(),
@@ -280,7 +285,7 @@ pub fn build_ui(app: &Application) {
     );
 
     // Create left side box for timer and hints
-    let left_box = gtk::Box::builder()
+    let left_box = gtk4::Box::builder()
         .name("left-box")
         .orientation(Orientation::Horizontal)
         .spacing(10) // Slightly larger spacing between groups
@@ -298,7 +303,7 @@ pub fn build_ui(app: &Application) {
     header_bar.pack_start(&left_box);
 
     // Create right side box for controls
-    let right_box = gtk::Box::builder()
+    let right_box = gtk4::Box::builder()
         .name("right-box")
         .orientation(Orientation::Horizontal)
         .spacing(5)
@@ -314,7 +319,7 @@ pub fn build_ui(app: &Application) {
     right_box.append(&hint_button);
     right_box.append(submit_ui.borrow().submit_button.as_ref());
 
-    let menu_button = gtk::MenuButton::builder()
+    let menu_button = MenuButton::builder()
         .icon_name("open-menu-symbolic")
         .menu_model(&menu)
         .build();
@@ -326,7 +331,7 @@ pub fn build_ui(app: &Application) {
     window.set_titlebar(Some(&header_bar));
 
     // Create a vertical box for puzzle grid and vertical clues
-    let puzzle_vertical_box = gtk::Box::builder()
+    let puzzle_vertical_box = gtk4::Box::builder()
         .name("puzzle-vertical-box")
         .orientation(Orientation::Vertical)
         .spacing(10)
@@ -345,18 +350,16 @@ pub fn build_ui(app: &Application) {
     ));
 
     // Add CSS for selected cells
-    let provider = gtk::CssProvider::new();
+    let provider = CssProvider::new();
     provider.load_from_resource("/org/gnomeclu/style.css");
 
-    gtk::style_context_add_provider_for_display(
-        Display::default()
-            .as_ref()
-            .expect("Could not connect to a display."),
+    gtk4::style_context_add_provider_for_display(
+        &display,
         &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
 
-    let puzzle_background = Frame::builder()
+    let puzzle_background = gtk4::Frame::builder()
         .name("puzzle-mat-board")
         .css_classes(["puzzle-mat-board"])
         .child(&puzzle_grid_ui.borrow().grid)
@@ -369,14 +372,14 @@ pub fn build_ui(app: &Application) {
     game_box.append(&puzzle_vertical_box);
     game_box.append(&clue_set_ui.borrow().horizontal_grid);
 
-    let top_level_box = gtk::Box::builder()
+    let top_level_box = gtk4::Box::builder()
         .name("top-level-box")
         .orientation(Orientation::Vertical)
         .visible(true)
         .hexpand(true)
         .vexpand(true)
-        .halign(gtk::Align::Fill)
-        .valign(gtk::Align::Center)
+        .halign(gtk4::Align::Fill)
+        .valign(gtk4::Align::Center)
         .css_classes(["app-background"])
         .build();
 
@@ -390,14 +393,14 @@ pub fn build_ui(app: &Application) {
     window.present();
 
     // Add actions for keyboard shortcuts and menu items
-    let action_undo = gtk::gio::SimpleAction::new("undo", None);
+    let action_undo = SimpleAction::new("undo", None);
     let game_action_emitter_undo = game_action_emitter.clone();
     action_undo.connect_activate(move |_, _| {
         game_action_emitter_undo.emit(GameActionEvent::Undo);
     });
     window.add_action(&action_undo);
 
-    let action_redo = gtk::gio::SimpleAction::new("redo", None);
+    let action_redo = SimpleAction::new("redo", None);
     let game_action_emitter_redo = game_action_emitter.clone();
     action_redo.connect_activate(move |_, _| {
         game_action_emitter_redo.emit(GameActionEvent::Redo);
@@ -405,7 +408,7 @@ pub fn build_ui(app: &Application) {
     window.add_action(&action_redo);
 
     // Add new game action that uses current difficulty
-    let action_new_game = gtk::gio::SimpleAction::new("new-game", None);
+    let action_new_game = SimpleAction::new("new-game", None);
     let settings_ref: Rc<RefCell<Settings>> = Rc::clone(&settings);
     let game_action_emitter_new_game = game_action_emitter.clone();
     action_new_game.connect_activate(move |_, _| {
@@ -414,7 +417,7 @@ pub fn build_ui(app: &Application) {
     });
     window.add_action(&action_new_game);
 
-    let action_statistics = gtk::gio::SimpleAction::new("statistics", None);
+    let action_statistics = SimpleAction::new("statistics", None);
     let game_state_stats = Rc::clone(&game_state);
     let stats_manager_stats = Rc::clone(&stats_manager);
     let submit_ui_stats = Rc::clone(&submit_ui);
@@ -440,22 +443,22 @@ pub fn build_ui(app: &Application) {
     }
     window.add_action(&action_statistics);
 
-    let action_about = gtk::gio::SimpleAction::new("about", None);
+    let action_about = SimpleAction::new("about", None);
     action_about.connect_activate(move |_, _| {
-        let dialog = gtk::AboutDialog::builder()
+        let dialog = AboutDialog::builder()
             .program_name("GnomeClu")
             .version("1.0")
             .authors(vec!["Tim Harper"])
             .website("https://github.com/timcharper/gnomeclu")
             .website_label("GitHub Repository")
-            .license_type(gtk::License::MitX11)
+            .license_type(License::MitX11)
             .build();
         dialog.present();
     });
     window.add_action(&action_about);
 
     // Add toggle tooltips action
-    let action_toggle_tooltips = gtk::gio::SimpleAction::new_stateful(
+    let action_toggle_tooltips = SimpleAction::new_stateful(
         "toggle-tooltips",
         None,
         &settings.borrow().clue_tooltips_enabled.to_variant(),
@@ -492,7 +495,7 @@ pub fn build_ui(app: &Application) {
     global_event_emitter.emit(GlobalEvent::SettingsChanged(settings.borrow().clone()));
 
     // Add seed action
-    let action_seed = gtk::gio::SimpleAction::new("seed", None);
+    let action_seed = SimpleAction::new("seed", None);
     let seed_dialog_ref = seed_dialog.clone();
     action_seed.connect_activate(move |_, _| {
         seed_dialog_ref.borrow().show_seed();
@@ -500,7 +503,7 @@ pub fn build_ui(app: &Application) {
     window.add_action(&action_seed);
 
     // Add restart action
-    let action_restart = gtk::gio::SimpleAction::new("restart", None);
+    let action_restart = SimpleAction::new("restart", None);
     let game_action_emitter_restart = game_action_emitter.clone();
     action_restart.connect_activate(move |_, _| {
         game_action_emitter_restart.emit(GameActionEvent::Restart);

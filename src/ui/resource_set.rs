@@ -1,5 +1,5 @@
-use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
-use gtk::MediaFile;
+use gdk_pixbuf::{Colorspace, InterpType, Pixbuf};
+use gtk4::MediaFile;
 use rand::Rng;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -81,11 +81,8 @@ impl ResourceSet {
     }
 
     fn rescale_icon(&self, pixbuf: &Pixbuf) -> Pixbuf {
-        let scaled_image = pixbuf.scale_simple(
-            SOLUTION_IMG_SIZE,
-            SOLUTION_IMG_SIZE,
-            gtk::gdk_pixbuf::InterpType::Bilinear,
-        );
+        let scaled_image =
+            pixbuf.scale_simple(SOLUTION_IMG_SIZE, SOLUTION_IMG_SIZE, InterpType::Bilinear);
         scaled_image.expect("Failed to scale icon")
     }
 
