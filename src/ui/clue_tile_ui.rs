@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::destroyable::Destroyable;
 use crate::model::{CluesSizing, TileAssertion};
 use gdk_pixbuf::Pixbuf;
 use gtk4::glib::{timeout_add_local_once, SourceId};
@@ -156,22 +157,27 @@ impl ClueTileUI {
         self.highlight_frame.add_css_class("clue-highlight");
         self.highlight_frame.set_visible(true);
         let highlight_frame = self.highlight_frame.clone();
-        let highlight_timeout_cell = Rc::clone(&self.highlight_timeout);
-        let source_id = timeout_add_local_once(from_secs, move || {
-            if let Ok(mut highlight_timeout) = highlight_timeout_cell.try_borrow_mut() {
-                *highlight_timeout = None;
-            }
-            highlight_frame.remove_css_class("clue-highlight");
-            highlight_frame.add_css_class("clue-nohighlight");
-        });
-        if let Ok(mut highlight_timeout) = self.highlight_timeout.try_borrow_mut() {
-            *highlight_timeout = Some(source_id);
+        let new_source_id: SourceId;
+        {
+            let highlight_timeout = Rc::downgrade(&self.highlight_timeout);
+            new_source_id = timeout_add_local_once(from_secs, move || {
+                if let Some(highlight_timeout_cell) = highlight_timeout.upgrade() {
+                    if let Ok(mut highlight_timeout) = highlight_timeout_cell.try_borrow_mut() {
+                        // clear the timeout as we've fired, since removing twice causes a panic.
+                        *highlight_timeout = None;
+                    }
+                }
+                highlight_frame.remove_css_class("clue-highlight");
+                highlight_frame.add_css_class("clue-nohighlight");
+            });
         }
+        let mut highlight_timeout = self.highlight_timeout.borrow_mut();
+        *highlight_timeout = Some(new_source_id);
     }
 }
 
-impl Drop for ClueTileUI {
-    fn drop(&mut self) {
+impl Destroyable for ClueTileUI {
+    fn destroy(&mut self) {
         // Cancel any pending highlight timeout
         if let Some(source_id) = self.highlight_timeout.take() {
             log::trace!(
@@ -182,7 +188,11 @@ impl Drop for ClueTileUI {
                 source_id.remove();
             });
         }
+    }
+}
 
+impl Drop for ClueTileUI {
+    fn drop(&mut self) {
         // Unparent all overlays
         self.overlay.remove_overlay(&self.x_image);
         self.overlay.remove_overlay(&self.maybe_image);

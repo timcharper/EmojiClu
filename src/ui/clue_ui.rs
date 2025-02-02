@@ -1,7 +1,9 @@
+use glib::SignalHandlerId;
 use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Widget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::destroyable::Destroyable;
 use crate::model::LayoutConfiguration;
 use crate::model::{Clue, CluesSizing};
 use crate::model::{ClueOrientation, TileAssertion};
@@ -12,7 +14,6 @@ use crate::ui::ResourceSet;
 #[derive(Debug)]
 struct ClueTooltipData {
     clue: Clue,
-    resources: Rc<ResourceSet>,
 }
 
 #[derive(Debug)]
@@ -31,6 +32,7 @@ pub struct ClueUI {
     tooltip_widget: Rc<RefCell<Option<Box>>>,
     resources: Rc<ResourceSet>,
     layout: CluesSizing,
+    tooltip_signal: Option<SignalHandlerId>,
 }
 
 impl ClueUI {
@@ -230,14 +232,16 @@ impl ClueUI {
 
         // Set up tooltip handling
         frame.set_has_tooltip(true);
-        let tooltip_widget_clone = Rc::clone(&tooltip_widget);
-        frame.connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
-            let widget = tooltip_widget_clone.borrow();
-            if let Some(ref w) = *widget {
-                tooltip.set_custom(Some(w));
-            }
-            true
-        });
+        let tooltip_widget_clone = Rc::downgrade(&tooltip_widget);
+        let tooltip_signal =
+            frame.connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
+                if let Some(tooltip_widget) = tooltip_widget_clone.upgrade() {
+                    if let Some(ref w) = *tooltip_widget.borrow() {
+                        tooltip.set_custom(Some(w));
+                    }
+                }
+                true
+            });
 
         grid.set_row_spacing(0);
         grid.set_column_spacing(0);
@@ -267,6 +271,7 @@ impl ClueUI {
             tooltip_widget,
             resources,
             layout,
+            tooltip_signal: Some(tooltip_signal),
         }
     }
 
@@ -306,10 +311,7 @@ impl ClueUI {
 
     pub fn set_clue(&self, clue: Option<&Clue>, is_new_group: bool) {
         if let Some(clue) = clue {
-            let tooltip_data = ClueTooltipData {
-                clue: clue.clone(),
-                resources: Rc::clone(&self.resources),
-            };
+            let tooltip_data = ClueTooltipData { clue: clue.clone() };
             *self.tooltip_data.borrow_mut() = Some(tooltip_data);
 
             // Create new tooltip widget when clue changes
@@ -391,6 +393,17 @@ impl ClueUI {
         }
         let opacity = if completed { 0.1 } else { 1.0 };
         self.frame.set_opacity(opacity);
+    }
+}
+
+impl Destroyable for ClueUI {
+    fn destroy(&mut self) {
+        if let Some(tooltip_signal) = self.tooltip_signal.take() {
+            self.frame.disconnect(tooltip_signal);
+        }
+        for cell in &mut self.cells {
+            cell.destroy();
+        }
     }
 }
 

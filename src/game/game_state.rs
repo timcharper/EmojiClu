@@ -168,8 +168,10 @@ impl GameState {
             .emit(GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
             .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
-        self.game_state_emitter
-            .emit(GameStateEvent::ClueSetUpdate(self.clue_set.clone()));
+        self.game_state_emitter.emit(GameStateEvent::ClueSetUpdate(
+            self.clue_set.clone(),
+            difficulty,
+        ));
         self.game_state_emitter
             .emit(GameStateEvent::HistoryChanged {
                 history_index: self.history_index,

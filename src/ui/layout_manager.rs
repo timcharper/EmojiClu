@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-use super::ResourceSet;
+use super::{clue_set_ui::ClueSetUI, ResourceSet};
 
 // Base unit sizes
 const SPACING_SMALL: i32 = 2;
@@ -30,8 +30,6 @@ const SPACING_LARGE: i32 = 10;
 // Icon sizes
 const SOLUTION_IMG_SIZE: i32 = 128;
 const CANDIDATE_IMG_SIZE: i32 = SOLUTION_IMG_SIZE / 2;
-
-const CLUES_PER_COLUMN: i32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ClueStats {
@@ -177,7 +175,7 @@ impl LayoutManager {
 
     fn handle_game_state_event(&mut self, event: &GameStateEvent) {
         match event {
-            GameStateEvent::ClueSetUpdate(clue_set) => self.update_clue_stats(clue_set.as_ref()),
+            GameStateEvent::ClueSetUpdate(clue_set, _) => self.update_clue_stats(clue_set.as_ref()),
             _ => (),
         }
     }
@@ -249,8 +247,10 @@ impl LayoutManager {
             height: CANDIDATE_IMG_SIZE,
         };
 
+        let clues_per_column = ClueSetUI::calc_clues_per_column(difficulty) as i32;
+
         let (horiz_clue_columns, horiz_clue_rows) =
-            LayoutManager::calc_horiz_clue_columns(n_horizontal_clues as i32, CLUES_PER_COLUMN);
+            LayoutManager::calc_horiz_clue_columns(n_horizontal_clues as i32, clues_per_column);
 
         LayoutConfiguration {
             grid: LayoutManager::calc_grid_sizing(GridSizingInputs {
@@ -277,6 +277,7 @@ impl LayoutManager {
                         margin_left: SPACING_LARGE * 2,
                         clue_img_size: CANDIDATE_IMG_SIZE,
                     },
+                    difficulty,
                 ),
                 vertical_clue_panel: LayoutManager::calc_vert_clue_panel(
                     VertCluePanelSizingInputs {
@@ -357,6 +358,7 @@ impl LayoutManager {
                         as i32,
                     clue_img_size: candidate_image.width,
                 },
+                self.current_difficulty,
             ),
             vertical_clue_panel: LayoutManager::calc_vert_clue_panel(VertCluePanelSizingInputs {
                 candidate_img_size: candidate_image.width,
@@ -391,12 +393,17 @@ impl LayoutManager {
         (n_cols, n_rows)
     }
 
-    fn calc_horiz_clue_panel(inputs: HorizCluePanelSizingInputs) -> HorizontalCluePanelSizing {
+    fn calc_horiz_clue_panel(
+        inputs: HorizCluePanelSizingInputs,
+        difficulty: Difficulty,
+    ) -> HorizontalCluePanelSizing {
         let base_clue_panel_width = inputs.clue_img_size * 3  // 3 tiles
             + inputs.margin_left; // padding on both sides
 
-        let max_columns = MAX_HORIZ_CLUES as i32 / CLUES_PER_COLUMN;
-        let n_horiz_spacers = inputs.n_rows.clamp(1, CLUES_PER_COLUMN) - 1;
+        let clues_per_column = ClueSetUI::calc_clues_per_column(difficulty) as i32;
+
+        let max_columns = MAX_HORIZ_CLUES as i32 / clues_per_column;
+        let n_horiz_spacers = inputs.n_rows.clamp(1, clues_per_column) - 1;
         let n_vert_spacers = inputs.n_columns.clamp(1, max_columns) - 1;
 
         // Total width for all horizontal clue columns including spacing between columns

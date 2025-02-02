@@ -4,7 +4,6 @@ use gtk4::{
 };
 use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
-use crate::ui::ResourceSet;
 use crate::{destroyable::Destroyable, events::Unsubscriber};
 use crate::{
     events::{EventEmitter, EventObserver},
@@ -14,9 +13,8 @@ use crate::{
     game::clue_generator_state::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
     model::ClueWithGrouping,
 };
+use crate::{model::Difficulty, ui::ResourceSet};
 use crate::{model::LayoutConfiguration, ui::clue_ui::ClueUI};
-
-const CLUES_PER_COLUMN: usize = 16;
 
 pub struct ClueSetUI {
     pub horizontal_grid: Grid,
@@ -43,6 +41,14 @@ impl Destroyable for ClueSetUI {
         if let Some(subscription_id) = self.settings_subscription_id.take() {
             subscription_id.unsubscribe();
         }
+        for clue_ui in &mut self.horizontal_clue_uis {
+            clue_ui.destroy();
+        }
+        for clue_ui in &mut self.vertical_clue_uis {
+            clue_ui.destroy();
+        }
+        self.horizontal_clue_uis.clear();
+        self.vertical_clue_uis.clear();
     }
 }
 
@@ -89,9 +95,6 @@ impl ClueSetUI {
             current_layout: layout,
         }));
 
-        // Initialize clue sets
-        clue_set_ui.borrow_mut().setup_clue_sets();
-
         Self::connect_observers(
             clue_set_ui.clone(),
             game_state_observer,
@@ -136,8 +139,8 @@ impl ClueSetUI {
 
     fn handle_game_state_event(&mut self, event: &GameStateEvent) {
         match event {
-            GameStateEvent::ClueSetUpdate(clue_set) => {
-                self.set_clues(clue_set);
+            GameStateEvent::ClueSetUpdate(clue_set, difficulty) => {
+                self.set_clues(clue_set, difficulty);
             }
             GameStateEvent::ClueHintHighlight { clue } => {
                 self.highlight_clue(clue.orientation, clue.index, Duration::from_secs(4));
@@ -150,10 +153,13 @@ impl ClueSetUI {
         }
     }
 
-    fn setup_clue_sets(&mut self) {
+    fn setup_clue_sets(&mut self, difficulty: Difficulty) {
+        let n_rows = difficulty.grid_size();
+        let clues_per_column = n_rows * 2;
+
         for row in 0..MAX_HORIZ_CLUES {
-            let grid_col = row / CLUES_PER_COLUMN;
-            let grid_row = row % CLUES_PER_COLUMN;
+            let grid_col = row / clues_per_column;
+            let grid_row = row % clues_per_column;
 
             let clue_set = ClueUI::new(
                 Rc::clone(&self.resources),
@@ -215,7 +221,28 @@ impl ClueSetUI {
         }
     }
 
-    fn set_clues(&self, clue_set: &ClueSet) {
+    fn set_clues(&mut self, clue_set: &ClueSet, difficulty: &Difficulty) {
+        // First destroy the ClueUI instances which will cleanup their internal grids
+        for clue_ui in &mut self.horizontal_clue_uis {
+            clue_ui.destroy();
+        }
+        for clue_ui in &mut self.vertical_clue_uis {
+            clue_ui.destroy();
+        }
+        self.horizontal_clue_uis.clear();
+        self.vertical_clue_uis.clear();
+
+        // Then clean up the container grids that hold the clue frames
+        while let Some(child) = self.horizontal_grid.first_child() {
+            self.horizontal_grid.remove(&child);
+        }
+        while let Some(child) = self.vertical_grid.first_child() {
+            self.vertical_grid.remove(&child);
+        }
+
+        // allocate new clue cells
+        self.setup_clue_sets(*difficulty);
+
         let mut previous_clue: Option<&ClueWithGrouping> = None;
         for (idx, clue_ui) in self.horizontal_clue_uis.iter().enumerate() {
             let clue = clue_set.horizontal_clues().get(idx);
@@ -293,5 +320,10 @@ impl ClueSetUI {
         for clue_ui in self.vertical_clue_uis.iter_mut() {
             clue_ui.update_layout(layout);
         }
+    }
+
+    pub fn calc_clues_per_column(difficulty: Difficulty) -> usize {
+        let n_rows = difficulty.grid_size();
+        n_rows * 2
     }
 }
