@@ -384,6 +384,7 @@ pub fn build_ui(app: &Application) {
         .vexpand(true)
         .halign(gtk::Align::Fill)
         .valign(gtk::Align::Center)
+        .css_classes(["app-background"])
         .build();
 
     top_level_box.append(game_box.as_ref());

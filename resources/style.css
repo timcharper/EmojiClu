@@ -145,3 +145,7 @@ image {
 .horizontal-clues .new-group {
     margin-top: 0px;
 } */
+
+.app-background {
+    background-color: #2d2d2d;  /* Dark grey background */
+}
