@@ -2,8 +2,8 @@
 
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-use glib::{timeout_add_local, Continue, SourceId};
-use gtk::{prelude::WidgetExt, Label, ScrolledWindow};
+use glib::{timeout_add_local, SourceId};
+use gtk::{prelude::WidgetExt, Label};
 
 use crate::{
     destroyable::Destroyable,
@@ -142,9 +142,9 @@ impl GameInfoUI {
                 if let Some(game_info) = game_info_weak.upgrade() {
                     let game_info = game_info.borrow();
                     GameInfoUI::update_timer_label(&game_info.timer_label, &game_info.timer_state);
-                    Continue(true)
+                    glib::ControlFlow::Continue
                 } else {
-                    Continue(false)
+                    glib::ControlFlow::Break
                 }
             });
             self.timer = Some(timer);

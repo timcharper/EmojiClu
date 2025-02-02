@@ -187,7 +187,7 @@ impl ClueSetUI {
             let gesture_right = gtk::GestureClick::new();
             gesture_right.set_button(3);
             gesture_right.connect_pressed(move |_gesture, _, _, _| {
-                game_action_emitter.emit(&GameActionEvent::HorizontalClueClick(clue_idx));
+                game_action_emitter.emit(GameActionEvent::HorizontalClueClick(clue_idx));
             });
             clue_set.frame.add_controller(gesture_right);
         }
@@ -198,7 +198,7 @@ impl ClueSetUI {
             let gesture_right = gtk::GestureClick::new();
             gesture_right.set_button(3);
             gesture_right.connect_pressed(move |_gesture, _, _, _| {
-                game_action_emitter.emit(&GameActionEvent::VerticalClueClick(clue_idx));
+                game_action_emitter.emit(GameActionEvent::VerticalClueClick(clue_idx));
             });
             clue_set.frame.add_controller(gesture_right);
         }

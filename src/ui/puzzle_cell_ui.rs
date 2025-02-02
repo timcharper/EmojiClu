@@ -165,7 +165,7 @@ impl PuzzleCellUI {
             gesture_click.connect_pressed(move |_gesture, _, x, y| {
                 if let Some(cell_ui) = cell_ui.upgrade() {
                     let variant = cell_ui.borrow_mut().get_variant_at_position(x, y);
-                    game_action_emitter.emit(&GameActionEvent::CellClick(row, col, variant));
+                    game_action_emitter.emit(GameActionEvent::CellClick(row, col, variant));
                 } else {
                     warn!(target: "puzzle_cell_ui", "Stale handler called!");
                 }
@@ -181,7 +181,7 @@ impl PuzzleCellUI {
             gesture_right.connect_pressed(move |_gesture, _, x, y| {
                 if let Some(cell_ui) = cell_ui.upgrade() {
                     let variant = cell_ui.borrow_mut().get_variant_at_position(x, y);
-                    game_action_emitter.emit(&GameActionEvent::CellRightClick(row, col, variant));
+                    game_action_emitter.emit(GameActionEvent::CellRightClick(row, col, variant));
                 } else {
                     warn!(target: "puzzle_cell_ui", "Stale handler called!");
                 }

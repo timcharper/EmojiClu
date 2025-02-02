@@ -1,6 +1,6 @@
 use gtk::{
     prelude::{GridExt, WidgetExt},
-    Grid, Label,
+    Grid,
 };
 use log::trace;
 use std::{cell::RefCell, rc::Rc, time::Duration};

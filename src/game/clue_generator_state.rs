@@ -1,7 +1,7 @@
 use log::{info, trace};
 use rand::{
     rngs::StdRng,
-    seq::{IteratorRandom, SliceRandom},
+    seq::{IndexedMutRandom, IndexedRandom, IteratorRandom, SliceRandom},
     Rng, RngCore, SeedableRng,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,8 +18,8 @@ use super::puzzle_variants::WeightedClueType;
 
 pub const MAX_HORIZ_CLUES: usize = 96;
 pub const MAX_VERT_CLUES: usize = 48;
-const MAX_HORIZONTAL_TILE_USAGE: usize = 3;
-const MAX_VERTICAL_TILE_USAGE: usize = 2;
+const MAX_HORIZONTAL_TILE_USAGE: usize = 4;
+const MAX_VERTICAL_TILE_USAGE: usize = 3;
 
 #[derive(Debug, Default)]
 pub struct ClueGeneratorStats {

@@ -11,8 +11,8 @@ use crate::events::EventEmitter;
 use crate::events::EventObserver;
 use crate::events::Unsubscriber;
 use crate::game::stats_manager::StatsManager;
+use crate::model::GameStateEvent;
 use crate::model::{GameActionEvent, PuzzleCompletionState};
-use crate::model::{GameStateEvent, GameStats};
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::ResourceSet;
 
@@ -55,7 +55,7 @@ impl SubmitUI {
         {
             let game_action_emitter_submit = game_action_emitter.clone();
             submit_button_clicked_signal = submit_button.connect_clicked(move |_| {
-                game_action_emitter_submit.emit(&GameActionEvent::CompletePuzzle);
+                game_action_emitter_submit.emit(GameActionEvent::CompletePuzzle);
             });
         }
 
@@ -106,7 +106,7 @@ impl SubmitUI {
                     &stats_manager,
                     Some(stats),
                     move || {
-                        game_action_emitter.emit(&GameActionEvent::NewGame(difficulty, None));
+                        game_action_emitter.emit(GameActionEvent::NewGame(difficulty, None));
                     },
                 );
             }
@@ -126,13 +126,12 @@ impl SubmitUI {
                 let game_action_emitter = self.game_action_emitter.clone();
                 dialog.connect_response(move |dialog, response| {
                     if response == gtk::ResponseType::Ok {
-                        game_action_emitter.emit(&GameActionEvent::RewindLastGood);
+                        game_action_emitter.emit(GameActionEvent::RewindLastGood);
                     }
                     dialog.close();
                 });
                 dialog.show();
             }
-            _ => (),
         }
     }
 

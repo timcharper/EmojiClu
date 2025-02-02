@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::model::{CluesSizing, LayoutConfiguration, TileAssertion};
+use crate::model::{CluesSizing, TileAssertion};
 use gtk::glib::{timeout_add_local_once, SourceId};
 use gtk::prelude::*;
 use gtk::{Frame, Image, Overlay, Widget};

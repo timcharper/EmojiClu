@@ -4,7 +4,7 @@ use std::ops::RangeInclusive;
 use crate::model::{Difficulty, Tile};
 use log::trace;
 use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::TryRngCore;
 use rand::{seq::SliceRandom, SeedableRng};
 use serde::{Deserialize, Serialize};
 
@@ -61,7 +61,7 @@ impl Solution {
 
         let mut grid = [[Tile::new(0, '0'); MAX_GRID_SIZE]; MAX_GRID_SIZE];
 
-        let seed = seed.unwrap_or(OsRng.next_u64());
+        let seed = seed.unwrap_or(OsRng.try_next_u64().expect("Failed to generate seed"));
 
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 

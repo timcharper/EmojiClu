@@ -165,13 +165,13 @@ impl GameState {
         self.timer_state = TimerState::default();
         self.sync_board_display();
         self.game_state_emitter
-            .emit(&GameStateEvent::HintUsageChanged(self.hints_used));
+            .emit(GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
-            .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+            .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
         self.game_state_emitter
-            .emit(&GameStateEvent::ClueSetUpdate(self.clue_set.clone()));
+            .emit(GameStateEvent::ClueSetUpdate(self.clue_set.clone()));
         self.game_state_emitter
-            .emit(&GameStateEvent::HistoryChanged {
+            .emit(GameStateEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -212,7 +212,7 @@ impl GameState {
         self.history_index += 1;
 
         self.game_state_emitter
-            .emit(&GameStateEvent::HistoryChanged {
+            .emit(GameStateEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -228,7 +228,7 @@ impl GameState {
         }
 
         self.game_state_emitter
-            .emit(&GameStateEvent::HistoryChanged {
+            .emit(GameStateEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -242,7 +242,7 @@ impl GameState {
         }
 
         self.game_state_emitter
-            .emit(&GameStateEvent::HistoryChanged {
+            .emit(GameStateEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -250,13 +250,13 @@ impl GameState {
 
     fn sync_board_display(&mut self) {
         // Emit grid update event
-        self.game_state_emitter.emit(&GameStateEvent::GridUpdate(
+        self.game_state_emitter.emit(GameStateEvent::GridUpdate(
             self.current_board.as_ref().clone(),
         ));
         // Emit completion state event
         let all_cells_filled = self.current_board.is_complete();
         self.game_state_emitter
-            .emit(&GameStateEvent::PuzzleSubmissionReadyChanged(
+            .emit(GameStateEvent::PuzzleSubmissionReadyChanged(
                 all_cells_filled,
             ));
     }
@@ -306,22 +306,22 @@ impl GameState {
         if self.current_board.is_complete() {
             if self.current_board.is_incorrect() {
                 self.game_state_emitter
-                    .emit(&GameStateEvent::PuzzleSuccessfullyCompleted(
+                    .emit(GameStateEvent::PuzzleSuccessfullyCompleted(
                         PuzzleCompletionState::Incorrect,
                     ));
             } else {
                 self.game_state_emitter
-                    .emit(&GameStateEvent::PuzzleSuccessfullyCompleted(
+                    .emit(GameStateEvent::PuzzleSuccessfullyCompleted(
                         PuzzleCompletionState::Correct(self.get_game_stats()),
                     ));
 
                 self.timer_state.ended_timestamp = Some(Instant::now());
                 self.game_state_emitter
-                    .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+                    .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
             }
         } else {
             self.game_state_emitter
-                .emit(&GameStateEvent::PuzzleSuccessfullyCompleted(
+                .emit(GameStateEvent::PuzzleSuccessfullyCompleted(
                     PuzzleCompletionState::Incomplete,
                 ));
         }
@@ -411,7 +411,7 @@ impl GameState {
             self.hint_status.hint_level += 1;
         }
         self.game_state_emitter
-            .emit(&GameStateEvent::HintUsageChanged(self.hints_used));
+            .emit(GameStateEvent::HintUsageChanged(self.hints_used));
     }
 
     fn show_hint(&mut self) -> bool {
@@ -430,7 +430,7 @@ impl GameState {
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
             if let Some(clue) = clue {
                 self.game_state_emitter
-                    .emit(&GameStateEvent::ClueHintHighlight { clue: clue.clone() });
+                    .emit(GameStateEvent::ClueHintHighlight { clue: clue.clone() });
             }
 
             if self.hint_status.hint_level > 0 {
@@ -438,7 +438,7 @@ impl GameState {
                     // highlight cells
 
                     self.game_state_emitter
-                        .emit(&GameStateEvent::CellHintHighlight {
+                        .emit(GameStateEvent::CellHintHighlight {
                             cell: (first_deduction.tile.row, first_deduction.column),
                             variant: first_deduction.tile.variant,
                         });
@@ -462,7 +462,7 @@ impl GameState {
             self.sync_board_display();
         }
         self.game_state_emitter
-            .emit(&GameStateEvent::HistoryChanged {
+            .emit(GameStateEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -505,7 +505,7 @@ impl GameState {
             self.is_paused = true;
             self.timer_state.paused_timestamp = Some(Instant::now());
             self.game_state_emitter
-                .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+                .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
         }
     }
 
@@ -516,7 +516,7 @@ impl GameState {
                 // Add the duration of this pause to total_paused_duration
                 self.timer_state.paused_duration += pause_time.elapsed();
                 self.game_state_emitter
-                    .emit(&GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+                    .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
             }
         }
     }

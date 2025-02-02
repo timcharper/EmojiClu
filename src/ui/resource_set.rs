@@ -16,16 +16,10 @@ pub struct ResourceSet {
     maybe_assertion: Rc<Pixbuf>,
     lose_sounds: Vec<Rc<MediaFile>>,
     win_sounds: Vec<Rc<MediaFile>>,
-    tile_width: i32,
-    tile_height: i32,
 }
 
 impl ResourceSet {
     pub fn new() -> Self {
-        let tile_width = SOLUTION_IMG_SIZE;
-        let tile_height = SOLUTION_IMG_SIZE;
-        let mut icons = HashMap::new();
-
         let mut lose_sounds = Vec::new();
         for n in 1..=2 {
             let resource_path = format!("/org/gnomeclu/assets/sounds/lose-{}.mp3", n);
@@ -44,14 +38,12 @@ impl ResourceSet {
         );
 
         let mut set = Self {
-            icons,
+            icons: HashMap::new(),
             negative_assertion: empty_pixbuf.clone(),
             left_of: empty_pixbuf.clone(),
             maybe_assertion: empty_pixbuf.clone(),
             lose_sounds,
             win_sounds,
-            tile_width,
-            tile_height,
         };
         set.load_tile_icons();
         set
@@ -118,12 +110,12 @@ impl ResourceSet {
     }
 
     pub fn random_lose_sound(&self) -> Rc<MediaFile> {
-        let index = rand::thread_rng().gen_range(0..self.lose_sounds.len());
+        let index = rand::rng().random_range(0..self.lose_sounds.len());
         Rc::clone(&self.lose_sounds[index])
     }
 
     pub fn random_win_sound(&self) -> Rc<MediaFile> {
-        let index = rand::thread_rng().gen_range(0..self.win_sounds.len());
+        let index = rand::rng().random_range(0..self.win_sounds.len());
         Rc::clone(&self.win_sounds[index])
     }
 }

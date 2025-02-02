@@ -1,7 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
 use gtk::{
-    gdk::Monitor,
     glib::{ObjectExt, SignalHandlerId},
     prelude::{MonitorExt, NativeExt, SurfaceExt, WidgetExt},
     ApplicationWindow,
@@ -219,7 +218,7 @@ impl LayoutManager {
         if layout_changed {
             trace!(target: "layout_manager", "layout changed");
             self.global_event_emitter
-                .emit(&&GlobalEvent::LayoutChanged(new_layout.clone()));
+                .emit(GlobalEvent::LayoutChanged(new_layout.clone()));
             self.last_layout = Some(new_layout);
         } else {
             trace!(target: "layout_manager", "layout unchanged");

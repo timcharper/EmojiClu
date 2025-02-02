@@ -3,7 +3,7 @@ use crate::{
     model::{Clue, ClueType, Deduction, GameBoard, HorizontalClueType, Tile, VerticalClueType},
 };
 use log::{info, trace};
-use rand::{seq::SliceRandom, Rng, RngCore};
+use rand::{seq::IndexedRandom, Rng, RngCore};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -374,9 +374,9 @@ impl PuzzleVariant for StripingPuzzleVariant {
 
 pub fn random_puzzle_variant(rng: &mut Box<dyn RngCore>) -> Box<dyn PuzzleVariant> {
     let puzzle_variants: Vec<(Box<dyn PuzzleVariant>, i32)> = vec![
-        (Box::new(StandardPuzzleVariant {}), 2),
+        (Box::new(StandardPuzzleVariant {}), 3),
         (Box::new(NarrowingPuzzleVariant {}), 1),
-        (Box::new(StripingPuzzleVariant {}), 1),
+        (Box::new(StripingPuzzleVariant {}), 2),
     ];
     let lol = puzzle_variants
         .choose_weighted(rng, |(_, weight)| *weight)

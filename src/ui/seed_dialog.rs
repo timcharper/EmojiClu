@@ -77,10 +77,8 @@ impl SeedDialog {
             if response == gtk::ResponseType::Ok {
                 if let Ok(new_seed) = entry.text().as_str().parse::<u64>() {
                     if Some(new_seed) != current_seed {
-                        game_action_emitter.emit(&GameActionEvent::NewGame(
-                            current_difficulty,
-                            Some(new_seed),
-                        ));
+                        game_action_emitter
+                            .emit(GameActionEvent::NewGame(current_difficulty, Some(new_seed)));
                     }
                 }
             }

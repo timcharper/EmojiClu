@@ -52,10 +52,10 @@ impl TimerButtonUI {
     fn toggle_pause(&mut self) {
         if self.is_paused {
             self.is_paused = false;
-            self.game_action_emitter.emit(&GameActionEvent::Resume);
+            self.game_action_emitter.emit(GameActionEvent::Resume);
         } else {
             self.is_paused = true;
-            self.game_action_emitter.emit(&GameActionEvent::Pause);
+            self.game_action_emitter.emit(GameActionEvent::Pause);
         }
         TimerButtonUI::update_button_state(&self.button, self.is_paused);
     }

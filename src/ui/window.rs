@@ -8,7 +8,7 @@ use crate::ui::seed_dialog::SeedDialog;
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
-use glib::{timeout_add_local_once, HasParamSpec};
+use glib::timeout_add_local_once;
 use gtk::gdk::{Display, Monitor};
 use gtk::{prelude::*, Frame};
 use gtk::{Application, ApplicationWindow, Button, Label, Orientation};
@@ -60,7 +60,7 @@ fn hint_button_handler(
         log::trace!(target: "window", "Handling hint button click");
         if board_is_incorrect {
             log::trace!(target: "window", "Board is incorrect, showing rewind dialog");
-            game_action_emitter.emit(&GameActionEvent::IncrementHintsUsed);
+            game_action_emitter.emit(GameActionEvent::IncrementHintsUsed);
             // Play game over sound using a MediaStream
             let media = resources_hint.random_lose_sound();
             media.play();
@@ -80,14 +80,14 @@ fn hint_button_handler(
             dialog.connect_response(move |dialog, response| {
                 log::trace!(target: "window", "Dialog response: {:?}", response);
                 if response == gtk::ResponseType::Ok {
-                    game_action_emitter.emit(&GameActionEvent::RewindLastGood);
+                    game_action_emitter.emit(GameActionEvent::RewindLastGood);
                 }
                 dialog.close();
             });
             dialog.show();
         } else {
             log::trace!(target: "window", "Board is correct, showing hint");
-            game_action_emitter.emit(&GameActionEvent::ShowHint);
+            game_action_emitter.emit(GameActionEvent::ShowHint);
             button.set_sensitive(false);
             let button = button.clone();
             timeout_add_local_once(Duration::from_secs(4), move || {
@@ -214,7 +214,6 @@ pub fn build_ui(app: &Application) {
 
     // Handle difficulty changes
     let settings_ref = Rc::clone(&settings);
-    let window_ref = Rc::clone(&window);
     let game_action_emitter_new_game = game_action_emitter.clone();
     difficulty_selector.connect_selected_notify(move |selector| {
         let new_difficulty = match selector.selected() {
@@ -226,7 +225,7 @@ pub fn build_ui(app: &Application) {
         };
         settings_ref.borrow_mut().difficulty = new_difficulty;
         let _ = settings_ref.borrow().save();
-        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(new_difficulty, None));
+        game_action_emitter_new_game.emit(GameActionEvent::NewGame(new_difficulty, None));
     });
 
     header_bar.pack_start(&difficulty_box);
@@ -335,7 +334,7 @@ pub fn build_ui(app: &Application) {
 
     let game_action_emitter_solve = game_action_emitter.clone();
     solve_button.connect_clicked(move |_| {
-        game_action_emitter_solve.emit(&GameActionEvent::Solve);
+        game_action_emitter_solve.emit(GameActionEvent::Solve);
     });
 
     // Connect hint button
@@ -344,12 +343,6 @@ pub fn build_ui(app: &Application) {
         &game_state,
         &resources,
     ));
-
-    // Set up game event loop
-    let action = gtk::gio::SimpleAction::new(
-        "game-event",
-        Some(&gtk::glib::VariantType::new("s").unwrap()),
-    );
 
     // Add CSS for selected cells
     let provider = gtk::CssProvider::new();
@@ -400,14 +393,14 @@ pub fn build_ui(app: &Application) {
     let action_undo = gtk::gio::SimpleAction::new("undo", None);
     let game_action_emitter_undo = game_action_emitter.clone();
     action_undo.connect_activate(move |_, _| {
-        game_action_emitter_undo.emit(&GameActionEvent::Undo);
+        game_action_emitter_undo.emit(GameActionEvent::Undo);
     });
     window.add_action(&action_undo);
 
     let action_redo = gtk::gio::SimpleAction::new("redo", None);
     let game_action_emitter_redo = game_action_emitter.clone();
     action_redo.connect_activate(move |_, _| {
-        game_action_emitter_redo.emit(&GameActionEvent::Redo);
+        game_action_emitter_redo.emit(GameActionEvent::Redo);
     });
     window.add_action(&action_redo);
 
@@ -417,7 +410,7 @@ pub fn build_ui(app: &Application) {
     let game_action_emitter_new_game = game_action_emitter.clone();
     action_new_game.connect_activate(move |_, _| {
         let difficulty = settings_ref.borrow().difficulty;
-        game_action_emitter_new_game.emit(&GameActionEvent::NewGame(difficulty, None));
+        game_action_emitter_new_game.emit(GameActionEvent::NewGame(difficulty, None));
     });
     window.add_action(&action_new_game);
 
@@ -475,7 +468,7 @@ pub fn build_ui(app: &Application) {
             settings.clue_tooltips_enabled = !settings.clue_tooltips_enabled;
             action.set_state(&settings.clue_tooltips_enabled.to_variant());
             let _ = settings.save();
-            global_event_emitter.emit(&GlobalEvent::SettingsChanged(settings.clone()));
+            global_event_emitter.emit(GlobalEvent::SettingsChanged(settings.clone()));
         });
         window.add_action(&action_toggle_tooltips);
     }
@@ -492,11 +485,11 @@ pub fn build_ui(app: &Application) {
     // publish initial messages
 
     // Initialize game with saved difficulty
-    game_action_emitter.emit(&GameActionEvent::NewGame(
+    game_action_emitter.emit(GameActionEvent::NewGame(
         settings.borrow().difficulty,
         seed_from_env(),
     ));
-    global_event_emitter.emit(&GlobalEvent::SettingsChanged(settings.borrow().clone()));
+    global_event_emitter.emit(GlobalEvent::SettingsChanged(settings.borrow().clone()));
 
     // Add seed action
     let action_seed = gtk::gio::SimpleAction::new("seed", None);
@@ -510,7 +503,7 @@ pub fn build_ui(app: &Application) {
     let action_restart = gtk::gio::SimpleAction::new("restart", None);
     let game_action_emitter_restart = game_action_emitter.clone();
     action_restart.connect_activate(move |_, _| {
-        game_action_emitter_restart.emit(&GameActionEvent::Restart);
+        game_action_emitter_restart.emit(GameActionEvent::Restart);
     });
     window.add_action(&action_restart);
 

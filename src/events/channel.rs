@@ -1,29 +1,32 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
+use glib;
 use log::trace;
 
 pub type Callback<T> = Rc<dyn Fn(&T)>;
 type SubscriptionId = u64;
 
-pub struct EventEmitter<T: std::fmt::Debug> {
+pub struct EventEmitter<T: std::fmt::Debug + 'static> {
     channel: Channel<T>,
+    pending: Rc<RefCell<VecDeque<T>>>,
 }
 
-impl<T: std::fmt::Debug> Clone for EventEmitter<T> {
+impl<T: std::fmt::Debug + 'static> Clone for EventEmitter<T> {
     fn clone(&self) -> Self {
         Self {
             channel: self.channel.clone(),
+            pending: Rc::clone(&self.pending),
         }
     }
 }
 
-pub struct EventObserver<T: std::fmt::Debug> {
+pub struct EventObserver<T: std::fmt::Debug + 'static> {
     channel: Channel<T>,
 }
 
-impl<T: std::fmt::Debug> Clone for EventObserver<T> {
+impl<T: std::fmt::Debug + 'static> Clone for EventObserver<T> {
     fn clone(&self) -> Self {
         Self {
             channel: self.channel.clone(),
@@ -45,28 +48,32 @@ impl<T: std::fmt::Debug> Clone for Channel<T> {
     }
 }
 
-pub struct Unsubscriber<T: std::fmt::Debug> {
+pub struct Unsubscriber<T: std::fmt::Debug + 'static> {
     channel: Channel<T>,
     id: SubscriptionId,
 }
 
-impl<T: std::fmt::Debug> Unsubscriber<T> {
+impl<T: std::fmt::Debug + 'static> Unsubscriber<T> {
     pub fn unsubscribe(&self) -> bool {
         self.channel.unsubscribe(self.id)
     }
 }
 
-impl<T: std::fmt::Debug> Channel<T> {
+impl<T: std::fmt::Debug + 'static> Channel<T> {
     pub fn new() -> (EventEmitter<T>, EventObserver<T>) {
         let listeners = Rc::new(RefCell::new(HashMap::new()));
         let next_id = Rc::new(RefCell::new(0));
+        let pending = Rc::new(RefCell::new(VecDeque::new()));
+
         let channel = Channel {
             listeners: Rc::clone(&listeners),
             next_id: Rc::clone(&next_id),
         };
+
         (
             EventEmitter {
                 channel: channel.clone(),
+                pending: Rc::clone(&pending),
             },
             EventObserver {
                 channel: channel.clone(),
@@ -108,13 +115,30 @@ impl<T: std::fmt::Debug> Channel<T> {
     }
 }
 
-impl<T: std::fmt::Debug> EventEmitter<T> {
-    pub fn emit(&self, data: &T) {
-        self.channel.emit(data);
+impl<T: std::fmt::Debug + 'static> EventEmitter<T> {
+    fn drain_pending_events(&self) {
+        let mut pending = self.pending.borrow_mut();
+        while let Some(event) = pending.pop_front() {
+            self.channel.emit(&event);
+        }
+    }
+
+    pub fn emit(&self, data: T) {
+        let mut pending = self.pending.borrow_mut();
+        if pending.is_empty() {
+            // Only schedule a new timeout if this is the first pending event
+            let emitter = self.clone();
+            glib::timeout_add_local(std::time::Duration::from_millis(0), move || {
+                emitter.drain_pending_events();
+                // Return false to not repeat the timeout
+                glib::ControlFlow::Break
+            });
+        }
+        pending.push_back(data);
     }
 }
 
-impl<T: std::fmt::Debug> EventObserver<T> {
+impl<T: std::fmt::Debug + 'static> EventObserver<T> {
     pub fn subscribe<F>(&self, callback: F) -> Unsubscriber<T>
     where
         F: Fn(&T) + 'static,
@@ -138,7 +162,8 @@ mod tests {
             counter_clone.set(counter_clone.get() + 1);
         });
 
-        emitter.emit(&42);
+        emitter.emit(42);
+        emitter.drain_pending_events();
         assert_eq!(counter.get(), 1);
     }
 
@@ -157,7 +182,8 @@ mod tests {
             sum_clone2.set(sum_clone2.get() + data);
         });
 
-        emitter.emit(&5);
+        emitter.emit(5);
+        emitter.drain_pending_events();
         assert_eq!(sum.get(), 10); // Each listener adds 5
     }
 
@@ -176,7 +202,8 @@ mod tests {
         });
 
         // Emit using second emitter
-        emitter2.emit(&42);
+        emitter2.emit(42);
+        emitter2.drain_pending_events();
         assert_eq!(counter.get(), 1);
 
         // Subscribe using second observer
@@ -186,7 +213,8 @@ mod tests {
         });
 
         // Emit using first emitter
-        emitter1.emit(&42);
+        emitter1.emit(42);
+        emitter1.drain_pending_events();
         assert_eq!(counter.get(), 3); // Two listeners, each adding 1
     }
 
@@ -200,12 +228,14 @@ mod tests {
             counter_clone.set(counter_clone.get() + 1);
         });
 
-        emitter.emit(&42);
+        emitter.emit(42);
+        emitter.drain_pending_events();
         assert_eq!(counter.get(), 1);
 
         // Unsubscribe and verify no more updates
         assert!(sub_id.unsubscribe());
-        emitter.emit(&42);
+        emitter.emit(42);
+        emitter.drain_pending_events();
         assert_eq!(counter.get(), 1);
 
         // Trying to unsubscribe again should return false
