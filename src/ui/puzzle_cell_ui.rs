@@ -1,10 +1,11 @@
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
-use crate::model::{Candidate, CandidateState, GameActionEvent, GridSizing, Tile};
+use crate::model::{Candidate, CandidateState, Clue, GameActionEvent, GridSizing, Tile};
 use glib::timeout_add_local_once;
 use gtk4::{prelude::*, GestureClick, Widget};
 use gtk4::{Frame, Grid, Image, Overlay};
@@ -16,9 +17,11 @@ pub struct PuzzleCellUI {
     pub frame: Frame,
     pub candidates_grid: Grid,                 // 2x3 grid for candidates
     pub solution_image: Image,                 // Large image for selected solution
+    pub solution_overlay: Rc<Overlay>,         // Overlay for solution image
+    pub solution_highlight_frame: Rc<Frame>,   // Frame for solution highlighting
     pub candidate_images: Vec<Image>,          // Small images for candidates
     pub _candidate_overlays: Vec<Rc<Overlay>>, // Overlays for highlighting; need to hold references for GTK
-    pub highlight_frames: Vec<Rc<Frame>>,      // Frames for showing highlights
+    pub candidate_highlight_frames: Vec<Rc<Frame>>, // Frames for showing highlights
     pub resources: Rc<ResourceSet>,
     pub row: usize,
     pub col: usize,
@@ -28,6 +31,9 @@ pub struct PuzzleCellUI {
     current_layout: GridSizing,
     gesture_click: Option<GestureClick>,
     gesture_right: Option<GestureClick>,
+    available_tiles: HashSet<Tile>,
+    selected_tile: Option<Tile>,
+    clue_selection: Option<Clue>,
 }
 
 impl PuzzleCellUI {
@@ -58,6 +64,18 @@ impl PuzzleCellUI {
         let solution_image = Image::new();
         solution_image.set_visible(false);
 
+        let solution_highlight_frame = Rc::new(
+            Frame::builder()
+                .name("solution-highlight-frame")
+                .css_classes(["highlight-frame"])
+                .build(),
+        );
+
+        let solution_overlay = Rc::new(Overlay::new());
+        solution_overlay.set_child(Some(&solution_image));
+        solution_overlay.add_overlay(solution_highlight_frame.upcast_ref::<Widget>());
+        solution_overlay.set_visible(false);
+
         let n_variants = variants.clone().count();
         let candidate_images: Vec<Image> = variants
             .clone()
@@ -69,9 +87,11 @@ impl PuzzleCellUI {
 
         let candidate_highlight_frames: Vec<Rc<Frame>> = variants
             .clone()
-            .map(|_| {
-                let frame = Frame::new(None);
-                frame.set_css_classes(&["highlight-frame"]);
+            .map(|variant| {
+                let frame = Frame::builder()
+                    .name(&format!("candidate-highlight-frame-{}", variant))
+                    .css_classes(["highlight-frame"])
+                    .build();
                 Rc::new(frame)
             })
             .collect();
@@ -89,19 +109,21 @@ impl PuzzleCellUI {
             candidates_grid.attach(overlay.as_ref(), grid_col as i32, grid_row as i32, 1, 1);
         }
 
-        let overlay = Overlay::new();
-        overlay.set_child(Some(&candidates_grid));
-        overlay.add_overlay(&solution_image);
+        // Create root overlay that will contain either candidates_grid or solution_overlay
+        let root_overlay = Overlay::new();
+        root_overlay.set_child(Some(&candidates_grid));
 
-        frame.set_child(Some(&overlay));
+        frame.set_child(Some(&root_overlay));
 
         let cell_ui = Self {
             frame,
             candidates_grid,
             solution_image,
+            solution_overlay,
+            solution_highlight_frame,
             candidate_images,
             _candidate_overlays: candidate_overlays,
-            highlight_frames: candidate_highlight_frames,
+            candidate_highlight_frames,
             resources,
             row,
             col,
@@ -111,6 +133,9 @@ impl PuzzleCellUI {
             current_layout: layout,
             gesture_click: None,
             gesture_right: None,
+            available_tiles: HashSet::new(),
+            selected_tile: None,
+            clue_selection: None,
         };
         cell_ui.apply_layout();
 
@@ -118,6 +143,65 @@ impl PuzzleCellUI {
 
         PuzzleCellUI::register_click_handler(cell_ui.clone());
         cell_ui
+    }
+
+    /// Dimm the puzzle cell if candidates not in clue
+    pub fn set_clue_xray(&mut self, clue_selection: &Option<Clue>) {
+        self.clue_selection = clue_selection.clone();
+        self.sync_clue_xray();
+    }
+
+    fn sync_clue_xray(&self) {
+        // clear css on all candidate cells and solution frame
+        self.frame.remove_css_class("clue-xray-positive");
+        self.frame.remove_css_class("clue-xray-negative");
+        for highlight_frame in &self.candidate_highlight_frames {
+            highlight_frame.remove_css_class("clue-1");
+            highlight_frame.remove_css_class("clue-2");
+            highlight_frame.remove_css_class("clue-3");
+        }
+        self.solution_highlight_frame.remove_css_class("clue-1");
+        self.solution_highlight_frame.remove_css_class("clue-2");
+        self.solution_highlight_frame.remove_css_class("clue-3");
+
+        match &self.clue_selection {
+            Some(clue) => {
+                let mut match_count = 0;
+
+                // Handle solution tile if present
+                if let Some(selected_tile) = &self.selected_tile {
+                    for (idx, assertion) in clue.assertions.iter().enumerate() {
+                        if assertion.tile == *selected_tile {
+                            match_count += 1;
+                            self.solution_highlight_frame
+                                .add_css_class(&format!("clue-{}", idx + 1));
+                        }
+                    }
+                } else {
+                    // Handle candidate tiles
+                    for (idx, assertion) in clue.assertions.iter().enumerate() {
+                        let tile_is_avail = if assertion.tile.row != self.row {
+                            false
+                        } else {
+                            self.available_tiles.contains(&assertion.tile)
+                        };
+                        let variant_idx = assertion.tile.variant as usize - 'a' as usize;
+                        if tile_is_avail {
+                            match_count += 1;
+                            self.candidate_highlight_frames[variant_idx]
+                                .add_css_class(&format!("clue-{}", idx + 1));
+                        }
+                    }
+                }
+
+                if match_count > 0 {
+                    self.frame.add_css_class("clue-xray-positive");
+                } else {
+                    self.frame.add_css_class("clue-xray-negative");
+                }
+            }
+            None => {}
+        }
     }
 
     pub fn apply_layout(&self) {
@@ -198,16 +282,19 @@ impl PuzzleCellUI {
     pub fn highlight_candidate(&self, index: char, highlight_class: Option<&str>) {
         let index = index as usize - 'a' as usize;
         if let Some(class) = highlight_class {
-            self.highlight_frames[index].set_css_classes(&[class]);
-            self.highlight_frames[index].set_visible(true);
+            self.candidate_highlight_frames[index].set_css_classes(&[class]);
         } else {
-            self.highlight_frames[index].set_visible(false);
         }
     }
 
-    pub fn set_candidate(&self, variant: char, candidate: Option<&Candidate>) {
+    pub fn set_candidate(&mut self, variant: char, candidate: Option<&Candidate>) {
         let variant_idx = variant as usize - 'a' as usize;
         if let Some(candidate) = candidate {
+            if candidate.state == CandidateState::Available {
+                self.available_tiles.insert(candidate.tile);
+            } else {
+                self.available_tiles.remove(&candidate.tile);
+            }
             if let Some(pixbuf) = self
                 .resources
                 .get_icon(candidate.tile.row as i32, variant_idx as i32)
@@ -219,9 +306,10 @@ impl PuzzleCellUI {
                 });
             }
         }
+        self.sync_clue_xray();
     }
 
-    pub fn set_solution(&self, tile: Option<&Tile>) {
+    pub fn set_solution(&mut self, tile: Option<&Tile>) {
         // First, remove current child to ensure clean state
         self.frame.set_child(Option::<&Widget>::None);
 
@@ -233,17 +321,22 @@ impl PuzzleCellUI {
                 // Set up solution image
                 self.solution_image.set_from_pixbuf(Some(&pixbuf));
                 self.solution_image.set_visible(true);
+                self.solution_overlay.set_visible(true);
                 self.candidates_grid.set_visible(false);
-                // Add solution image as child
-                self.frame.set_child(Some(&self.solution_image));
+                // Add solution overlay as child
+                self.frame.set_child(Some(self.solution_overlay.as_ref()));
+                self.selected_tile = Some(tile.clone());
             }
         } else {
+            self.selected_tile = None;
             // Reset to candidates view
             self.solution_image.set_visible(false);
+            self.solution_overlay.set_visible(false);
             self.candidates_grid.set_visible(true);
             // Add candidates grid as child
             self.frame.set_child(Some(&self.candidates_grid));
         }
+        self.sync_clue_xray();
     }
 
     pub fn get_variant_at_position(&self, x: f64, y: f64) -> Option<char> {
@@ -313,9 +406,9 @@ impl PuzzleCellUI {
             self.col
         );
         let index = variant as usize - 'a' as usize;
-        self.highlight_frames[index].set_css_classes(&["clue-highlight"]);
-        self.highlight_frames[index].set_visible(true);
-        let highlight_frame = Rc::clone(&self.highlight_frames[index]);
+        self.candidate_highlight_frames[index].set_css_classes(&["clue-highlight"]);
+        self.candidate_highlight_frames[index].set_visible(true);
+        let highlight_frame = Rc::clone(&self.candidate_highlight_frames[index]);
         timeout_add_local_once(from_secs, move || {
             highlight_frame.remove_css_class("clue-highlight");
             highlight_frame.add_css_class("clue-nohighlight");

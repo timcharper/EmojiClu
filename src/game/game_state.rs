@@ -9,8 +9,9 @@ use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::game::clue_generator::ClueGeneratorResult;
 use crate::model::{
-    CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameActionEvent, GameBoard,
-    GameStateEvent, GameStats, PuzzleCompletionState, Solution, TimerState,
+    CandidateState, Clue, ClueOrientation, ClueSet, ClueWithGrouping, Deduction, Difficulty,
+    GameActionEvent, GameBoard, GameStateEvent, GameStats, PuzzleCompletionState, Solution,
+    TimerState,
 };
 use std::rc::Rc;
 
@@ -51,6 +52,7 @@ pub struct GameState {
     game_action_observer: EventObserver<GameActionEvent>,
     subscription_id: Option<Unsubscriber<GameActionEvent>>,
     game_state_emitter: EventEmitter<GameStateEvent>,
+    selected_clue: Option<(ClueOrientation, usize)>,
 }
 
 impl Destroyable for GameState {
@@ -128,6 +130,7 @@ impl GameState {
             game_action_observer: game_action_observer.clone(),
             subscription_id: None,
             game_state_emitter,
+            selected_clue: None,
         };
         let refcell = Rc::new(RefCell::new(game_state));
         GameState::wire_subscription(refcell.clone(), game_action_observer);
@@ -164,6 +167,7 @@ impl GameState {
         self.is_paused = false;
         self.timer_state = TimerState::default();
         self.sync_board_display();
+        self.select_clue(None);
         self.game_state_emitter
             .emit(GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
@@ -272,12 +276,6 @@ impl GameState {
             GameActionEvent::CellRightClick(row, col, variant) => {
                 self.handle_cell_right_click(row, col, variant)
             }
-            GameActionEvent::HorizontalClueClick(clue_idx) => {
-                self.handle_horizontal_clue_click(clue_idx)
-            }
-            GameActionEvent::VerticalClueClick(clue_idx) => {
-                self.handle_vertical_clue_click(clue_idx)
-            }
             GameActionEvent::NewGame(difficulty, seed) => self.new_game(difficulty, seed),
             GameActionEvent::InitDisplay => {
                 self.sync_board_display();
@@ -301,7 +299,18 @@ impl GameState {
                 let current_difficulty = self.current_board.solution.difficulty;
                 self.new_game(current_difficulty, Some(current_seed));
             }
+            GameActionEvent::ClueRightClick(clue_orientation, clue_idx) => {
+                self.handle_clue_right_click(clue_orientation, clue_idx)
+            }
+            GameActionEvent::ClueLeftClick(clue_orientation, clue_idx) => {
+                self.handle_clue_left_click(clue_orientation, clue_idx)
+            }
         }
+    }
+
+    fn select_clue(&mut self, clue: Option<Clue>) {
+        self.game_state_emitter
+            .emit(GameStateEvent::ClueSelected(clue));
     }
 
     fn complete_puzzle(&mut self) {
@@ -486,15 +495,27 @@ impl GameState {
         stats
     }
 
-    fn handle_horizontal_clue_click(&mut self, clue_idx: usize) {
-        let mut current_board = self.current_board.as_ref().clone();
-        current_board.toggle_horizontal_clue_completed(clue_idx);
-        self.push_board(current_board);
+    fn handle_clue_left_click(&mut self, clue_orientation: ClueOrientation, clue_idx: usize) {
+        let selection = (clue_orientation, clue_idx);
+        let mut clue: Option<Clue> = None;
+        if self.selected_clue == Some(selection) {
+            self.selected_clue = None;
+        } else {
+            self.selected_clue = Some(selection);
+            let mut current_board = self.current_board.as_ref().clone();
+            let m_clue = self
+                .current_board
+                .clue_set
+                .get_clue(clue_orientation, clue_idx);
+            clue = m_clue.map(|cwg| cwg.clue.clone());
+        }
+        self.game_state_emitter
+            .emit(GameStateEvent::ClueSelected(clue));
     }
 
-    fn handle_vertical_clue_click(&mut self, clue_idx: usize) {
+    fn handle_clue_right_click(&mut self, clue_orientation: ClueOrientation, clue_idx: usize) {
         let mut current_board = self.current_board.as_ref().clone();
-        current_board.toggle_vertical_clue_completed(clue_idx);
+        current_board.toggle_clue_completed(clue_orientation, clue_idx);
         self.push_board(current_board);
     }
 

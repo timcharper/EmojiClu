@@ -149,3 +149,29 @@ image {
 .app-background {
     background-color: #2d2d2d;  /* Dark grey background */
 }
+
+.clue-xray-positive {
+   opacity: 1.0;
+}
+
+.clue-xray-negative {
+   opacity: 0.2;
+}
+
+.clue-xray-positive .clue-1 {
+}
+
+.clue-xray-positive .clue-2 {
+}
+
+.clue-xray-positive .clue-3 {
+}
+
+.selection-frame {
+    border: none;
+    background: transparent;
+}
+
+.selection-frame.selected {
+    border: 4px solid #f6d32d;  /* Yellow border */
+}

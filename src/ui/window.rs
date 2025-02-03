@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use super::clue_set_ui::ClueSetUI;
+use super::clue_panels_ui::CluePanelsUI;
 use super::game_info_ui::GameInfoUI;
 use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
@@ -262,7 +262,7 @@ pub fn build_ui(app: &Application) {
         default_layout.clone(),
     );
 
-    let clue_set_ui = ClueSetUI::new(
+    let clue_set_ui = CluePanelsUI::new(
         game_action_emitter.clone(),
         game_state_observer.clone(),
         global_event_observer.clone(),

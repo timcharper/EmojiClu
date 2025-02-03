@@ -1,7 +1,7 @@
 use crate::{game::settings::Settings, ui::ResourceSet};
 use std::rc::Rc;
 
-use super::LayoutConfiguration;
+use super::{Clue, LayoutConfiguration};
 
 /// Events that are not specific to any one component of the game.
 #[derive(Debug)]

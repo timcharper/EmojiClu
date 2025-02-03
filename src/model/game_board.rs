@@ -400,15 +400,22 @@ impl GameBoard {
         }
     }
 
-    pub fn toggle_horizontal_clue_completed(&mut self, clue_idx: usize) {
-        if !self.completed_horizontal_clues.remove(&clue_idx) {
-            self.completed_horizontal_clues.insert(clue_idx);
-        }
-    }
-
-    pub fn toggle_vertical_clue_completed(&mut self, clue_idx: usize) {
-        if !self.completed_vertical_clues.remove(&clue_idx) {
-            self.completed_vertical_clues.insert(clue_idx);
+    pub(crate) fn toggle_clue_completed(
+        &mut self,
+        clue_orientation: super::ClueOrientation,
+        clue_idx: usize,
+    ) {
+        match clue_orientation {
+            super::ClueOrientation::Horizontal => {
+                if !self.completed_horizontal_clues.remove(&clue_idx) {
+                    self.completed_horizontal_clues.insert(clue_idx);
+                }
+            }
+            super::ClueOrientation::Vertical => {
+                if !self.completed_vertical_clues.remove(&clue_idx) {
+                    self.completed_vertical_clues.insert(clue_idx);
+                }
+            }
         }
     }
 

@@ -8,7 +8,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
-    model::{GameActionEvent, GameStateEvent, GlobalEvent, LayoutConfiguration, Solution},
+    model::{Clue, GameActionEvent, GameStateEvent, GlobalEvent, LayoutConfiguration, Solution},
 };
 
 use super::{puzzle_cell_ui::PuzzleCellUI, ResourceSet};
@@ -136,7 +136,7 @@ impl PuzzleGridUI {
                 for row in 0..board.solution.n_rows {
                     for col in 0..board.solution.n_variants {
                         if let Some(cell) = self.cells.get(row).and_then(|row| row.get(col)) {
-                            let cell = cell.borrow_mut();
+                            let mut cell = cell.borrow_mut();
                             // If there's a solution, show it
                             if let Some(tile) = board.selected[row][col] {
                                 cell.set_solution(Some(&tile));
@@ -159,7 +159,19 @@ impl PuzzleGridUI {
             GameStateEvent::CellHintHighlight { cell, variant } => {
                 self.highlight_candidate(cell.0, cell.1, *variant);
             }
+            GameStateEvent::ClueSelected(clue) => {
+                self.set_clue_xray(clue);
+            }
             _ => {}
+        }
+    }
+
+    fn set_clue_xray(&mut self, clue: &Option<Clue>) {
+        // dispatch to cell uis
+        for row in &mut self.cells {
+            for cell in row {
+                cell.borrow_mut().set_clue_xray(clue);
+            }
         }
     }
 

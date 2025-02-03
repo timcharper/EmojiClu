@@ -1,12 +1,12 @@
-use super::Difficulty;
+use super::{ClueOrientation, Difficulty};
 
 #[derive(Debug, Clone)]
 pub enum GameActionEvent {
     CellClick(usize, usize, Option<char>),
     CellRightClick(usize, usize, Option<char>),
-    HorizontalClueClick(usize),       // clue_idx
-    VerticalClueClick(usize),         // clue_idx
-    NewGame(Difficulty, Option<u64>), // grid rows, grid columns
+    ClueRightClick(ClueOrientation, usize), // clue_idx
+    ClueLeftClick(ClueOrientation, usize),  // clue_idx
+    NewGame(Difficulty, Option<u64>),       // grid rows, grid columns
     InitDisplay,
     CompletePuzzle,
     Solve,

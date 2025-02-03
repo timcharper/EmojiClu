@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-use super::{clue_set_ui::ClueSetUI, ResourceSet};
+use super::{clue_panels_ui::CluePanelsUI, ResourceSet};
 
 // Base unit sizes
 const SPACING_SMALL: i32 = 2;
@@ -247,7 +247,7 @@ impl LayoutManager {
             height: CANDIDATE_IMG_SIZE,
         };
 
-        let clues_per_column = ClueSetUI::calc_clues_per_column(difficulty) as i32;
+        let clues_per_column = CluePanelsUI::calc_clues_per_column(difficulty) as i32;
 
         let (horiz_clue_columns, horiz_clue_rows) =
             LayoutManager::calc_horiz_clue_columns(n_horizontal_clues as i32, clues_per_column);
@@ -400,7 +400,7 @@ impl LayoutManager {
         let base_clue_panel_width = inputs.clue_img_size * 3  // 3 tiles
             + inputs.margin_left; // padding on both sides
 
-        let clues_per_column = ClueSetUI::calc_clues_per_column(difficulty) as i32;
+        let clues_per_column = CluePanelsUI::calc_clues_per_column(difficulty) as i32;
 
         let max_columns = MAX_HORIZ_CLUES as i32 / clues_per_column;
         let n_horiz_spacers = inputs.n_rows.clamp(1, clues_per_column) - 1;

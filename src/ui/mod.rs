@@ -1,4 +1,4 @@
-mod clue_set_ui;
+mod clue_panels_ui;
 mod clue_tile_ui;
 mod clue_ui;
 mod game_info_ui;
