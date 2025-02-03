@@ -127,7 +127,7 @@ pub fn build_ui(app: &Application) {
     let window = Rc::new(
         ApplicationWindow::builder()
             .application(app)
-            .title("GnomeClu")
+            .title("Mind Hunt")
             .resizable(true)
             .decorated(true)
             .default_height(desired_height as i32)
@@ -351,7 +351,7 @@ pub fn build_ui(app: &Application) {
 
     // Add CSS for selected cells
     let provider = CssProvider::new();
-    provider.load_from_resource("/org/gnomeclu/style.css");
+    provider.load_from_resource("/org/mindhunt/style.css");
 
     gtk4::style_context_add_provider_for_display(
         &display,
@@ -446,10 +446,10 @@ pub fn build_ui(app: &Application) {
     let action_about = SimpleAction::new("about", None);
     action_about.connect_activate(move |_, _| {
         let dialog = AboutDialog::builder()
-            .program_name("GnomeClu")
+            .program_name("Mind Hunt")
             .version("1.0")
             .authors(vec!["Tim Harper"])
-            .website("https://github.com/timcharper/gnomeclu")
+            .website("https://github.com/timcharper/mindhunt")
             .website_label("GitHub Repository")
             .license_type(License::MitX11)
             .build();

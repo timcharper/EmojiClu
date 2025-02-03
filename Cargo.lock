@@ -472,26 +472,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gnomeclu"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "env_logger",
- "gdk-pixbuf",
- "gio",
- "glib",
- "glib-build-tools",
- "gtk4",
- "itertools",
- "log",
- "rand",
- "serde",
- "serde_json",
- "test-context",
- "uuid",
-]
-
-[[package]]
 name = "gobject-sys"
 version = "0.20.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -715,6 +695,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mindhunt"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "env_logger",
+ "gdk-pixbuf",
+ "gio",
+ "glib",
+ "glib-build-tools",
+ "gtk4",
+ "itertools",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "test-context",
+ "uuid",
 ]
 
 [[package]]

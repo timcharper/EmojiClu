@@ -1,10 +1,10 @@
 use gio::prelude::*;
 use gio::ApplicationFlags;
 use glib::{Bytes, ExitCode};
-use gnomeclu::ui::build_ui;
 use gtk4::Application;
+use mindhunt::ui::build_ui;
 
-const APP_ID: &str = "org.gnomeclu.LogicPuzzle";
+const APP_ID: &str = "org.mindhunt.LogicPuzzle";
 
 #[cfg(target_os = "windows")]
 const RESOURCES: &[u8] = include_bytes!("../target/resources/compiled.gresource");
