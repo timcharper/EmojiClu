@@ -1,6 +1,6 @@
 use super::{
     solution::{Solution, MAX_GRID_SIZE},
-    ClueSet,
+    Clue, ClueSet,
 };
 use crate::model::{Candidate, CandidateState, Deduction, PartialSolution, Tile};
 use std::{collections::HashSet, rc::Rc};
@@ -13,6 +13,7 @@ pub struct GameBoard {
     pub clue_set: Rc<ClueSet>,
     pub completed_horizontal_clues: HashSet<usize>,
     pub completed_vertical_clues: HashSet<usize>,
+    pub completed_clues: HashSet<Clue>,
 }
 
 impl std::fmt::Debug for GameBoard {
@@ -76,6 +77,7 @@ impl GameBoard {
             clue_set: Rc::new(ClueSet::new(vec![])),
             completed_horizontal_clues: HashSet::new(),
             completed_vertical_clues: HashSet::new(),
+            completed_clues: HashSet::new(),
         }
     }
 
@@ -282,6 +284,7 @@ impl GameBoard {
             clue_set: Rc::new(ClueSet::new(vec![])),
             completed_horizontal_clues: HashSet::new(),
             completed_vertical_clues: HashSet::new(),
+            completed_clues: HashSet::new(),
         }
     }
 
@@ -400,15 +403,54 @@ impl GameBoard {
         }
     }
 
-    pub fn toggle_horizontal_clue_completed(&mut self, clue_idx: usize) {
-        if !self.completed_horizontal_clues.remove(&clue_idx) {
-            self.completed_horizontal_clues.insert(clue_idx);
+    /// returns final state, is clue completed
+    pub(crate) fn toggle_clue_completed(
+        &mut self,
+        clue_orientation: super::ClueOrientation,
+        clue_idx: usize,
+    ) -> bool {
+        let cwg = self.clue_set.get_clue(clue_orientation, clue_idx);
+        if !cwg.is_some() {
+            return false;
         }
+        let clue = &cwg.unwrap().clue;
+
+        let is_completed = match clue_orientation {
+            super::ClueOrientation::Horizontal => {
+                if !self.completed_horizontal_clues.remove(&clue_idx) {
+                    self.completed_horizontal_clues.insert(clue_idx);
+                    true
+                } else {
+                    false
+                }
+            }
+            super::ClueOrientation::Vertical => {
+                if !self.completed_vertical_clues.remove(&clue_idx) {
+                    self.completed_vertical_clues.insert(clue_idx);
+                    true
+                } else {
+                    false
+                }
+            }
+        };
+        if is_completed {
+            self.completed_clues.insert(clue.clone());
+        } else {
+            self.completed_clues.remove(clue);
+        }
+        is_completed
     }
 
-    pub fn toggle_vertical_clue_completed(&mut self, clue_idx: usize) {
-        if !self.completed_vertical_clues.remove(&clue_idx) {
-            self.completed_vertical_clues.insert(clue_idx);
+    pub(crate) fn is_clue_completed(
+        &self,
+        clue_orientation: super::ClueOrientation,
+        clue_idx: usize,
+    ) -> bool {
+        match clue_orientation {
+            super::ClueOrientation::Horizontal => {
+                self.completed_horizontal_clues.contains(&clue_idx)
+            }
+            super::ClueOrientation::Vertical => self.completed_vertical_clues.contains(&clue_idx),
         }
     }
 

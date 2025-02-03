@@ -3,28 +3,31 @@ use gtk4::{
     Grid,
 };
 use log::trace;
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
-    model::{GameActionEvent, GameStateEvent, GlobalEvent, LayoutConfiguration, Solution},
+    game::settings::Settings,
+    model::{Clue, GameActionEvent, GameStateEvent, GlobalEvent, LayoutConfiguration, Solution},
 };
 
-use super::{puzzle_cell_ui::PuzzleCellUI, ResourceSet};
+use super::{puzzle_cell_ui::PuzzleCellUI, ImageSet};
 
 pub struct PuzzleGridUI {
     pub grid: Grid,
-    pub cells: Vec<Vec<Rc<RefCell<PuzzleCellUI>>>>,
+    cells: Vec<Vec<Rc<RefCell<PuzzleCellUI>>>>,
     game_action_emitter: EventEmitter<GameActionEvent>,
-    resources: Rc<ResourceSet>,
+    resources: Rc<ImageSet>,
     game_state_subscription_id: Option<Unsubscriber<GameStateEvent>>,
     settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
-    game_state_observer: EventObserver<GameStateEvent>,
-    global_event_observer: EventObserver<GlobalEvent>,
     current_layout: LayoutConfiguration,
     n_rows: usize,
     n_variants: usize,
+    current_xray_enabled: bool,
+    current_focused_clue: Option<Clue>,
+    completed_clues: HashSet<Clue>,
+    current_clue_hint: Option<Clue>,
 }
 
 impl Destroyable for PuzzleGridUI {
@@ -45,8 +48,9 @@ impl PuzzleGridUI {
         game_action_emitter: EventEmitter<GameActionEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
-        resources: Rc<ResourceSet>,
+        resources: Rc<ImageSet>,
         layout: LayoutConfiguration,
+        settings: &Settings,
     ) -> Rc<RefCell<Self>> {
         let grid = Grid::new();
         grid.set_css_classes(&["puzzle-grid"]);
@@ -58,11 +62,13 @@ impl PuzzleGridUI {
             resources,
             game_state_subscription_id: None,
             settings_subscription_id: None,
-            game_state_observer: game_state_observer.clone(),
-            global_event_observer: global_event_observer.clone(),
             current_layout: layout.clone(),
             n_rows: 0,
             n_variants: 0,
+            current_xray_enabled: settings.clue_xray_enabled,
+            current_focused_clue: None,
+            completed_clues: HashSet::new(),
+            current_clue_hint: None,
         }));
 
         // Subscribe to layout changes
@@ -125,6 +131,20 @@ impl PuzzleGridUI {
     fn handle_global_event(&mut self, event: &GlobalEvent) {
         match event {
             GlobalEvent::LayoutChanged(new_layout) => self.update_layout(new_layout),
+            GlobalEvent::ImagesOptimized(new_image_set) => {
+                self.resources = new_image_set.clone();
+                // propagate image set to all cells
+                for row in &mut self.cells {
+                    for cell in row {
+                        cell.borrow_mut().set_image_set(self.resources.clone());
+                    }
+                }
+            }
+            GlobalEvent::SettingsChanged(settings) => {
+                if settings.clue_xray_enabled != self.current_xray_enabled {
+                    self.set_clue_xray_enabled(settings.clue_xray_enabled);
+                }
+            }
             _ => (),
         }
     }
@@ -136,31 +156,75 @@ impl PuzzleGridUI {
                 for row in 0..board.solution.n_rows {
                     for col in 0..board.solution.n_variants {
                         if let Some(cell) = self.cells.get(row).and_then(|row| row.get(col)) {
-                            let cell = cell.borrow_mut();
+                            let mut cell = cell.borrow_mut();
                             // If there's a solution, show it
                             if let Some(tile) = board.selected[row][col] {
                                 cell.set_solution(Some(&tile));
                             } else {
                                 // Otherwise show candidates
                                 cell.set_solution(None);
-                                // let correct_tile = board.solution.get(row, col);
-                                for variant in board.get_variants().iter() {
-                                    if let Some(candidate) = board.get_candidate(row, col, *variant)
-                                    {
-                                        cell.set_candidate(*variant, Some(&candidate));
-                                        cell.highlight_candidate(*variant, None);
-                                    }
-                                }
+                                cell.set_candidates(
+                                    board
+                                        .get_variants()
+                                        .iter()
+                                        .map(|v| board.get_candidate(row, col, *v))
+                                        .collect::<Vec<_>>(),
+                                );
                             }
                         }
                     }
                 }
+                self.completed_clues = board.completed_clues.clone();
             }
             GameStateEvent::CellHintHighlight { cell, variant } => {
                 self.highlight_candidate(cell.0, cell.1, *variant);
             }
+            GameStateEvent::ClueFocused(clue) => {
+                self.set_current_clue(clue);
+            }
+            GameStateEvent::ClueHintHighlight { clue_with_grouping } => {
+                self.current_clue_hint = Some(clue_with_grouping.clue.clone());
+                self.sync_xray();
+            }
             _ => {}
         }
+    }
+
+    fn set_current_clue(&mut self, clue: &Option<Clue>) {
+        self.current_focused_clue = clue.clone();
+        if self.current_focused_clue != self.current_clue_hint {
+            // clear the hint state we move on
+            self.current_clue_hint = None;
+        }
+        self.sync_xray();
+    }
+
+    fn sync_xray(&self) {
+        let current_focused_clue_completed = self
+            .current_focused_clue
+            .as_ref()
+            .map(|clue| self.completed_clues.contains(clue))
+            .unwrap_or(false);
+
+        let selected_clue_is_hint = self.current_clue_hint == self.current_focused_clue;
+
+        let xray_clue = if (selected_clue_is_hint || self.current_xray_enabled)
+            && !current_focused_clue_completed
+        {
+            self.current_focused_clue.clone()
+        } else {
+            None
+        };
+        for row in &self.cells {
+            for cell in row {
+                cell.borrow_mut().set_clue_xray(&xray_clue);
+            }
+        }
+    }
+
+    fn set_clue_xray_enabled(&mut self, enabled: bool) {
+        self.current_xray_enabled = enabled;
+        self.sync_xray();
     }
 
     fn set_grid_size(&mut self, n_rows: usize, n_variants: usize) {

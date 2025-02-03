@@ -4,29 +4,31 @@ use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
 use crate::model::{Difficulty, GameActionEvent, GameStateEvent, GlobalEvent};
+use crate::ui::game_controls_monitor::GameControlsMonitor;
 use crate::ui::seed_dialog::SeedDialog;
+use crate::ui::settings_menu_ui::SettingsMenuUI;
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use gio::{Menu, SimpleAction};
-use glib::prelude::ToVariant;
 use glib::timeout_add_local_once;
 use gtk4::gdk::{Display, Monitor};
 use gtk4::{
-    prelude::*, AboutDialog, Align, Application, ApplicationWindow, Box, Button, ButtonsType,
-    CssProvider, DialogFlags, HeaderBar, Label, License, MenuButton, MessageDialog, MessageType,
-    Orientation, ScrolledWindow, Widget, Window, STYLE_PROVIDER_PRIORITY_APPLICATION,
+    prelude::*, AboutDialog, Application, ApplicationWindow, Button, ButtonsType, CssProvider,
+    DialogFlags, HeaderBar, Label, License, MenuButton, MessageDialog, MessageType, Orientation,
+    STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use super::clue_set_ui::ClueSetUI;
+use super::audio_set::AudioSet;
+use super::clue_panels_ui::CluePanelsUI;
 use super::game_info_ui::GameInfoUI;
 use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
 use super::puzzle_grid_ui::PuzzleGridUI;
-use super::ResourceSet;
+use super::resource_manager::ResourceManager;
 
 fn seed_from_env() -> Option<u64> {
     std::env::var("SEED")
@@ -55,10 +57,10 @@ fn pause_screen() -> Rc<gtk4::Box> {
 fn hint_button_handler(
     game_action_emitter: EventEmitter<GameActionEvent>,
     game_state: &Rc<RefCell<GameState>>,
-    resources: &Rc<ResourceSet>,
+    audio_set: &Rc<AudioSet>,
 ) -> impl Fn(&Button) {
     let game_state = Rc::clone(&game_state);
-    let resources_hint = Rc::clone(&resources);
+    let audio_set_hint = Rc::clone(&audio_set);
 
     move |button| {
         let board_is_incorrect = game_state.borrow().current_board.is_incorrect();
@@ -67,7 +69,7 @@ fn hint_button_handler(
             log::trace!(target: "window", "Board is incorrect, showing rewind dialog");
             game_action_emitter.emit(GameActionEvent::IncrementHintsUsed);
             // Play game over sound using a MediaStream
-            let media = resources_hint.random_lose_sound();
+            let media = audio_set_hint.random_lose_sound();
             media.play();
 
             // show dialog
@@ -109,7 +111,10 @@ pub fn build_ui(app: &Application) {
     let (global_event_emitter, global_event_observer) = Channel::<GlobalEvent>::new();
 
     let settings = Rc::new(RefCell::new(Settings::load()));
-    let resources = Rc::new(ResourceSet::new());
+    let resource_manager =
+        ResourceManager::new(global_event_observer.clone(), global_event_emitter.clone());
+    let image_set = resource_manager.borrow().get_image_set();
+    let audio_set = resource_manager.borrow().get_audio_set();
 
     let display = Display::default().expect("Could not connect to a display.");
     let monitor = display
@@ -159,7 +164,6 @@ pub fn build_ui(app: &Application) {
         global_event_emitter.clone(),
         game_action_observer.clone(),
         game_state_observer.clone(),
-        resources.clone(),
         scrolled_window.clone(),
         settings.borrow().difficulty,
     );
@@ -175,15 +179,18 @@ pub fn build_ui(app: &Application) {
     let menu = Menu::new();
 
     // Create Settings submenu
-    let settings_menu = Menu::new();
-    settings_menu.append(Some("Show Clue Tooltips"), Some("win.toggle-tooltips"));
+    let settings_menu_ui = SettingsMenuUI::new(
+        window.clone(),
+        global_event_emitter.clone(),
+        settings.clone(),
+    );
 
     // Add all menu items
     menu.append(Some("New Game"), Some("win.new-game"));
     menu.append(Some("Restart"), Some("win.restart"));
     menu.append(Some("Statistics"), Some("win.statistics"));
     menu.append(Some("Seed"), Some("win.seed"));
-    menu.append_submenu(Some("Settings"), &settings_menu);
+    menu.append_submenu(Some("Settings"), settings_menu_ui.borrow().get_menu());
     menu.append(Some("About"), Some("win.about"));
 
     // Add menu button to header bar
@@ -258,20 +265,27 @@ pub fn build_ui(app: &Application) {
         game_action_emitter.clone(),
         game_state_observer.clone(),
         global_event_observer.clone(),
-        resources.clone(),
+        image_set.clone(),
         default_layout.clone(),
+        &settings.borrow(),
     );
 
-    let clue_set_ui = ClueSetUI::new(
+    let clue_set_ui = CluePanelsUI::new(
         game_action_emitter.clone(),
         game_state_observer.clone(),
         global_event_observer.clone(),
-        &resources,
+        &image_set,
         default_layout.clone(),
+        &settings.borrow(),
     );
 
     // Create game state with UI references
-    let game_state = GameState::new(game_action_observer.clone(), game_state_emitter.clone());
+    let game_state = GameState::new(
+        game_action_observer.clone(),
+        game_state_emitter.clone(),
+        global_event_observer.clone(),
+        settings.borrow().clone(),
+    );
 
     // Remove the old button_box since controls are now in header
     let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
@@ -280,7 +294,7 @@ pub fn build_ui(app: &Application) {
         game_state_observer.clone(),
         game_action_emitter.clone(),
         &stats_manager,
-        &resources,
+        &audio_set,
         &window,
     );
 
@@ -313,7 +327,7 @@ pub fn build_ui(app: &Application) {
     // Create buttons first
     right_box.append(history_controls_ui.borrow().undo_button.as_ref());
     right_box.append(history_controls_ui.borrow().redo_button.as_ref());
-    if GameState::is_debug_mode() {
+    if Settings::is_debug_mode() {
         right_box.append(&solve_button);
     }
     right_box.append(&hint_button);
@@ -346,7 +360,7 @@ pub fn build_ui(app: &Application) {
     hint_button.connect_clicked(hint_button_handler(
         game_action_emitter.clone(),
         &game_state,
-        &resources,
+        &audio_set,
     ));
 
     // Add CSS for selected cells
@@ -457,25 +471,6 @@ pub fn build_ui(app: &Application) {
     });
     window.add_action(&action_about);
 
-    // Add toggle tooltips action
-    let action_toggle_tooltips = SimpleAction::new_stateful(
-        "toggle-tooltips",
-        None,
-        &settings.borrow().clue_tooltips_enabled.to_variant(),
-    );
-    let settings_ref = Rc::clone(&settings);
-    {
-        let global_event_emitter = global_event_emitter.clone();
-        action_toggle_tooltips.connect_activate(move |action, _| {
-            let mut settings = settings_ref.borrow_mut();
-            settings.clue_tooltips_enabled = !settings.clue_tooltips_enabled;
-            action.set_state(&settings.clue_tooltips_enabled.to_variant());
-            let _ = settings.save();
-            global_event_emitter.emit(GlobalEvent::SettingsChanged(settings.clone()));
-        });
-        window.add_action(&action_toggle_tooltips);
-    }
-
     let submit_ui_cleanup = Rc::clone(&submit_ui);
     let puzzle_grid_ui_cleanup = Rc::clone(&puzzle_grid_ui);
     let clue_set_ui_cleanup = Rc::clone(&clue_set_ui);
@@ -485,7 +480,14 @@ pub fn build_ui(app: &Application) {
         game_state_observer.clone(),
     );
 
-    // publish initial messages
+    // Initialize game controls
+    let game_controls = GameControlsMonitor::new(
+        window.clone(),
+        scrolled_window.clone(),
+        game_action_emitter.clone(),
+        global_event_observer.clone(),
+        &settings.borrow(),
+    );
 
     // Initialize game with saved difficulty
     game_action_emitter.emit(GameActionEvent::NewGame(
@@ -521,5 +523,8 @@ pub fn build_ui(app: &Application) {
         timer_button.borrow_mut().destroy();
         layout_manager.borrow_mut().destroy();
         seed_dialog.borrow_mut().destroy();
+        settings_menu_ui.borrow_mut().destroy();
+        game_controls.borrow_mut().destroy();
+        resource_manager.borrow_mut().destroy();
     });
 }

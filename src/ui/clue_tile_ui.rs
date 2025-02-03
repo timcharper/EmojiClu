@@ -3,32 +3,48 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::destroyable::Destroyable;
-use crate::model::{CluesSizing, TileAssertion};
-use gdk_pixbuf::Pixbuf;
+use crate::model::{Clue, ClueType, CluesSizing, HorizontalClueType, Tile, VerticalClueType};
 use gtk4::glib::{timeout_add_local_once, SourceId};
 use gtk4::prelude::*;
 use gtk4::{Frame, Image, Overlay, Widget};
 
-use super::ResourceSet;
+use super::ImageSet;
+
+enum Decoration {
+    Negative,
+    Maybe,
+}
+
+enum ClueTileContents {
+    TileAssertion(Tile, Option<Decoration>),
+    LeftOf, /* show the LeftOf icon */
+    None,
+}
 
 pub struct ClueTileUI {
     pub frame: Frame,
     pub overlay: Overlay,
-    pub image: Image,       // Main tile image
-    pub x_image: Image,     // Red X for negative assertions
-    pub maybe_image: Image, // Question mark for maybe assertions
-    pub left_of: Image,     // LeftOf clues
-    pub highlight_frame: Arc<Frame>,
-    pub decoration_frame: Arc<Frame>, // For red border on negative assertions or yellow for maybe
-    pub resources: Rc<ResourceSet>,
+    image: Image,       // Main tile image
+    x_image: Image,     // Red X for negative assertions
+    maybe_image: Image, // Question mark for maybe assertions
+    left_of: Image,     // LeftOf clues
+    highlight_frame: Arc<Frame>,
+    decoration_frame: Arc<Frame>, // For red border on negative assertions or yellow for maybe
+    resources: Rc<ImageSet>,
     highlight_timeout: Rc<RefCell<Option<SourceId>>>, // Track active highlight timeout
+    clue: Option<Clue>,
+    idx: usize,
 }
+
 impl ClueTileUI {
-    pub fn new(resources: Rc<ResourceSet>) -> Self {
-        let frame = Frame::new(None);
-        frame.set_css_classes(&["clue-cell-frame"]);
-        frame.set_hexpand(false);
-        frame.set_vexpand(false);
+    pub fn new(resources: Rc<ImageSet>, clue: Option<Clue>, idx: usize) -> Self {
+        let frame = Frame::builder()
+            .visible(true)
+            .name("clue-cell")
+            .css_classes(["clue-cell"])
+            .hexpand(false)
+            .vexpand(false)
+            .build();
 
         let image = Image::new();
 
@@ -80,6 +96,8 @@ impl ClueTileUI {
             decoration_frame: Arc::new(decoration_frame),
             resources,
             highlight_timeout: Rc::new(RefCell::new(None)),
+            clue,
+            idx,
         }
     }
 
@@ -96,7 +114,8 @@ impl ClueTileUI {
             .set_pixel_size(layout.clue_annotation_size.width);
     }
 
-    pub fn set_tile(&self, assertion: Option<&TileAssertion>) {
+    pub fn set_clue(&mut self, clue: Option<&Clue>) {
+        self.clue = clue.cloned();
         // reset decorations
         self.highlight_frame.set_visible(false);
         self.maybe_image.set_visible(false);
@@ -104,23 +123,7 @@ impl ClueTileUI {
         self.left_of.set_visible(false);
         self.decoration_frame.set_visible(false);
 
-        if let Some(assertion) = assertion {
-            if let Some(pixbuf) = self.resources.get_tile_icon(&assertion.tile) {
-                self.image.set_from_pixbuf(Some(&pixbuf));
-                self.image.set_visible(true);
-            }
-            if !assertion.assertion {
-                self.set_negative();
-            }
-        } else {
-            self.image.set_from_pixbuf(None);
-        }
-    }
-
-    pub fn show_left_of(&self) {
-        let dot_pixbuf = self.resources.get_left_of();
-        self.left_of.set_from_pixbuf(Some(&dot_pixbuf));
-        self.left_of.set_visible(true);
+        self.sync_images();
     }
 
     fn set_negative(&self) {
@@ -134,7 +137,7 @@ impl ClueTileUI {
         self.decoration_frame.set_visible(true);
     }
 
-    pub(crate) fn set_maybe(&self) {
+    fn set_maybe(&self) {
         let maybe_pixbuf = self.resources.get_maybe_assertion();
         self.maybe_image.set_from_pixbuf(Some(&maybe_pixbuf));
         self.maybe_image.set_visible(true);
@@ -173,6 +176,73 @@ impl ClueTileUI {
         }
         let mut highlight_timeout = self.highlight_timeout.borrow_mut();
         *highlight_timeout = Some(new_source_id);
+    }
+
+    pub(crate) fn set_image_set(&mut self, image_set: Rc<ImageSet>) {
+        self.resources = image_set;
+        self.sync_images();
+    }
+
+    fn sync_images(&self) {
+        if let Some(clue) = &self.clue {
+            let my_tile_info = ClueTileUI::get_clue_tile_contents(clue, self.idx);
+
+            match my_tile_info {
+                ClueTileContents::TileAssertion(tile, decoration) => {
+                    if let Some(pixbuf) = self.resources.get_solution_icon(&tile) {
+                        self.image.set_from_pixbuf(Some(&pixbuf));
+                        self.image.set_visible(true);
+                    }
+                    if let Some(decoration) = decoration {
+                        match decoration {
+                            Decoration::Negative => self.set_negative(),
+                            Decoration::Maybe => self.set_maybe(),
+                        }
+                    }
+                }
+                ClueTileContents::LeftOf => {
+                    let dot_pixbuf = self.resources.get_left_of();
+                    self.left_of.set_from_pixbuf(Some(&dot_pixbuf));
+                    self.left_of.set_visible(true);
+                    self.image.set_from_pixbuf(None);
+                }
+                ClueTileContents::None => {
+                    self.image.set_from_pixbuf(None);
+                }
+            }
+        }
+    }
+
+    fn get_clue_tile_contents(clue: &Clue, idx: usize) -> ClueTileContents {
+        match &clue.clue_type {
+            ClueType::Horizontal(HorizontalClueType::LeftOf) => match idx {
+                0 => ClueTileContents::TileAssertion(clue.assertions[0].tile, None),
+                1 => ClueTileContents::LeftOf,
+                2 => ClueTileContents::TileAssertion(clue.assertions[1].tile, None),
+                _ => ClueTileContents::None,
+            },
+            ClueType::Vertical(VerticalClueType::OneMatchesEither) => match idx {
+                0 => ClueTileContents::TileAssertion(clue.assertions[0].tile, None),
+                1 => ClueTileContents::TileAssertion(
+                    clue.assertions[1].tile,
+                    Some(Decoration::Maybe),
+                ),
+                2 => ClueTileContents::TileAssertion(
+                    clue.assertions[2].tile,
+                    Some(Decoration::Maybe),
+                ),
+                _ => ClueTileContents::None,
+            },
+            _ => match clue.assertions.get(idx) {
+                Some(assertion) if assertion.is_positive() => {
+                    ClueTileContents::TileAssertion(assertion.tile, None)
+                }
+                Some(assertion) if assertion.is_negative() => {
+                    ClueTileContents::TileAssertion(assertion.tile, Some(Decoration::Negative))
+                }
+                _ => ClueTileContents::None,
+            },
+        }
     }
 }
 

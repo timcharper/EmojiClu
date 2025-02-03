@@ -1,15 +1,16 @@
 use glib::SignalHandlerId;
-use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Widget};
+use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Overlay, Widget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
-use crate::model::LayoutConfiguration;
+use crate::events::EventEmitter;
 use crate::model::{Clue, CluesSizing};
 use crate::model::{ClueOrientation, TileAssertion};
 use crate::model::{ClueType, HorizontalClueType, VerticalClueType};
+use crate::model::{GameActionEvent, LayoutConfiguration};
 use crate::ui::clue_tile_ui::ClueTileUI;
-use crate::ui::ResourceSet;
+use crate::ui::ImageSet;
 
 #[derive(Debug)]
 struct ClueTooltipData {
@@ -26,16 +27,265 @@ const NEW_GROUP_CSS_CLASS: &str = "new-group";
 
 pub struct ClueUI {
     pub frame: Frame,
-    pub cells: Vec<ClueTileUI>,
-    pub orientation: ClueOrientation,
-    tooltip_data: Rc<RefCell<Option<ClueTooltipData>>>,
-    tooltip_widget: Rc<RefCell<Option<Box>>>,
-    resources: Rc<ResourceSet>,
+    grid: Grid,
+    clue_tiles: Vec<ClueTileUI>,
+    orientation: ClueOrientation,
+    tooltip_data: Option<ClueTooltipData>,
+    tooltip_widget: Option<Box>,
+    resources: Rc<ImageSet>,
     layout: CluesSizing,
     tooltip_signal: Option<SignalHandlerId>,
+    game_action_emitter: EventEmitter<GameActionEvent>,
+    clue_idx: usize,
+    clue: Clue,
+    gesture_right: Option<gtk4::GestureClick>,
+    clue_xray_enabled: bool,
 }
 
 impl ClueUI {
+    pub fn new(
+        resources: Rc<ImageSet>,
+        clue: Clue,
+        layout: CluesSizing,
+        game_action_emitter: EventEmitter<GameActionEvent>,
+        clue_idx: usize,
+        clue_xray_enabled: bool,
+        tooltips_enabled: bool,
+    ) -> Rc<RefCell<Self>> {
+        let orientation = clue.orientation();
+        let frame = Frame::builder()
+            .name(&format!("clue-frame-{}", orientation))
+            .css_classes(["clue-frame"])
+            // Set up tooltip handling
+            .has_tooltip(tooltips_enabled)
+            .build();
+
+        let grid = Grid::builder()
+            .name("clue-cell-grid")
+            .css_classes(["clue-cell-grid"])
+            .row_spacing(0)
+            .column_spacing(0)
+            .build();
+
+        // Create the three cells for this clue
+        let mut cells = Vec::new();
+        for i in 0..3 {
+            let clue_cell = ClueTileUI::new(Rc::clone(&resources), Some(clue.clone()), i);
+            match orientation {
+                ClueOrientation::Horizontal => {
+                    grid.attach(&clue_cell.frame, i as i32, 0, 1, 1);
+                }
+                ClueOrientation::Vertical => {
+                    grid.attach(&clue_cell.frame, 0, i as i32, 1, 1);
+                }
+            }
+            cells.push(clue_cell);
+        }
+
+        // Add content to root overlay instead of frame directly
+        frame.set_child(Some(&grid));
+
+        let clue_ui = Self {
+            frame,
+            grid,
+            clue_tiles: cells,
+            orientation,
+            tooltip_data: None,
+            tooltip_widget: None,
+            resources,
+            layout,
+            tooltip_signal: None,
+            game_action_emitter,
+            clue_idx,
+            clue,
+            gesture_right: None,
+            clue_xray_enabled,
+        };
+        let clue_ui_ref = Rc::new(RefCell::new(clue_ui));
+        ClueUI::wire_handlers(clue_ui_ref.clone());
+        ClueUI::wire_tooltip_handlers(clue_ui_ref.clone());
+        clue_ui_ref
+            .borrow_mut()
+            .update_xray_enabled(clue_xray_enabled);
+        clue_ui_ref
+    }
+
+    fn wire_tooltip_handlers(clue_ui: Rc<RefCell<Self>>) {
+        let weak_clue_ui = Rc::downgrade(&clue_ui);
+        // let mut clue_ui = clue_ui.borrow_mut();
+        // let frame = clue_ui.frame.clone();
+        // let tooltip_signal = frame.connect_query_tooltip(move |_, _, _, _, tooltip| {
+        //     if let Some(clue_ui) = weak_clue_ui.upgrade() {
+        //         let clue_ui = clue_ui.borrow();
+        //         let tooltip_widget = clue_ui.create_tooltip_widget();
+        //         tooltip.set_custom(Some(tooltip_widget.upcast::<Widget>()));
+        //     }
+        //     true
+        // });
+        let mut clue_ui = clue_ui.borrow_mut();
+
+        let tooltip_signal =
+            clue_ui
+                .frame
+                .connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
+                    if let Some(clue_ui) = weak_clue_ui.upgrade() {
+                        let clue_ui = clue_ui.borrow();
+                        if let Some(tooltip_widget) = &clue_ui.tooltip_widget {
+                            tooltip.set_custom(Some(tooltip_widget));
+                        }
+                    }
+                    true
+                });
+        clue_ui.tooltip_signal = Some(tooltip_signal);
+
+        // let tooltip_widget_clone = Rc::downgrade(&tooltip_widget);
+        // let tooltip_signal =
+        //     frame.connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
+        //         if let Some(tooltip_widget) = tooltip_widget_clone.upgrade() {
+        //             if let Some(ref w) = *tooltip_widget.borrow() {
+        //                 tooltip.set_custom(Some(w));
+        //             }
+        //         }
+        //         true
+        //     });
+    }
+
+    pub fn set_tooltips_enabled(&mut self, enabled: bool) {
+        self.frame.set_has_tooltip(enabled);
+    }
+
+    fn wire_handlers(clue_ui: Rc<RefCell<Self>>) {
+        let weak_clue_ui = Rc::downgrade(&clue_ui);
+        let mut clue_ui = clue_ui.borrow_mut();
+        let clue_orientation = clue_ui.orientation;
+        let clue_idx = clue_ui.clue_idx;
+
+        // Right click handler
+        {
+            let weak_clue_ui = weak_clue_ui.clone();
+            let gesture_right = gtk4::GestureClick::new();
+            gesture_right.set_button(3);
+            gesture_right.connect_pressed(move |gesture, _, _, _| {
+                if let Some(clue_ui) = weak_clue_ui.upgrade() {
+                    let clue_ui = clue_ui.borrow();
+                    clue_ui
+                        .game_action_emitter
+                        .emit(GameActionEvent::ClueToggleComplete(
+                            clue_orientation,
+                            clue_idx,
+                        ));
+                    gesture.set_state(gtk4::EventSequenceState::Claimed);
+                }
+            });
+            clue_ui.frame.add_controller(gesture_right.clone());
+            clue_ui.gesture_right = Some(gesture_right);
+        }
+
+        // Left click handler
+        {
+            let weak_clue_ui = weak_clue_ui.clone();
+            let gesture_left = gtk4::GestureClick::new();
+            gesture_left.set_button(1);
+            gesture_left.connect_pressed(move |gesture, _, _, _| {
+                if let Some(clue_ui) = weak_clue_ui.upgrade() {
+                    let clue_ui = clue_ui.borrow();
+                    clue_ui
+                        .game_action_emitter
+                        .emit(GameActionEvent::ClueSelect(Some((
+                            clue_orientation,
+                            clue_idx,
+                        ))));
+                    gesture.set_state(gtk4::EventSequenceState::Claimed);
+                }
+            });
+            clue_ui.frame.add_controller(gesture_left.clone());
+        }
+    }
+
+    fn apply_layout(&self) {
+        match self.orientation {
+            ClueOrientation::Horizontal => {
+                self.frame.set_size_request(
+                    self.layout.horizontal_clue_panel.clue_dimensions.width,
+                    self.layout.horizontal_clue_panel.clue_dimensions.height,
+                );
+            }
+            ClueOrientation::Vertical => {
+                self.frame.set_size_request(
+                    self.layout.vertical_clue_panel.clue_dimensions.width,
+                    self.layout.vertical_clue_panel.clue_dimensions.height,
+                );
+
+                if self.frame.has_css_class(NEW_GROUP_CSS_CLASS) {
+                    self.frame
+                        .set_margin_start(self.layout.vertical_clue_panel.group_spacing);
+                } else {
+                    self.frame.set_margin_start(0);
+                }
+            }
+        }
+        self.grid.set_margin_bottom(self.layout.clue_padding);
+        self.grid.set_margin_top(self.layout.clue_padding);
+        self.grid.set_margin_start(self.layout.clue_padding);
+        self.grid.set_margin_end(self.layout.clue_padding);
+
+        // Update individual tile sizes
+        for cell in &self.clue_tiles {
+            cell.update_layout(&self.layout);
+        }
+    }
+
+    pub(crate) fn update_layout(&mut self, layout: &LayoutConfiguration) {
+        self.layout = layout.clues.clone();
+        self.apply_layout();
+    }
+
+    pub fn set_clue(&mut self, clue: Option<&Clue>, is_new_group: bool) {
+        if let Some(clue) = clue {
+            let tooltip_data = ClueTooltipData { clue: clue.clone() };
+            self.tooltip_data = Some(tooltip_data);
+
+            // Create new tooltip widget when clue changes
+            let new_tooltip = self.create_tooltip_widget();
+            self.tooltip_widget = Some(new_tooltip);
+
+            for clue_tile in &mut self.clue_tiles {
+                clue_tile.set_clue(Some(clue));
+            }
+            self.frame.set_visible(true);
+            if clue.is_vertical() && is_new_group {
+                self.frame.add_css_class(NEW_GROUP_CSS_CLASS);
+            } else {
+                self.frame.remove_css_class(NEW_GROUP_CSS_CLASS);
+            }
+            self.apply_layout();
+        } else {
+            self.tooltip_data = None;
+            self.tooltip_widget = None;
+            // clear
+            for clue_tile in &mut self.clue_tiles {
+                clue_tile.set_clue(None);
+            }
+
+            self.frame.set_visible(false);
+            self.frame.remove_css_class(NEW_GROUP_CSS_CLASS);
+        }
+    }
+
+    pub fn highlight_for(&self, from_secs: std::time::Duration) {
+        for cell in &self.clue_tiles {
+            cell.highlight_for(from_secs);
+        }
+    }
+
+    pub fn set_completed(&self, completed: bool) {
+        if completed {
+            self.frame.add_css_class("completed");
+        } else {
+            self.frame.remove_css_class("completed");
+        }
+    }
+
     fn parse_template_elements(&self, template: &str) -> Vec<TemplateElement> {
         let mut elements = Vec::new();
         let mut current_text = String::new();
@@ -92,10 +342,10 @@ impl ClueUI {
                 }
                 TemplateElement::Tile(tile_idx) => {
                     // Get the tile assertion and create an image if it exists
-                    self.cells
+                    self.clue_tiles
                         .get(tile_idx)
                         .and_then(|_| clue_data.clue.assertions.get(tile_idx))
-                        .and_then(|ta| self.resources.get_tile_icon(&ta.tile))
+                        .and_then(|ta| self.resources.get_candidate_icon(&ta.tile))
                         .map(|pixbuf| {
                             let image = gtk4::Image::from_pixbuf(Some(&pixbuf));
                             image.upcast::<Widget>()
@@ -109,12 +359,11 @@ impl ClueUI {
 
     fn create_tooltip_widget(&self) -> Box {
         let tooltip_box = Box::new(Orientation::Vertical, 5);
-        let clue_data = self.tooltip_data.borrow();
-        if clue_data.is_none() {
+        if self.tooltip_data.is_none() {
             return tooltip_box;
         }
 
-        let clue_data = clue_data.as_ref().unwrap();
+        let clue_data = self.tooltip_data.as_ref().unwrap();
 
         tooltip_box.set_margin_start(5);
         tooltip_box.set_margin_end(5);
@@ -216,206 +465,67 @@ impl ClueUI {
         tooltip_box
     }
 
-    pub fn new(
-        resources: Rc<ResourceSet>,
-        orientation: ClueOrientation,
-        layout: CluesSizing,
-    ) -> Self {
-        let frame = Frame::builder()
-            .name(&format!("clue-cell-frame-{}", orientation))
-            .css_classes(["clue-cell-frame"])
-            .build();
-
-        let grid = Grid::new();
-        let tooltip_data = Rc::new(RefCell::new(None));
-        let tooltip_widget = Rc::new(RefCell::new(None));
-
-        // Set up tooltip handling
-        frame.set_has_tooltip(true);
-        let tooltip_widget_clone = Rc::downgrade(&tooltip_widget);
-        let tooltip_signal =
-            frame.connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
-                if let Some(tooltip_widget) = tooltip_widget_clone.upgrade() {
-                    if let Some(ref w) = *tooltip_widget.borrow() {
-                        tooltip.set_custom(Some(w));
-                    }
-                }
-                true
-            });
-
-        grid.set_row_spacing(0);
-        grid.set_column_spacing(0);
-
-        // Create the three cells for this clue
-        let mut cells = Vec::new();
-        for i in 0..3 {
-            let clue_cell = ClueTileUI::new(Rc::clone(&resources));
-            match orientation {
-                ClueOrientation::Horizontal => {
-                    grid.attach(&clue_cell.frame, i as i32, 0, 1, 1);
-                }
-                ClueOrientation::Vertical => {
-                    grid.attach(&clue_cell.frame, 0, i as i32, 1, 1);
-                }
-            }
-            cells.push(clue_cell);
-        }
-
-        frame.set_child(Some(&grid));
-
-        Self {
-            frame,
-            cells,
-            orientation,
-            tooltip_data,
-            tooltip_widget,
-            resources,
-            layout,
-            tooltip_signal: Some(tooltip_signal),
-        }
-    }
-
-    fn apply_layout(&self) {
-        match self.orientation {
-            ClueOrientation::Horizontal => {
-                self.frame.set_size_request(
-                    self.layout.horizontal_clue_panel.clue_dimensions.width,
-                    self.layout.horizontal_clue_panel.clue_dimensions.height,
-                );
-            }
-            ClueOrientation::Vertical => {
-                self.frame.set_size_request(
-                    self.layout.vertical_clue_panel.clue_dimensions.width,
-                    self.layout.vertical_clue_panel.clue_dimensions.height,
-                );
-
-                if self.frame.has_css_class(NEW_GROUP_CSS_CLASS) {
-                    self.frame
-                        .set_margin_start(self.layout.vertical_clue_panel.group_spacing);
-                } else {
-                    self.frame.set_margin_start(0);
-                }
-            }
-        }
-
-        // Update individual tile sizes
-        for cell in &self.cells {
-            cell.update_layout(&self.layout);
-        }
-    }
-
-    pub(crate) fn update_layout(&mut self, layout: &LayoutConfiguration) {
-        self.layout = layout.clues.clone();
-        self.apply_layout();
-    }
-
-    pub fn set_clue(&self, clue: Option<&Clue>, is_new_group: bool) {
-        if let Some(clue) = clue {
-            let tooltip_data = ClueTooltipData { clue: clue.clone() };
-            *self.tooltip_data.borrow_mut() = Some(tooltip_data);
-
-            // Create new tooltip widget when clue changes
-            let new_tooltip = self.create_tooltip_widget();
-            *self.tooltip_widget.borrow_mut() = Some(new_tooltip);
-
-            match self.orientation {
-                ClueOrientation::Horizontal => self.set_horiz_clue(clue),
-                ClueOrientation::Vertical => self.set_vert_clue(clue),
-            }
-            self.frame.set_visible(true);
-            if clue.is_vertical() && is_new_group {
-                self.frame.add_css_class(NEW_GROUP_CSS_CLASS);
+    pub fn set_selected(&self, maybe_clue: &Option<Clue>) {
+        if let Some(clue) = maybe_clue {
+            if clue == &self.clue {
+                self.frame.add_css_class("selected");
+                self.frame.remove_css_class("not-selected");
             } else {
-                self.frame.remove_css_class(NEW_GROUP_CSS_CLASS);
+                self.frame.remove_css_class("selected");
+                self.frame.add_css_class("not-selected");
             }
-            self.apply_layout();
         } else {
-            *self.tooltip_data.borrow_mut() = None;
-            *self.tooltip_widget.borrow_mut() = None;
-            // clear
-            for cell in &self.cells {
-                cell.set_tile(None);
-            }
-
-            self.frame.set_visible(false);
-            self.frame.remove_css_class(NEW_GROUP_CSS_CLASS);
+            self.frame.remove_css_class("selected");
+            self.frame.remove_css_class("not-selected");
         }
     }
 
-    fn set_vert_clue(&self, clue: &Clue) {
-        for tile_idx in 0..3 {
-            self.cells[tile_idx].set_tile(clue.assertions.get(tile_idx));
-        }
-
-        match clue.clue_type {
-            ClueType::Vertical(VerticalClueType::OneMatchesEither) => {
-                self.cells[1].set_maybe();
-                self.cells[2].set_maybe();
-            }
-            _ => {
-                for tile_idx in 0..3 {
-                    self.cells[tile_idx].set_tile(clue.assertions.get(tile_idx));
-                }
-            }
-        }
+    pub(crate) fn update_xray_enabled(&mut self, enabled: bool) {
+        self.clue_xray_enabled = enabled;
     }
 
-    fn set_horiz_clue(&self, clue: &Clue) {
-        // Handle LeftOf clues specially
-        match &clue.clue_type {
-            ClueType::Horizontal(HorizontalClueType::LeftOf) => {
-                self.cells[0].set_tile(clue.assertions.get(0));
-                self.cells[1].set_tile(None);
-                self.cells[2].set_tile(clue.assertions.get(1));
-
-                self.cells[1].show_left_of();
-            }
-            _ => {
-                for tile_idx in 0..3 {
-                    self.cells[tile_idx].set_tile(clue.assertions.get(tile_idx));
-                }
-            }
-        }
-        //  else
+    pub(crate) fn set_image_set(&mut self, image_set: Rc<ImageSet>) {
+        self.resources = image_set;
+        self.sync_images();
     }
 
-    pub fn highlight_for(&self, from_secs: std::time::Duration) {
-        for cell in &self.cells {
-            cell.highlight_for(from_secs);
+    fn sync_images(&mut self) {
+        for clue_tile in &mut self.clue_tiles {
+            clue_tile.set_image_set(self.resources.clone());
         }
-    }
-
-    pub fn set_completed(&self, completed: bool) {
-        if completed {
-            self.frame.add_css_class("completed-clue");
-        } else {
-            self.frame.remove_css_class("completed-clue");
-        }
-        let opacity = if completed { 0.1 } else { 1.0 };
-        self.frame.set_opacity(opacity);
     }
 }
 
 impl Destroyable for ClueUI {
     fn destroy(&mut self) {
+        log::trace!(target: "clue_ui", "Destroying clue UI");
+
+        // Remove the click gesture controller
+        if let Some(gesture) = self.gesture_right.take() {
+            self.frame.remove_controller(&gesture);
+        }
+        log::trace!(target: "clue_ui", "Removed gesture controller");
+
         if let Some(tooltip_signal) = self.tooltip_signal.take() {
             self.frame.disconnect(tooltip_signal);
         }
-        for cell in &mut self.cells {
+        log::trace!(target: "clue_ui", "Disconnected tooltip_signal");
+        for cell in &mut self.clue_tiles {
             cell.destroy();
         }
+        log::trace!(target: "clue_ui", "Destroyed clue UI");
     }
 }
 
 impl Drop for ClueUI {
     fn drop(&mut self) {
         // Clear tooltip data and widget first to drop any resource references
-        *self.tooltip_data.borrow_mut() = None;
-        *self.tooltip_widget.borrow_mut() = None;
+        self.tooltip_data = None;
+        self.tooltip_widget = None;
 
         // Remove all cells from the grid
         if let Some(grid) = self.frame.child().and_then(|w| w.downcast::<Grid>().ok()) {
-            for cell in &self.cells {
+            for cell in &self.clue_tiles {
                 if cell.frame.parent().is_some() {
                     grid.remove(&cell.frame);
                 }

@@ -6,8 +6,25 @@ use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
+    #[serde(default = "default_version")]
+    version: u32,
+
+    #[serde(default)]
     pub difficulty: Difficulty,
+
+    #[serde(default = "default_true")]
     pub clue_tooltips_enabled: bool,
+
+    #[serde(default)]
+    pub clue_xray_enabled: bool,
+}
+
+// Helper functions for default values
+fn default_version() -> u32 {
+    1
+}
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -15,6 +32,8 @@ impl Default for Settings {
         Settings {
             difficulty: Difficulty::default(),
             clue_tooltips_enabled: true,
+            clue_xray_enabled: false,
+            version: 1,
         }
     }
 }
@@ -23,12 +42,12 @@ impl Settings {
     pub fn load() -> Self {
         let path = Self::settings_path();
         if let Ok(contents) = fs::read_to_string(&path) {
-            if let Ok(settings) = serde_json::from_str(&contents) {
+            if let Ok(mut settings) = serde_json::from_str::<Settings>(&contents) {
+                settings.migrate();
                 return settings;
             }
         }
         let default = Settings::default();
-        // Try to save default settings, but don't panic if it fails
         let _ = default.save();
         default
     }
@@ -48,5 +67,18 @@ impl Settings {
         let mut path = data_dir.join("mindhunt");
         path.push("settings.json");
         path
+    }
+
+    fn migrate(&mut self) {
+        match self.version {
+            0 => {
+                self.version = 1;
+            }
+            _ => (),
+        }
+    }
+
+    pub fn is_debug_mode() -> bool {
+        std::env::var("DEBUG").map(|v| v == "1").unwrap_or(false)
     }
 }

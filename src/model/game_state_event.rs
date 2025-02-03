@@ -1,4 +1,4 @@
-use super::{ClueSet, ClueWithGrouping, Difficulty, TimerState};
+use super::{Clue, ClueSet, ClueWithGrouping, Difficulty, TimerState};
 use crate::model::{GameBoard, GameStats};
 use std::rc::Rc;
 
@@ -29,9 +29,10 @@ pub enum GameStateEvent {
     PuzzleSubmissionReadyChanged(bool),
     PuzzleSuccessfullyCompleted(PuzzleCompletionState),
     ClueHintHighlight {
-        clue: ClueWithGrouping,
+        clue_with_grouping: ClueWithGrouping,
     },
     ClueSetUpdate(Rc<ClueSet>, Difficulty),
+    ClueFocused(Option<Clue>),
 }
 
 impl GameStateEvent {}

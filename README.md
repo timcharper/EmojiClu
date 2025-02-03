@@ -10,7 +10,9 @@ Mind Hunt is a graphical implementation of the [Zebra Puzzle](https://en.wikiped
 
 https://github.com/user-attachments/assets/61fe3d10-efc5-4cf0-80ea-c69454759b0e
 
-## Text Tutorial for Those Who Hate Video
+[https://github.com/user-attachments/assets/61fe3d10-efc5-4cf0-80ea-c69454759b0e](video link if GitHub player fails)
+
+## Text Tutorial
 
 ![Mind Hunt Hard Puzzle](docs/6x6-screeen.png)
 
@@ -51,7 +53,6 @@ Current differences:
 
 Planned differences:
 
-- "X-ray" feature
 - Experimental new clue types.
 - Competition mode (two users playing the same puzzle, racing on time).
 

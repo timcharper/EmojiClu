@@ -117,7 +117,7 @@ impl<T: std::fmt::Debug + 'static> Channel<T> {
 
 impl<T: std::fmt::Debug + 'static> EventEmitter<T> {
     fn drain_pending_events(&self) {
-        let mut pending = self.pending.borrow_mut();
+        let mut pending = self.pending.take();
         while let Some(event) = pending.pop_front() {
             self.channel.emit(&event);
         }

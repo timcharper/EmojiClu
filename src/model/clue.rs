@@ -4,7 +4,7 @@ use log::warn;
 
 use crate::model::tile::Tile;
 
-use super::TileAssertion;
+use super::{ClueOrientation, TileAssertion};
 
 // horiz sort index
 const SORT_INDEX_THREE_ADJACENT: usize = 0;
@@ -412,6 +412,14 @@ impl Clue {
 
     pub fn is_horizontal(&self) -> bool {
         matches!(self.clue_type, ClueType::Horizontal(_))
+    }
+
+    pub fn orientation(&self) -> ClueOrientation {
+        if self.is_vertical() {
+            ClueOrientation::Vertical
+        } else {
+            ClueOrientation::Horizontal
+        }
     }
 
     pub(crate) fn merge(&self, other: &Self) -> Option<Vec<Self>> {

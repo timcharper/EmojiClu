@@ -1,10 +1,12 @@
 use gtk4::{
-    prelude::{GestureSingleExt, GridExt, WidgetExt},
+    prelude::{GridExt, WidgetExt},
     Grid,
 };
 use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
-use crate::{destroyable::Destroyable, events::Unsubscriber};
+use crate::{
+    destroyable::Destroyable, events::Unsubscriber, game::settings::Settings, model::Clue,
+};
 use crate::{
     events::{EventEmitter, EventObserver},
     model::{ClueOrientation, ClueSet, GameActionEvent, GameStateEvent, GlobalEvent},
@@ -13,24 +15,24 @@ use crate::{
     game::clue_generator_state::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
     model::ClueWithGrouping,
 };
-use crate::{model::Difficulty, ui::ResourceSet};
+use crate::{model::Difficulty, ui::ImageSet};
 use crate::{model::LayoutConfiguration, ui::clue_ui::ClueUI};
 
-pub struct ClueSetUI {
+pub struct CluePanelsUI {
     pub horizontal_grid: Grid,
     pub vertical_grid: Grid,
-    horizontal_clue_uis: Vec<ClueUI>,
-    vertical_clue_uis: Vec<ClueUI>,
+    horizontal_clue_uis: Vec<Rc<RefCell<ClueUI>>>,
+    vertical_clue_uis: Vec<Rc<RefCell<ClueUI>>>,
     game_action_emitter: EventEmitter<GameActionEvent>,
-    resources: Rc<ResourceSet>,
+    resources: Rc<ImageSet>,
     game_state_subscription_id: Option<Unsubscriber<GameStateEvent>>,
     settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
-    game_state_observer: EventObserver<GameStateEvent>,
-    global_event_observer: EventObserver<GlobalEvent>,
     current_layout: LayoutConfiguration,
+    tooltips_enabled: bool,
+    current_xray_enabled: bool,
 }
 
-impl Destroyable for ClueSetUI {
+impl Destroyable for CluePanelsUI {
     fn destroy(&mut self) {
         // Unparent all widgets
         self.horizontal_grid.unparent();
@@ -42,10 +44,10 @@ impl Destroyable for ClueSetUI {
             subscription_id.unsubscribe();
         }
         for clue_ui in &mut self.horizontal_clue_uis {
-            clue_ui.destroy();
+            clue_ui.borrow_mut().destroy();
         }
         for clue_ui in &mut self.vertical_clue_uis {
-            clue_ui.destroy();
+            clue_ui.borrow_mut().destroy();
         }
         self.horizontal_clue_uis.clear();
         self.vertical_clue_uis.clear();
@@ -53,13 +55,14 @@ impl Destroyable for ClueSetUI {
 }
 
 // Parent widget for both horizontal clues and vertical clues
-impl ClueSetUI {
+impl CluePanelsUI {
     pub fn new(
         game_action_emitter: EventEmitter<GameActionEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
-        resources: &Rc<ResourceSet>,
+        resources: &Rc<ImageSet>,
         layout: LayoutConfiguration,
+        settings: &Settings,
     ) -> Rc<RefCell<Self>> {
         let horizontal_clues_grid = Grid::builder()
             .row_spacing(layout.clues.horizontal_clue_panel.row_spacing)
@@ -90,9 +93,9 @@ impl ClueSetUI {
             resources: Rc::clone(resources),
             game_state_subscription_id: None,
             settings_subscription_id: None,
-            game_state_observer: game_state_observer.clone(),
-            global_event_observer: global_event_observer.clone(),
             current_layout: layout,
+            tooltips_enabled: settings.clue_tooltips_enabled,
+            current_xray_enabled: settings.clue_xray_enabled,
         }));
 
         Self::connect_observers(
@@ -129,105 +132,134 @@ impl ClueSetUI {
         match event {
             GlobalEvent::SettingsChanged(settings) => {
                 self.update_tooltip_visibility(settings.clue_tooltips_enabled);
+                self.update_xray_enabled(settings.clue_xray_enabled);
             }
             GlobalEvent::LayoutChanged(new_layout) => {
                 self.update_layout(new_layout);
             }
+            GlobalEvent::ImagesOptimized(new_image_set) => {
+                self.resources = new_image_set.clone();
+                // propagate image set to all clue_uis
+                for clue_ui in &mut self.horizontal_clue_uis {
+                    clue_ui.borrow_mut().set_image_set(self.resources.clone());
+                }
+                for clue_ui in &mut self.vertical_clue_uis {
+                    clue_ui.borrow_mut().set_image_set(self.resources.clone());
+                }
+            }
             _ => {}
+        }
+    }
+
+    fn update_xray_enabled(&mut self, enabled: bool) {
+        self.current_xray_enabled = enabled;
+        self.sync_xray_enabled();
+    }
+
+    fn sync_xray_enabled(&mut self) {
+        // dispatch to clue_uis
+        for clue_ui in &mut self.horizontal_clue_uis {
+            clue_ui
+                .borrow_mut()
+                .update_xray_enabled(self.current_xray_enabled);
+        }
+        for clue_ui in &mut self.vertical_clue_uis {
+            clue_ui
+                .borrow_mut()
+                .update_xray_enabled(self.current_xray_enabled);
         }
     }
 
     fn handle_game_state_event(&mut self, event: &GameStateEvent) {
         match event {
             GameStateEvent::ClueSetUpdate(clue_set, difficulty) => {
-                self.set_clues(clue_set, difficulty);
+                self.set_clues(clue_set, *difficulty);
             }
-            GameStateEvent::ClueHintHighlight { clue } => {
-                self.highlight_clue(clue.orientation, clue.index, Duration::from_secs(4));
+            GameStateEvent::ClueHintHighlight { clue_with_grouping } => {
+                self.highlight_clue(
+                    clue_with_grouping.orientation,
+                    clue_with_grouping.index,
+                    Duration::from_secs(4),
+                );
             }
             GameStateEvent::GridUpdate(grid) => {
                 self.set_horiz_completion(&grid.completed_horizontal_clues);
                 self.set_vert_completion(&grid.completed_vertical_clues);
             }
+            GameStateEvent::ClueFocused(clue) => {
+                self.set_clue_selected(&clue);
+            }
             _ => {}
         }
     }
 
-    fn setup_clue_sets(&mut self, difficulty: Difficulty) {
+    fn allocate_clue_uis(&mut self, difficulty: Difficulty, clue_set: &ClueSet) {
         let n_rows = difficulty.grid_size();
         let clues_per_column = n_rows * 2;
 
-        for row in 0..MAX_HORIZ_CLUES {
-            let grid_col = row / clues_per_column;
-            let grid_row = row % clues_per_column;
+        // horizontal clues
+        for (idx, clue_with_grouping) in clue_set.horizontal_clues().iter().enumerate() {
+            let grid_col = idx / clues_per_column;
+            let grid_row = idx % clues_per_column;
 
             let clue_set = ClueUI::new(
                 Rc::clone(&self.resources),
-                ClueOrientation::Horizontal,
+                clue_with_grouping.clue.clone(),
                 self.current_layout.clues.clone(),
+                self.game_action_emitter.clone(),
+                idx,
+                self.current_xray_enabled,
+                self.tooltips_enabled,
             );
-            self.horizontal_grid
-                .attach(&clue_set.frame, grid_col as i32, grid_row as i32, 1, 1);
+            self.horizontal_grid.attach(
+                &clue_set.borrow().frame,
+                grid_col as i32,
+                grid_row as i32,
+                1,
+                1,
+            );
             self.horizontal_clue_uis.push(clue_set);
         }
 
         // Create vertical clue cells (3 tiles high for each clue)
-        for col in 0..MAX_VERT_CLUES {
+        for (col, clue_with_grouping) in clue_set.vertical_clues().iter().enumerate() {
             let clue_set = ClueUI::new(
                 Rc::clone(&self.resources),
-                ClueOrientation::Vertical,
+                clue_with_grouping.clue.clone(),
                 self.current_layout.clues.clone(),
+                self.game_action_emitter.clone(),
+                col,
+                self.current_xray_enabled,
+                self.tooltips_enabled,
             );
             self.vertical_grid
-                .attach(&clue_set.frame, col as i32, 0, 1, 1);
+                .attach(&clue_set.borrow().frame, col as i32, 0, 1, 1);
             self.vertical_clue_uis.push(clue_set);
-        }
-
-        self.wire_clue_handlers();
-    }
-
-    fn wire_clue_handlers(&self) {
-        // Wire up horizontal clue handlers
-        for (clue_idx, clue_set) in self.horizontal_clue_uis.iter().enumerate() {
-            let game_action_emitter = self.game_action_emitter.clone();
-            let gesture_right = gtk4::GestureClick::new();
-            gesture_right.set_button(3);
-            gesture_right.connect_pressed(move |_gesture, _, _, _| {
-                game_action_emitter.emit(GameActionEvent::HorizontalClueClick(clue_idx));
-            });
-            clue_set.frame.add_controller(gesture_right);
-        }
-
-        // Wire up vertical clue handlers
-        for (clue_idx, clue_set) in self.vertical_clue_uis.iter().enumerate() {
-            let game_action_emitter = self.game_action_emitter.clone();
-            let gesture_right = gtk4::GestureClick::new();
-            gesture_right.set_button(3);
-            gesture_right.connect_pressed(move |_gesture, _, _, _| {
-                game_action_emitter.emit(GameActionEvent::VerticalClueClick(clue_idx));
-            });
-            clue_set.frame.add_controller(gesture_right);
         }
     }
 
     fn highlight_clue(&self, orientation: ClueOrientation, clue_idx: usize, duration: Duration) {
         match orientation {
             ClueOrientation::Horizontal => {
-                self.horizontal_clue_uis[clue_idx].highlight_for(duration);
+                self.horizontal_clue_uis[clue_idx]
+                    .borrow_mut()
+                    .highlight_for(duration);
             }
             ClueOrientation::Vertical => {
-                self.vertical_clue_uis[clue_idx].highlight_for(duration);
+                self.vertical_clue_uis[clue_idx]
+                    .borrow_mut()
+                    .highlight_for(duration);
             }
         }
     }
 
-    fn set_clues(&mut self, clue_set: &ClueSet, difficulty: &Difficulty) {
+    fn clear_clue_uis(&mut self) {
         // First destroy the ClueUI instances which will cleanup their internal grids
         for clue_ui in &mut self.horizontal_clue_uis {
-            clue_ui.destroy();
+            clue_ui.borrow_mut().destroy();
         }
         for clue_ui in &mut self.vertical_clue_uis {
-            clue_ui.destroy();
+            clue_ui.borrow_mut().destroy();
         }
         self.horizontal_clue_uis.clear();
         self.vertical_clue_uis.clear();
@@ -239,10 +271,15 @@ impl ClueSetUI {
         while let Some(child) = self.vertical_grid.first_child() {
             self.vertical_grid.remove(&child);
         }
+    }
 
-        // allocate new clue cells
-        self.setup_clue_sets(*difficulty);
+    fn set_clues(&mut self, clue_set: &ClueSet, difficulty: Difficulty) {
+        self.clear_clue_uis();
+        self.allocate_clue_uis(difficulty, clue_set);
+        self.populate_clue_uis(clue_set);
+    }
 
+    fn populate_clue_uis(&mut self, clue_set: &ClueSet) {
         let mut previous_clue: Option<&ClueWithGrouping> = None;
         for (idx, clue_ui) in self.horizontal_clue_uis.iter().enumerate() {
             let clue = clue_set.horizontal_clues().get(idx);
@@ -250,7 +287,9 @@ impl ClueSetUI {
                 (Some(clue), Some(previous_clue)) => clue.group != previous_clue.group,
                 _ => false,
             };
-            clue_ui.set_clue(clue.map(|c| &c.clue), is_new_group);
+            clue_ui
+                .borrow_mut()
+                .set_clue(clue.map(|c| &c.clue), is_new_group);
 
             previous_clue = clue;
         }
@@ -260,32 +299,43 @@ impl ClueSetUI {
                 (Some(clue), Some(previous_clue)) => clue.group != previous_clue.group,
                 _ => false,
             };
-            clue_ui.set_clue(clue.map(|c| &c.clue), is_new_group);
+            clue_ui
+                .borrow_mut()
+                .set_clue(clue.map(|c| &c.clue), is_new_group);
             previous_clue = clue;
         }
-        let horiz_dim = &self.current_layout.clues.horizontal_clue_panel.dimensions;
+        let horiz_dim = &self
+            .current_layout
+            .clues
+            .horizontal_clue_panel
+            .total_clues_dimensions;
         self.horizontal_grid
             .set_size_request(horiz_dim.width, horiz_dim.height);
     }
 
     fn set_horiz_completion(&self, completed_clues: &HashSet<usize>) {
         for (idx, clue_ui) in self.horizontal_clue_uis.iter().enumerate() {
-            clue_ui.set_completed(completed_clues.contains(&idx));
+            clue_ui
+                .borrow_mut()
+                .set_completed(completed_clues.contains(&idx));
         }
     }
 
     fn set_vert_completion(&self, completed_clues: &HashSet<usize>) {
         for (idx, clue_ui) in self.vertical_clue_uis.iter().enumerate() {
-            clue_ui.set_completed(completed_clues.contains(&idx));
+            clue_ui
+                .borrow_mut()
+                .set_completed(completed_clues.contains(&idx));
         }
     }
 
-    fn update_tooltip_visibility(&self, enabled: bool) {
+    fn update_tooltip_visibility(&mut self, enabled: bool) {
+        self.tooltips_enabled = enabled;
         for clue_ui in &self.horizontal_clue_uis {
-            clue_ui.frame.set_has_tooltip(enabled);
+            clue_ui.borrow_mut().set_tooltips_enabled(enabled);
         }
         for clue_ui in &self.vertical_clue_uis {
-            clue_ui.frame.set_has_tooltip(enabled);
+            clue_ui.borrow_mut().set_tooltips_enabled(enabled);
         }
     }
 
@@ -299,31 +349,49 @@ impl ClueSetUI {
             .set_column_spacing(layout.clues.horizontal_clue_panel.column_spacing as u32);
         self.horizontal_grid
             .set_margin_start(layout.clues.horizontal_clue_panel.left_margin);
-        let horiz_dim = &self.current_layout.clues.horizontal_clue_panel.dimensions;
+        let horiz_dim = &self
+            .current_layout
+            .clues
+            .horizontal_clue_panel
+            .total_clues_dimensions;
         self.horizontal_grid
             .set_size_request(horiz_dim.width, horiz_dim.height);
 
         // Update vertical clues grid
-        self.vertical_grid
-            .set_row_spacing(layout.clues.vertical_clue_panel.height as u32);
+        self.vertical_grid.set_row_spacing(0);
         self.vertical_grid
             .set_column_spacing(layout.clues.vertical_clue_panel.column_spacing as u32);
         self.vertical_grid
             .set_margin_top(layout.clues.vertical_clue_panel.margin_top);
-        self.vertical_grid
-            .set_size_request(-1, self.current_layout.clues.vertical_clue_panel.height);
+        self.vertical_grid.set_size_request(
+            -1,
+            self.current_layout
+                .clues
+                .vertical_clue_panel
+                .total_clues_height,
+        );
 
         // Update individual clue UIs
         for clue_ui in self.horizontal_clue_uis.iter_mut() {
-            clue_ui.update_layout(layout);
+            clue_ui.borrow_mut().update_layout(layout);
         }
         for clue_ui in self.vertical_clue_uis.iter_mut() {
-            clue_ui.update_layout(layout);
+            clue_ui.borrow_mut().update_layout(layout);
         }
     }
 
     pub fn calc_clues_per_column(difficulty: Difficulty) -> usize {
         let n_rows = difficulty.grid_size();
         n_rows * 2
+    }
+
+    fn set_clue_selected(&self, clue: &Option<Clue>) {
+        // dispatch to all clues
+        for clue_ui in &self.horizontal_clue_uis {
+            clue_ui.borrow_mut().set_selected(clue);
+        }
+        for clue_ui in &self.vertical_clue_uis {
+            clue_ui.borrow_mut().set_selected(clue);
+        }
     }
 }

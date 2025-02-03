@@ -13,6 +13,13 @@ impl ClueOrientation {
             ClueOrientation::Vertical => "Vertical",
         }
     }
+
+    pub fn invert(&self) -> ClueOrientation {
+        match self {
+            ClueOrientation::Horizontal => ClueOrientation::Vertical,
+            ClueOrientation::Vertical => ClueOrientation::Horizontal,
+        }
+    }
 }
 impl Display for ClueOrientation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

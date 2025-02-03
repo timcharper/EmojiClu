@@ -255,6 +255,22 @@ impl ClueSet {
             all_clues,
         }
     }
+    pub fn get_clue(
+        &self,
+        orientation: ClueOrientation,
+        index: usize,
+    ) -> Option<&ClueWithGrouping> {
+        match orientation {
+            ClueOrientation::Horizontal => self.horizontal_clues.get(index),
+            ClueOrientation::Vertical => self.vertical_clues.get(index),
+        }
+    }
+    pub fn get_clue_count(&self, orientation: ClueOrientation) -> usize {
+        match orientation {
+            ClueOrientation::Horizontal => self.horizontal_clues.len(),
+            ClueOrientation::Vertical => self.vertical_clues.len(),
+        }
+    }
 
     pub fn horizontal_clues(&self) -> &Vec<ClueWithGrouping> {
         &self.horizontal_clues

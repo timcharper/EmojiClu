@@ -1,4 +1,4 @@
-use crate::{game::settings::Settings, ui::ResourceSet};
+use crate::{game::settings::Settings, ui::ImageSet};
 use std::rc::Rc;
 
 use super::LayoutConfiguration;
@@ -7,6 +7,11 @@ use super::LayoutConfiguration;
 #[derive(Debug)]
 pub enum GlobalEvent {
     SettingsChanged(Settings),
-    DimensionsChanged(Rc<ResourceSet>),
+    DimensionsChanged(Rc<ImageSet>),
     LayoutChanged(LayoutConfiguration),
+    OptimizeImages {
+        candidate_tile_size: i32,
+        solution_tile_size: i32,
+    },
+    ImagesOptimized(Rc<ImageSet>),
 }

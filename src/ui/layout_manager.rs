@@ -1,6 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
-use glib::object::ObjectExt;
+use glib::{object::ObjectExt, source::SourceId, timeout_add_local, ControlFlow};
 use gtk4::{
     glib::SignalHandlerId,
     prelude::{MonitorExt, NativeExt, SurfaceExt, WidgetExt},
@@ -20,7 +24,7 @@ use crate::{
     },
 };
 
-use super::{clue_set_ui::ClueSetUI, ResourceSet};
+use super::clue_panels_ui::CluePanelsUI;
 
 // Base unit sizes
 const SPACING_SMALL: i32 = 2;
@@ -45,6 +49,7 @@ struct HorizCluePanelSizingInputs {
     column_spacing: i32,
     margin_left: i32,
     clue_img_size: i32,
+    clue_padding: i32,
 }
 
 struct VertCluePanelSizingInputs {
@@ -52,6 +57,7 @@ struct VertCluePanelSizingInputs {
     margin_top: i32,
     column_spacing: i32,
     group_spacing: i32,
+    clue_padding: i32,
 }
 
 pub struct LayoutManager {
@@ -61,18 +67,22 @@ pub struct LayoutManager {
     handle_surface_layout: Option<SignalHandlerId>,
     game_action_subscription: Option<Unsubscriber<GameActionEvent>>,
     game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
-    resources: Rc<ResourceSet>,
     current_difficulty: Difficulty,
     scrolled_window: gtk4::ScrolledWindow,
     container_dimensions: Option<Dimensions>,
     clue_stats: ClueStats,
     last_layout: Option<LayoutConfiguration>,
+    last_layout_change: Option<Instant>,
+    layout_monitor_source: Option<SourceId>,
 }
 
 impl Destroyable for LayoutManager {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.game_action_subscription.take() {
             subscription_id.unsubscribe();
+        }
+        if let Some(source_id) = self.layout_monitor_source.take() {
+            source_id.remove();
         }
     }
 }
@@ -98,7 +108,6 @@ impl LayoutManager {
         global_event_emitter: EventEmitter<GlobalEvent>,
         game_action_observer: EventObserver<GameActionEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
-        resources: Rc<ResourceSet>,
         scrolled_window: gtk4::ScrolledWindow,
         current_difficulty: Difficulty,
     ) -> Rc<RefCell<Self>> {
@@ -107,7 +116,6 @@ impl LayoutManager {
             window: window.clone(),
             handle_surface_enter_monitor: None,
             handle_surface_layout: None,
-            resources,
             scrolled_window,
             current_difficulty,
             game_action_subscription: None,
@@ -115,6 +123,8 @@ impl LayoutManager {
             container_dimensions: None,
             clue_stats: ClueStats::default(),
             last_layout: None,
+            last_layout_change: Some(Instant::now()),
+            layout_monitor_source: None,
         }));
 
         {
@@ -161,6 +171,21 @@ impl LayoutManager {
                     }
                 });
             }
+        }
+
+        // Set up layout monitoring
+        {
+            let weak_dw = Rc::downgrade(&dw);
+            let source_id = timeout_add_local(Duration::from_millis(100), move || {
+                if let Some(dw) = weak_dw.upgrade() {
+                    let mut manager = dw.borrow_mut();
+                    manager.check_layout_stability();
+                    ControlFlow::Continue
+                } else {
+                    ControlFlow::Break
+                }
+            });
+            dw.borrow_mut().layout_monitor_source = Some(source_id);
         }
 
         dw
@@ -217,6 +242,21 @@ impl LayoutManager {
         }
     }
 
+    fn check_layout_stability(&mut self) {
+        if let Some(last_change) = self.last_layout_change {
+            if last_change.elapsed() >= Duration::from_secs(1) {
+                // Layout has been stable for 3 seconds
+                if let Some(layout) = &self.last_layout {
+                    self.global_event_emitter.emit(GlobalEvent::OptimizeImages {
+                        candidate_tile_size: layout.grid.cell.candidate_image.width,
+                        solution_tile_size: layout.grid.cell.solution_image.width,
+                    });
+                }
+                self.last_layout_change = None;
+            }
+        }
+    }
+
     fn maybe_publish_layout(&mut self, new_layout: LayoutConfiguration) {
         let layout_changed = !self.last_layout.iter().contains(&new_layout);
         if layout_changed {
@@ -224,6 +264,7 @@ impl LayoutManager {
             self.global_event_emitter
                 .emit(GlobalEvent::LayoutChanged(new_layout.clone()));
             self.last_layout = Some(new_layout);
+            self.last_layout_change = Some(Instant::now());
         } else {
             trace!(target: "layout_manager", "layout unchanged");
         }
@@ -247,10 +288,12 @@ impl LayoutManager {
             height: CANDIDATE_IMG_SIZE,
         };
 
-        let clues_per_column = ClueSetUI::calc_clues_per_column(difficulty) as i32;
+        let clues_per_column = CluePanelsUI::calc_clues_per_column(difficulty) as i32;
 
         let (horiz_clue_columns, horiz_clue_rows) =
             LayoutManager::calc_horiz_clue_columns(n_horizontal_clues as i32, clues_per_column);
+
+        let clue_padding = SPACING_MEDIUM;
 
         LayoutConfiguration {
             grid: LayoutManager::calc_grid_sizing(GridSizingInputs {
@@ -272,10 +315,11 @@ impl LayoutManager {
                     HorizCluePanelSizingInputs {
                         n_rows: horiz_clue_rows,
                         n_columns: horiz_clue_columns,
-                        row_spacing: SPACING_LARGE,
-                        column_spacing: SPACING_LARGE * 2,
+                        row_spacing: SPACING_SMALL,
+                        column_spacing: SPACING_MEDIUM * 2,
                         margin_left: SPACING_LARGE * 2,
                         clue_img_size: CANDIDATE_IMG_SIZE,
+                        clue_padding,
                     },
                     difficulty,
                 ),
@@ -283,14 +327,16 @@ impl LayoutManager {
                     VertCluePanelSizingInputs {
                         candidate_img_size: CANDIDATE_IMG_SIZE,
                         margin_top: SPACING_LARGE,
-                        column_spacing: SPACING_MEDIUM,
+                        column_spacing: SPACING_SMALL,
                         group_spacing: SPACING_MEDIUM * 3,
+                        clue_padding,
                     },
                 ),
                 clue_annotation_size: Dimensions {
                     width: CANDIDATE_IMG_SIZE / 2,
                     height: CANDIDATE_IMG_SIZE / 2,
                 },
+                clue_padding,
             },
         }
     }
@@ -318,13 +364,22 @@ impl LayoutManager {
             + SPACING_MEDIUM * 2;
 
         let grid_plus_vert_clues_height =
-            grid_height + base_layout.clues.vertical_clue_panel.height + SPACING_LARGE;
+            grid_height + base_layout.clues.vertical_clue_panel.total_clues_height + SPACING_LARGE;
 
-        let total_required_height = grid_plus_vert_clues_height
-            .max(base_layout.clues.horizontal_clue_panel.dimensions.height);
+        let total_required_height = grid_plus_vert_clues_height.max(
+            base_layout
+                .clues
+                .horizontal_clue_panel
+                .total_clues_dimensions
+                .height,
+        );
 
         let total_required_width = total_grid_width
-            + base_layout.clues.horizontal_clue_panel.dimensions.width
+            + base_layout
+                .clues
+                .horizontal_clue_panel
+                .total_clues_dimensions
+                .width
             + SPACING_LARGE;
 
         // Calculate scaling factors based on window dimensions
@@ -343,6 +398,7 @@ impl LayoutManager {
     fn scale_layout(&self, layout: LayoutConfiguration, scale: f32) -> LayoutConfiguration {
         let candidate_image = layout.grid.cell.candidate_image.scale_by(scale);
         let solution_image = layout.grid.cell.solution_image.scale_by(scale);
+        let clue_padding = (layout.clues.clue_padding as f32 * scale) as i32;
 
         let scaled_clues = CluesSizing {
             clue_tile_size: layout.clues.clue_tile_size.scale_by(scale),
@@ -357,6 +413,7 @@ impl LayoutManager {
                     margin_left: (layout.clues.horizontal_clue_panel.left_margin as f32 * scale)
                         as i32,
                     clue_img_size: candidate_image.width,
+                    clue_padding: clue_padding,
                 },
                 self.current_difficulty,
             ),
@@ -367,8 +424,10 @@ impl LayoutManager {
                     as i32,
                 group_spacing: (layout.clues.vertical_clue_panel.group_spacing as f32 * scale)
                     as i32,
+                clue_padding,
             }),
             clue_annotation_size: layout.clues.clue_annotation_size.scale_by(scale),
+            clue_padding: clue_padding,
         };
 
         LayoutConfiguration {
@@ -397,26 +456,28 @@ impl LayoutManager {
         inputs: HorizCluePanelSizingInputs,
         difficulty: Difficulty,
     ) -> HorizontalCluePanelSizing {
-        let base_clue_panel_width = inputs.clue_img_size * 3  // 3 tiles
-            + inputs.margin_left; // padding on both sides
+        let clue_width = inputs.clue_img_size * 3  // 3 tiles
+            + inputs.clue_padding * 2; // padding on both sides
+        let clue_height = inputs.clue_img_size + inputs.clue_padding * 2;
 
-        let clues_per_column = ClueSetUI::calc_clues_per_column(difficulty) as i32;
+        let clues_per_column = CluePanelsUI::calc_clues_per_column(difficulty) as i32;
 
         let max_columns = MAX_HORIZ_CLUES as i32 / clues_per_column;
         let n_horiz_spacers = inputs.n_rows.clamp(1, clues_per_column) - 1;
         let n_vert_spacers = inputs.n_columns.clamp(1, max_columns) - 1;
 
         // Total width for all horizontal clue columns including spacing between columns
-        let horiz_clues_width =
-            (base_clue_panel_width * inputs.n_columns) + (n_vert_spacers * inputs.column_spacing);
+        let all_horiz_clues_width = (clue_width * inputs.n_columns)
+            + (n_vert_spacers * inputs.column_spacing)
+            + inputs.margin_left;
 
-        let horiz_clues_height =
-            inputs.clue_img_size * inputs.n_rows + (inputs.row_spacing * n_horiz_spacers);
+        let all_horiz_clues_height =
+            (clue_height * inputs.n_rows) + (inputs.row_spacing * n_horiz_spacers);
 
         HorizontalCluePanelSizing {
-            dimensions: Dimensions {
-                width: horiz_clues_width,
-                height: horiz_clues_height,
+            total_clues_dimensions: Dimensions {
+                width: all_horiz_clues_width,
+                height: all_horiz_clues_height,
             },
             row_spacing: inputs.row_spacing,
             column_spacing: inputs.column_spacing,
@@ -424,25 +485,24 @@ impl LayoutManager {
             n_rows: inputs.n_rows,
             n_columns: inputs.n_columns,
             clue_dimensions: Dimensions {
-                width: inputs.clue_img_size * 3, // no spacing
+                width: inputs.clue_img_size * 3,
                 height: inputs.clue_img_size,
             },
         }
     }
 
     fn calc_vert_clue_panel(inputs: VertCluePanelSizingInputs) -> VerticalCluePanelSizing {
-        // Calculate vertical clues height (3 tiles high for each clue)
-        let base_vert_clue_height = inputs.candidate_img_size * 3  // 3 tiles
-            + inputs.margin_top;
+        let clue_height = inputs.candidate_img_size * 3 + inputs.clue_padding * 2;
+        let clue_width = inputs.candidate_img_size + inputs.clue_padding * 2;
 
         VerticalCluePanelSizing {
-            height: base_vert_clue_height,
+            total_clues_height: clue_height + inputs.margin_top,
             margin_top: inputs.margin_top,
             column_spacing: inputs.column_spacing,
             group_spacing: inputs.group_spacing,
             clue_dimensions: Dimensions {
-                width: inputs.candidate_img_size,
-                height: inputs.candidate_img_size * 3, // no spacing
+                width: clue_width,
+                height: clue_height,
             },
         }
     }

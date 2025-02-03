@@ -16,13 +16,14 @@ use crate::game::stats_manager::StatsManager;
 use crate::model::GameStateEvent;
 use crate::model::{GameActionEvent, PuzzleCompletionState};
 use crate::ui::stats_dialog::StatsDialog;
-use crate::ui::ResourceSet;
+
+use super::audio_set::AudioSet;
 
 pub struct SubmitUI {
     pub submit_button: Rc<Button>,
     subscription_id: Option<Unsubscriber<GameStateEvent>>,
     stats_manager: Rc<RefCell<StatsManager>>,
-    resources: Rc<ResourceSet>,
+    audio_set: Rc<AudioSet>,
     submit_button_clicked_signal: Option<SignalHandlerId>,
     window: Rc<ApplicationWindow>,
     game_action_emitter: EventEmitter<GameActionEvent>,
@@ -44,7 +45,7 @@ impl SubmitUI {
         game_state_observer: EventObserver<GameStateEvent>,
         game_action_emitter: EventEmitter<GameActionEvent>,
         stats_manager: &Rc<RefCell<StatsManager>>,
-        resources: &Rc<ResourceSet>,
+        audio_set: &Rc<AudioSet>,
         window: &Rc<ApplicationWindow>,
     ) -> Rc<RefCell<Self>> {
         // Create submit button
@@ -65,7 +66,7 @@ impl SubmitUI {
             submit_button,
             subscription_id: None,
             stats_manager: Rc::clone(stats_manager),
-            resources: Rc::clone(resources),
+            audio_set: Rc::clone(audio_set),
             submit_button_clicked_signal: Some(submit_button_clicked_signal),
             window: Rc::clone(window),
             game_action_emitter: game_action_emitter,
@@ -90,7 +91,7 @@ impl SubmitUI {
             }
             PuzzleCompletionState::Correct(stats) => {
                 self.submit_button.remove_css_class("submit-ready"); // Stop blinking once clicked
-                let media = self.resources.random_win_sound();
+                let media = self.audio_set.random_win_sound();
                 media.play();
 
                 let difficulty = stats.difficulty;
@@ -122,7 +123,7 @@ impl SubmitUI {
                 );
 
                 // Play game over sound using a MediaStream
-                let media = self.resources.random_lose_sound();
+                let media = self.audio_set.random_lose_sound();
                 media.play();
 
                 let game_action_emitter = self.game_action_emitter.clone();

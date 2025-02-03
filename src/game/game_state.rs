@@ -3,14 +3,16 @@ use std::cell::RefCell;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+use super::settings::Settings;
 use super::solver::{deduce_hidden_pairs, perform_evaluation_step, EvaluationStepResult};
 use super::{deduce_clue, generate_clues};
 use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::game::clue_generator::ClueGeneratorResult;
 use crate::model::{
-    CandidateState, ClueSet, ClueWithGrouping, Deduction, Difficulty, GameActionEvent, GameBoard,
-    GameStateEvent, GameStats, PuzzleCompletionState, Solution, TimerState,
+    CandidateState, Clue, ClueOrientation, ClueSet, ClueWithGrouping, Deduction, Difficulty,
+    GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent, PuzzleCompletionState,
+    Solution, TimerState,
 };
 use std::rc::Rc;
 
@@ -50,12 +52,18 @@ pub struct GameState {
     timer_state: TimerState,
     game_action_observer: EventObserver<GameActionEvent>,
     subscription_id: Option<Unsubscriber<GameActionEvent>>,
+    global_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     game_state_emitter: EventEmitter<GameStateEvent>,
+    settings: Settings,
+    current_focused_clue: Option<(ClueOrientation, usize)>,
 }
 
 impl Destroyable for GameState {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.subscription_id.take() {
+            subscription_id.unsubscribe();
+        }
+        if let Some(subscription_id) = self.global_subscription_id.take() {
             subscription_id.unsubscribe();
         }
     }
@@ -80,10 +88,6 @@ impl Default for GameBoardSet {
 }
 
 impl GameState {
-    pub fn is_debug_mode() -> bool {
-        std::env::var("DEBUG").map(|v| v == "1").unwrap_or(false)
-    }
-
     pub fn new_board_set(difficulty: Difficulty, seed: Option<u64>) -> GameBoardSet {
         let solution = Rc::new(Solution::new(difficulty, seed));
         trace!(target: "game_state", "Generated solution: {:?}", solution);
@@ -94,7 +98,7 @@ impl GameState {
             revealed_tiles: _,
         } = generate_clues(&blank_board);
 
-        let debug_mode = GameState::is_debug_mode();
+        let debug_mode = Settings::is_debug_mode();
 
         GameBoardSet {
             clue_set: Rc::new(ClueSet::new(clues)),
@@ -107,6 +111,8 @@ impl GameState {
     pub fn new(
         game_action_observer: EventObserver<GameActionEvent>,
         game_state_emitter: EventEmitter<GameStateEvent>,
+        global_event_observer: EventObserver<GlobalEvent>,
+        settings: Settings,
     ) -> Rc<RefCell<Self>> {
         let board_set = GameBoardSet::default();
         let timer_state = TimerState::default();
@@ -127,10 +133,14 @@ impl GameState {
             timer_state,
             game_action_observer: game_action_observer.clone(),
             subscription_id: None,
+            global_subscription_id: None,
             game_state_emitter,
+            settings,
+            current_focused_clue: None,
         };
         let refcell = Rc::new(RefCell::new(game_state));
         GameState::wire_subscription(refcell.clone(), game_action_observer);
+        GameState::wire_global_subscription(refcell.clone(), global_event_observer);
         refcell
     }
 
@@ -144,6 +154,18 @@ impl GameState {
             game_state.handle_event(event.clone());
         });
         game_state.borrow_mut().subscription_id = Some(subscription_id);
+    }
+
+    fn wire_global_subscription(
+        game_state: Rc<RefCell<Self>>,
+        global_event_observer: EventObserver<GlobalEvent>,
+    ) {
+        let game_state_handler = game_state.clone();
+        let subscription_id = global_event_observer.subscribe(move |event| {
+            let mut game_state = game_state_handler.borrow_mut();
+            game_state.handle_global_event(event);
+        });
+        game_state.borrow_mut().global_subscription_id = Some(subscription_id);
     }
 
     fn new_game(&mut self, difficulty: Difficulty, seed: Option<u64>) {
@@ -164,6 +186,7 @@ impl GameState {
         self.is_paused = false;
         self.timer_state = TimerState::default();
         self.sync_board_display();
+        self.select_clue(None);
         self.game_state_emitter
             .emit(GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
@@ -177,6 +200,7 @@ impl GameState {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
+        self.current_focused_clue = None;
     }
 
     fn handle_cell_click(&mut self, row: usize, col: usize, variant: Option<char>) {
@@ -261,6 +285,10 @@ impl GameState {
             .emit(GameStateEvent::PuzzleSubmissionReadyChanged(
                 all_cells_filled,
             ));
+        if all_cells_filled {
+            self.game_state_emitter
+                .emit(GameStateEvent::ClueFocused(None));
+        }
     }
 
     pub fn handle_event(&mut self, event: GameActionEvent) {
@@ -271,12 +299,6 @@ impl GameState {
             }
             GameActionEvent::CellRightClick(row, col, variant) => {
                 self.handle_cell_right_click(row, col, variant)
-            }
-            GameActionEvent::HorizontalClueClick(clue_idx) => {
-                self.handle_horizontal_clue_click(clue_idx)
-            }
-            GameActionEvent::VerticalClueClick(clue_idx) => {
-                self.handle_vertical_clue_click(clue_idx)
             }
             GameActionEvent::NewGame(difficulty, seed) => self.new_game(difficulty, seed),
             GameActionEvent::InitDisplay => {
@@ -301,7 +323,59 @@ impl GameState {
                 let current_difficulty = self.current_board.solution.difficulty;
                 self.new_game(current_difficulty, Some(current_seed));
             }
+            GameActionEvent::ClueToggleComplete(clue_orientation, clue_idx) => {
+                self.handle_clue_toggle_complete(clue_orientation, clue_idx)
+            }
+            GameActionEvent::ClueToggleSelectedComplete => {
+                if let Some((clue_orientation, clue_idx)) = self.current_focused_clue {
+                    self.handle_clue_toggle_complete(clue_orientation, clue_idx)
+                }
+            }
+            GameActionEvent::ClueSelect(maybe_clue) => self.handle_clue_focus(maybe_clue),
+            GameActionEvent::ClueSelect(maybe_clue) => self.handle_clue_focus(maybe_clue),
+            GameActionEvent::ClueSelectNext(direction) => self.handle_clue_focus_next(direction),
         }
+    }
+    fn handle_clue_focus_next(&mut self, direction: i32) {
+        match self.current_focused_clue {
+            Some((old_clue_orientation, old_clue_idx)) => {
+                let mut tries = self.clue_set.all_clues().len() + 1;
+                let mut orientation = old_clue_orientation;
+                let mut clue_idx = old_clue_idx as i32;
+                self.current_focused_clue = None;
+                // if all clues are hidden, we don't want to try forever
+                while tries > 0 {
+                    clue_idx = clue_idx + direction;
+
+                    if clue_idx < 0 {
+                        orientation = orientation.invert();
+                        clue_idx = self.clue_set.get_clue_count(orientation) as i32 - 1;
+                    } else if clue_idx >= self.clue_set.get_clue_count(orientation) as i32 {
+                        orientation = orientation.invert();
+                        clue_idx = 0;
+                    }
+
+                    if !self
+                        .current_board
+                        .is_clue_completed(orientation, clue_idx as usize)
+                    {
+                        self.current_focused_clue = Some((orientation, clue_idx as usize));
+                        break;
+                    }
+                    tries -= 1;
+                }
+            }
+            None => {
+                self.current_focused_clue = Some((ClueOrientation::Horizontal, 0));
+            }
+        }
+
+        self.sync_clue_focused();
+    }
+
+    fn select_clue(&mut self, clue: Option<Clue>) {
+        self.game_state_emitter
+            .emit(GameStateEvent::ClueFocused(clue));
     }
 
     fn complete_puzzle(&mut self) {
@@ -430,9 +504,15 @@ impl GameState {
         );
 
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
-            if let Some(clue) = clue {
+            if let Some(clue_with_grouping) = clue {
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueHintHighlight { clue: clue.clone() });
+                    .emit(GameStateEvent::ClueFocused(Some(
+                        clue_with_grouping.clue.clone(),
+                    )));
+                self.game_state_emitter
+                    .emit(GameStateEvent::ClueHintHighlight {
+                        clue_with_grouping: clue_with_grouping.clone(),
+                    });
             }
 
             if self.hint_status.hint_level > 0 {
@@ -486,16 +566,11 @@ impl GameState {
         stats
     }
 
-    fn handle_horizontal_clue_click(&mut self, clue_idx: usize) {
+    fn handle_clue_toggle_complete(&mut self, clue_orientation: ClueOrientation, clue_idx: usize) {
         let mut current_board = self.current_board.as_ref().clone();
-        current_board.toggle_horizontal_clue_completed(clue_idx);
+        current_board.toggle_clue_completed(clue_orientation, clue_idx);
         self.push_board(current_board);
-    }
-
-    fn handle_vertical_clue_click(&mut self, clue_idx: usize) {
-        let mut current_board = self.current_board.as_ref().clone();
-        current_board.toggle_vertical_clue_completed(clue_idx);
-        self.push_board(current_board);
+        self.sync_clue_focused();
     }
 
     pub fn get_difficulty(&self) -> Difficulty {
@@ -521,5 +596,36 @@ impl GameState {
                     .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
             }
         }
+    }
+
+    fn handle_clue_focus(&mut self, maybe_clue: Option<(ClueOrientation, usize)>) {
+        self.current_focused_clue = maybe_clue;
+        self.sync_clue_focused();
+    }
+
+    fn sync_clue_focused(&mut self) {
+        let clue = self.current_focused_clue.and_then(|(orientation, idx)| {
+            self.current_board
+                .clue_set
+                .get_clue(orientation, idx)
+                .map(|cwg| cwg.clue.clone())
+        });
+        self.game_state_emitter
+            .emit(GameStateEvent::ClueFocused(clue));
+    }
+
+    fn update_settings(&mut self, settings: Settings) {
+        self.settings = settings;
+    }
+
+    fn handle_global_event(&mut self, event: &GlobalEvent) {
+        match event {
+            GlobalEvent::SettingsChanged(settings) => self.update_settings(settings.clone()),
+            _ => (),
+        }
+    }
+
+    pub fn get_focused_clue(&self) -> Option<(ClueOrientation, usize)> {
+        self.current_focused_clue
     }
 }

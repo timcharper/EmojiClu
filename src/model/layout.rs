@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Dimensions {
     pub width: i32,
     pub height: i32,
@@ -36,7 +36,7 @@ pub struct GridSizing {
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct HorizontalCluePanelSizing {
-    pub dimensions: Dimensions, // total dimensions of the entire panel
+    pub total_clues_dimensions: Dimensions, // total dimensions of the entire panel
     pub row_spacing: i32,
     pub column_spacing: i32,
     pub left_margin: i32,
@@ -47,7 +47,7 @@ pub struct HorizontalCluePanelSizing {
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct VerticalCluePanelSizing {
-    pub height: i32,
+    pub total_clues_height: i32,
     pub margin_top: i32,
     pub column_spacing: i32,
     pub group_spacing: i32, // space between clues, not the tiles themselves
@@ -60,6 +60,7 @@ pub struct CluesSizing {
     pub horizontal_clue_panel: HorizontalCluePanelSizing,
     pub vertical_clue_panel: VerticalCluePanelSizing,
     pub clue_annotation_size: Dimensions,
+    pub clue_padding: i32, // padding between clue and grid cell
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
