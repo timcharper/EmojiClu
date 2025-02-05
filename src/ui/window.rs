@@ -331,7 +331,6 @@ pub fn build_ui(app: &Application) {
         right_box.append(&solve_button);
     }
     right_box.append(&hint_button);
-    right_box.append(submit_ui.borrow().submit_button.as_ref());
 
     let menu_button = MenuButton::builder()
         .icon_name("open-menu-symbolic")
@@ -424,37 +423,32 @@ pub fn build_ui(app: &Application) {
     // Add new game action that uses current difficulty
     let action_new_game = SimpleAction::new("new-game", None);
     let settings_ref: Rc<RefCell<Settings>> = Rc::clone(&settings);
-    let game_action_emitter_new_game = game_action_emitter.clone();
-    action_new_game.connect_activate(move |_, _| {
-        let difficulty = settings_ref.borrow().difficulty;
-        game_action_emitter_new_game.emit(GameActionEvent::NewGame(difficulty, None));
+    action_new_game.connect_activate({
+        let game_action_emitter = game_action_emitter.clone();
+        move |_, _| {
+            let difficulty = settings_ref.borrow().difficulty;
+            game_action_emitter.emit(GameActionEvent::NewGame(difficulty, None));
+        }
     });
     window.add_action(&action_new_game);
 
     let action_statistics = SimpleAction::new("statistics", None);
-    let game_state_stats = Rc::clone(&game_state);
     let stats_manager_stats = Rc::clone(&stats_manager);
-    let submit_ui_stats = Rc::clone(&submit_ui);
-    {
-        let settings_ref = Rc::clone(&settings);
-        action_statistics.connect_activate(move |_, _| {
-            if let Some(window) = game_state_stats.try_borrow().ok().and_then(|_| {
-                submit_ui_stats
-                    .borrow()
-                    .submit_button
-                    .root()
-                    .and_then(|r| r.downcast::<ApplicationWindow>().ok())
-            }) {
-                StatsDialog::show(
-                    &window,
-                    settings_ref.borrow().difficulty,
-                    &stats_manager_stats.borrow_mut(),
-                    None,
-                    || {},
-                );
-            }
-        });
-    }
+
+    action_statistics.connect_activate({
+        let settings = Rc::clone(&settings);
+        let window = window.clone();
+        move |_, _| {
+            StatsDialog::show(
+                &window,
+                settings.borrow().difficulty,
+                &stats_manager_stats.borrow_mut(),
+                None,
+                || {},
+            );
+        }
+    });
+
     window.add_action(&action_statistics);
 
     let action_about = SimpleAction::new("about", None);
@@ -471,9 +465,6 @@ pub fn build_ui(app: &Application) {
     });
     window.add_action(&action_about);
 
-    let submit_ui_cleanup = Rc::clone(&submit_ui);
-    let puzzle_grid_ui_cleanup = Rc::clone(&puzzle_grid_ui);
-    let clue_set_ui_cleanup = Rc::clone(&clue_set_ui);
     let seed_dialog = SeedDialog::new(
         &window,
         game_action_emitter.clone(),
@@ -517,9 +508,9 @@ pub fn build_ui(app: &Application) {
         history_controls_ui.borrow_mut().destroy();
         game_state.borrow_mut().destroy();
         game_info_ui.borrow_mut().destroy();
-        submit_ui_cleanup.borrow_mut().destroy();
-        puzzle_grid_ui_cleanup.borrow_mut().destroy();
-        clue_set_ui_cleanup.borrow_mut().destroy();
+        submit_ui.borrow_mut().destroy();
+        puzzle_grid_ui.borrow_mut().destroy();
+        clue_set_ui.borrow_mut().destroy();
         timer_button.borrow_mut().destroy();
         layout_manager.borrow_mut().destroy();
         seed_dialog.borrow_mut().destroy();

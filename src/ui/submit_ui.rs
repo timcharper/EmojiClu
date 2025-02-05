@@ -1,12 +1,11 @@
-use glib::timeout_add_local_once;
 use gtk4::glib::SignalHandlerId;
-use gtk4::prelude::*;
+use gtk4::{prelude::*, Label};
 use gtk4::{
-    ApplicationWindow, Button, ButtonsType, DialogFlags, MessageDialog, MessageType, ResponseType,
+    ApplicationWindow, Button, ButtonsType, Dialog, DialogFlags, MessageDialog, MessageType,
+    ResponseType,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
@@ -20,22 +19,18 @@ use crate::ui::stats_dialog::StatsDialog;
 use super::audio_set::AudioSet;
 
 pub struct SubmitUI {
-    pub submit_button: Rc<Button>,
     subscription_id: Option<Unsubscriber<GameStateEvent>>,
     stats_manager: Rc<RefCell<StatsManager>>,
     audio_set: Rc<AudioSet>,
-    submit_button_clicked_signal: Option<SignalHandlerId>,
     window: Rc<ApplicationWindow>,
     game_action_emitter: EventEmitter<GameActionEvent>,
+    submit_dialog: Rc<RefCell<CompletionDialog>>,
 }
 
 impl Destroyable for SubmitUI {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.subscription_id.take() {
             subscription_id.unsubscribe();
-        }
-        if let Some(submit_button_clicked_signal) = self.submit_button_clicked_signal.take() {
-            self.submit_button.disconnect(submit_button_clicked_signal);
         }
     }
 }
@@ -53,30 +48,32 @@ impl SubmitUI {
         submit_button.set_tooltip_text(Some("Submit puzzle solution"));
         submit_button.set_action_name(Some("win.submit"));
 
-        let submit_button_clicked_signal: SignalHandlerId;
+        let submit_dialog: Rc<RefCell<CompletionDialog>>;
 
-        {
-            let game_action_emitter_submit = game_action_emitter.clone();
-            submit_button_clicked_signal = submit_button.connect_clicked(move |_| {
-                game_action_emitter_submit.emit(GameActionEvent::CompletePuzzle);
-            });
-        }
+        submit_dialog = CompletionDialog::new(
+            window,
+            Box::new({
+                let game_action_emitter = game_action_emitter.clone();
+                move || {
+                    game_action_emitter.emit(GameActionEvent::CompletePuzzle);
+                }
+            }),
+            Box::new({
+                let game_action_emitter = game_action_emitter.clone();
+                move || {
+                    game_action_emitter.emit(GameActionEvent::Undo);
+                }
+            }),
+        );
 
         let submit_ui = Rc::new(RefCell::new(Self {
-            submit_button,
             subscription_id: None,
             stats_manager: Rc::clone(stats_manager),
             audio_set: Rc::clone(audio_set),
-            submit_button_clicked_signal: Some(submit_button_clicked_signal),
             window: Rc::clone(window),
             game_action_emitter: game_action_emitter,
+            submit_dialog,
         }));
-
-        // Initialize button state
-        timeout_add_local_once(
-            Duration::default(),
-            Self::idle_add_handler(submit_ui.clone()),
-        );
 
         // Connect observer
         SubmitUI::connect_observer(submit_ui.clone(), game_state_observer);
@@ -90,7 +87,6 @@ impl SubmitUI {
                 // just ignore
             }
             PuzzleCompletionState::Correct(stats) => {
-                self.submit_button.remove_css_class("submit-ready"); // Stop blinking once clicked
                 let media = self.audio_set.random_win_sound();
                 media.play();
 
@@ -145,7 +141,9 @@ impl SubmitUI {
         let submit_ui_moved = submit_ui.clone();
         let subscription_id = game_state_observer.subscribe(move |event| match event {
             GameStateEvent::PuzzleSubmissionReadyChanged(all_cells_filled) => {
-                submit_ui_moved.borrow().update_button(*all_cells_filled)
+                if *all_cells_filled {
+                    CompletionDialog::show(submit_ui_moved.borrow().submit_dialog.clone());
+                }
             }
             GameStateEvent::PuzzleSuccessfullyCompleted(state) => {
                 submit_ui_moved.borrow().handle_game_completion(state);
@@ -154,20 +152,101 @@ impl SubmitUI {
         });
         submit_ui.borrow_mut().subscription_id = Some(subscription_id);
     }
+}
 
-    fn idle_add_handler(submit_ui: Rc<RefCell<Self>>) -> impl Fn() {
-        let submit_ui = submit_ui.clone();
-        move || {
-            submit_ui.borrow().update_button(false);
-        }
+struct CompletionDialog {
+    window: Rc<ApplicationWindow>,
+    is_active: bool,
+    on_submit: Box<dyn Fn()>,
+    on_undo: Box<dyn Fn()>,
+    accepted: bool,
+}
+
+impl CompletionDialog {
+    fn new(
+        window: &Rc<ApplicationWindow>,
+        on_submit: Box<dyn Fn()>,
+        on_undo: Box<dyn Fn()>,
+    ) -> Rc<RefCell<Self>> {
+        let completion_dialog = Rc::new(RefCell::new(CompletionDialog {
+            window: Rc::clone(window),
+            is_active: false,
+            accepted: false,
+            on_submit,
+            on_undo,
+        }));
+
+        completion_dialog
     }
 
-    fn update_button(&self, all_cells_filled: bool) {
-        self.submit_button.set_sensitive(all_cells_filled);
-        if all_cells_filled {
-            self.submit_button.add_css_class("submit-ready");
-        } else {
-            self.submit_button.remove_css_class("submit-ready");
+    fn show(completion_dialog: Rc<RefCell<Self>>) {
+        let completion_dialog_weak = Rc::downgrade(&completion_dialog);
+        let mut completion_dialog = completion_dialog.borrow_mut();
+        if completion_dialog.is_active {
+            return;
         }
+        completion_dialog.is_active = true;
+        completion_dialog.accepted = false;
+        let dialog = Dialog::builder()
+            .transient_for(completion_dialog.window.as_ref())
+            .modal(true)
+            .build();
+
+        let content_area = dialog.content_area();
+        content_area.set_margin_bottom(20);
+        content_area.set_margin_top(20);
+        content_area.set_margin_start(20);
+        content_area.set_margin_end(20);
+        content_area.set_spacing(20);
+
+        let label = Label::builder()
+            .label("Puzzle Completed!")
+            .css_classes(["completion-label"])
+            .build();
+        content_area.append(&label);
+
+        let submit_button = Button::builder()
+            .label("Submit")
+            .css_classes(["completion-submit-button"])
+            .margin_top(10)
+            .margin_bottom(10)
+            .margin_start(10)
+            .margin_end(10)
+            .build();
+
+        let undo_button = Button::builder()
+            .label("Undo")
+            .css_classes(["completion-undo-button"])
+            .margin_top(10)
+            .margin_bottom(10)
+            .margin_start(10)
+            .margin_end(10)
+            .build();
+
+        dialog.add_action_widget(&undo_button, ResponseType::Cancel);
+        dialog.add_action_widget(&submit_button, ResponseType::Accept);
+        drop(completion_dialog);
+
+        dialog.connect_response(move |dialog, response| {
+            if let Some(completion_dialog) = completion_dialog_weak.upgrade() {
+                let mut completion_dialog = completion_dialog.borrow_mut();
+                match response {
+                    ResponseType::Accept => {
+                        completion_dialog.accepted = true;
+                        (completion_dialog.on_submit)();
+                    }
+                    ResponseType::Cancel => {}
+                    _ => {
+                        if !completion_dialog.accepted {
+                            (completion_dialog.on_undo)();
+                        }
+                        completion_dialog.is_active = false;
+                    }
+                }
+            }
+            dialog.close();
+        });
+
+        dialog.show();
     }
 }

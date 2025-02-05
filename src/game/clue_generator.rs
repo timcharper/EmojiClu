@@ -52,7 +52,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
     );
     let mut state = ClueGeneratorState::new(init_board.clone());
 
-    let puzzle_variant = random_puzzle_variant(&mut state.rng);
+    let puzzle_variant = random_puzzle_variant(init_board.solution.difficulty, &mut state.rng);
     let clue_weights = puzzle_variant.get_clue_weights();
     info!(
         target: "clue_generator",
