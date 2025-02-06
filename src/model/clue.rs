@@ -1,4 +1,8 @@
-use std::{collections::HashSet, fmt::Debug};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+};
 
 use log::warn;
 
@@ -38,11 +42,25 @@ pub enum VerticalClueType {
     TwoInColumnWithout, // Two tiles in same column, one not
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[readonly::make]
+#[derive(Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Clue {
+    /// DO NOT MUTATE
+    #[readonly]
     pub clue_type: ClueType,
+    /// DO NOT MUTATE
+    #[readonly]
     pub assertions: Vec<TileAssertion>,
-    pub sort_index: usize,
+    /// DO NOT MUTATE
+    #[readonly]
+    pub(super) sort_index: usize,
+    cached_hash: u64,
+}
+
+impl Hash for Clue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.cached_hash);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
@@ -87,11 +105,26 @@ impl Clue {
         assertions: Vec<TileAssertion>,
         sort_index: usize,
     ) -> Self {
-        Self {
+        let clue = Self {
             clue_type,
             assertions,
             sort_index,
+            cached_hash: 0, // Temporary value
+        };
+        let cached_hash = clue.compute_hash();
+        Self {
+            cached_hash,
+            ..clue
         }
+    }
+
+    fn compute_hash(&self) -> u64 {
+        use std::hash::Hasher;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.clue_type.hash(&mut hasher);
+        self.assertions.hash(&mut hasher);
+        self.sort_index.hash(&mut hasher);
+        hasher.finish()
     }
 
     pub fn three_adjacent(t1: Tile, t2: Tile, t3: Tile) -> Self {

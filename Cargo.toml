@@ -19,6 +19,7 @@ chrono = "0.4"
 uuid = { version = "1.4", features = ["v4", "serde"] }
 itertools = "0.14"
 serial_test = "3.2.0"
+readonly = "0.2.12"
 
 [dev-dependencies]
 test-context = "0.3.0"

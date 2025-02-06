@@ -177,8 +177,8 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
         }
     }
 
-    state.quick_prune(&init_board);
-    state.deep_prune_clues(&init_board);
+    // state.quick_prune(&init_board);
+    state.optimized_prune(&init_board);
     trace!(
         target: "clue_generator",
         "Solved board: {:?}",
@@ -220,8 +220,8 @@ mod tests {
         let start_seed = 979700061949446372;
         for i in 0..n_iterations {
             // we'd test Veteran if we had all day... needs compiler optimizations to run at reasonable speed
-            // let solution = Solution::new(Difficulty::Veteran, Some(broken_seed + i));
-            let solution = Solution::new(Difficulty::Hard, Some(start_seed + i));
+            let solution = Solution::new(Difficulty::Veteran, Some(start_seed + i));
+            // let solution = Solution::new(Difficulty::Hard, Some(start_seed + i));
             let init_board = GameBoard::new(solution.into());
             let result = generate_clues(&init_board);
             trace!(

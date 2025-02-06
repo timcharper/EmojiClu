@@ -316,99 +316,54 @@ impl ClueGeneratorState {
         self.tiles_without_evidence.remove(&(column, tile));
     }
 
-    pub fn quick_prune(&mut self, board: &GameBoard) {
+    pub fn optimized_prune(&mut self, board: &GameBoard) {
+        let mut required_clues: BTreeSet<Clue> = BTreeSet::new();
+        let mut clues = self.clues.clone().into_iter().rev().collect::<Vec<_>>();
         info!(
             target: "clue_generator",
-            "Quick pruning {} clues; board is {:?}",
-            self.clues.len(),
-            board
+            "Optimized prune starting with {} clues",
+            clues.len()
         );
 
-        // solve puzzle backwards, any unused clues, discard
-        let mut board = board.clone();
-        let reversed_clues = self.clues.clone().into_iter().rev().collect::<Vec<_>>();
-        let mut used_clues = BTreeSet::new();
-        while !board.is_complete() {
-            let deduction = perform_evaluation_step(&mut board, &reversed_clues);
-            match deduction {
-                EvaluationStepResult::Nothing => {
-                    panic!("Puzzle not solvable! {:?}", board);
+        while !required_clues.contains(clues.last().unwrap()) {
+            let mut used_clues = BTreeSet::new();
+            let mut board = board.clone();
+            while !board.is_complete() {
+                let deduction = perform_evaluation_step(&mut board, &clues);
+                match deduction {
+                    EvaluationStepResult::Nothing => {
+                        panic!("Puzzle not solvable! {:?}", board);
+                    }
+                    EvaluationStepResult::DeductionsFound(clue) => {
+                        used_clues.insert(clue);
+                    }
+                    EvaluationStepResult::HiddenPairsFound => {
+                        // nothing
+                    }
                 }
-                EvaluationStepResult::DeductionsFound(clue) => {
-                    used_clues.insert(clue);
-                }
-                EvaluationStepResult::HiddenPairsFound => {
-                    // nothing
-                }
+                board.auto_solve_all();
             }
-            board.auto_solve_all();
-        }
-        info!(
-            target: "clue_generator",
-            "Quick prune reduced clues from {} to {}",
-            self.clues.len(),
-            used_clues.len()
-        );
-        self.clues.retain(|c| used_clues.contains(c));
-    }
 
-    pub fn deep_prune_clues(&mut self, board: &GameBoard) {
-        let original_clue_count = self.clues.len();
+            // remove any clues that were not used
+            clues.retain(|clue| used_clues.contains(clue));
 
-        trace!(
-            target: "clue_generator",
-            "Original clues: {:?}",
-            self.clues
-        );
+            // mark the last clue as known to be required
+            let last_clue = clues
+                .pop()
+                .expect("No clues left and board wasn't solved already.");
+            required_clues.insert(last_clue.clone());
 
-        // Try removing each clue one at a time
-        let mut i = 0;
-        while i < self.clues.len() {
+            // put the last clue back at the beginning
+            clues.insert(0, last_clue);
+
             info!(
                 target: "clue_generator",
-                "Deep prune cycles remaining: {}",
-                self.clues.len() - i
+                "Tested {} / {} clues",
+                required_clues.len(),
+                clues.len()
             );
-            let clue = self.clues.remove(i);
-            let mut test_board = board.clone();
-
-            // Try solving without this clue
-            while perform_evaluation_step(&mut test_board, &self.clues)
-                != EvaluationStepResult::Nothing
-            {
-                test_board.auto_solve_all();
-            }
-
-            if !test_board.is_complete() {
-                trace!(
-                    target: "clue_generator",
-                    "Board wasn't solvable without clue {:?}; keeping it",
-                    clue
-                );
-                trace!(
-                    target: "clue_generator",
-                    "Board state: {:?}",
-                    test_board
-                );
-                // Board wasn't solvable without this clue, put it back
-                self.clues.insert(i, clue);
-                i += 1;
-            }
-            // If board was solvable without the clue, leave it removed and don't increment i
-            // since we need to test the next clue at the same index
         }
-
-        info!(
-            target: "clue_generator",
-            "Deep prune reduced clues from {} to {} clues",
-            original_clue_count,
-            self.clues.len()
-        );
-        trace!(
-            target: "clue_generator",
-            "Pruned clues: {:?}",
-            self.clues
-        );
+        self.clues.retain(|clue| required_clues.contains(clue));
     }
 
     fn get_random_tile_not_from_columns(
