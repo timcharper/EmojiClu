@@ -4,7 +4,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use super::settings::Settings;
-use super::solver::{deduce_hidden_pairs, perform_evaluation_step, EvaluationStepResult};
+use super::solver::{deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult};
 use super::{deduce_clue, generate_clues};
 use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
@@ -440,7 +440,7 @@ impl GameState {
                 );
                 return;
             }
-            EvaluationStepResult::HiddenPairsFound => {
+            EvaluationStepResult::HiddenSetsFound => {
                 log::info!("Hidden pairs found");
             }
             EvaluationStepResult::DeductionsFound(clues) => {
@@ -464,7 +464,7 @@ impl GameState {
         }
 
         // look for hidden pairs
-        let hidden_pairs = deduce_hidden_pairs(&self.current_board);
+        let hidden_pairs = deduce_hidden_sets(&self.current_board);
         if !hidden_pairs.is_empty() {
             return Some(DeductionResult {
                 deductions: hidden_pairs,

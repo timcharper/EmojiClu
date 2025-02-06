@@ -76,13 +76,13 @@ impl GameBoard {
     }
 
     pub fn remove_candidate(&mut self, row: usize, col: usize, tile: Tile) {
-        let tile_idx = Tile::variant_to_index(tile.variant);
+        let tile_idx = Tile::variant_to_usize(tile.variant);
         self.candidates[row][col] &= !(1 << tile_idx);
         self.recompute_resolved_row(row);
     }
 
     pub fn show_candidate(&mut self, row: usize, col: usize, tile: Tile) {
-        let tile_idx = Tile::variant_to_index(tile.variant);
+        let tile_idx = Tile::variant_to_usize(tile.variant);
         self.candidates[row][col] |= 1 << tile_idx;
         self.recompute_resolved_row(row);
     }
@@ -97,14 +97,14 @@ impl GameBoard {
         let row_selections = self.selected[row]
             .iter()
             .flatten()
-            .map(|&variant| 1u8 << Tile::variant_to_index(variant))
+            .map(|&variant| 1u8 << Tile::variant_to_usize(variant))
             .fold(0u8, |acc, bit| acc | bit);
 
         for col in 0..self.solution.n_variants {
             match self.selected[row][col] {
                 Some(selected_variant) => {
                     // Only the selected variant is available here
-                    let variant_idx = Tile::variant_to_index(selected_variant);
+                    let variant_idx = Tile::variant_to_usize(selected_variant);
                     self.resolved_candidates[row][col] = 1 << variant_idx;
                 }
                 None => {
@@ -117,7 +117,7 @@ impl GameBoard {
     }
 
     pub fn get_candidate(&self, row: usize, col: usize, variant: char) -> Option<Candidate> {
-        let variant_idx = Tile::variant_to_index(variant);
+        let variant_idx = Tile::variant_to_usize(variant);
         if variant_idx >= self.solution.n_variants
             || row >= self.solution.n_rows
             || col >= self.solution.n_variants
@@ -132,7 +132,7 @@ impl GameBoard {
     }
 
     pub fn is_candidate_available(&self, row: usize, col: usize, variant: char) -> bool {
-        let variant_idx = Tile::variant_to_index(variant);
+        let variant_idx = Tile::variant_to_usize(variant);
         (self.resolved_candidates[row][col] & (1 << variant_idx)) != 0
     }
 
@@ -248,7 +248,7 @@ impl GameBoard {
                 continue;
             }
 
-            let cells: Vec<&str> = line[2..].split('|').collect();
+            let cells: Vec<&str> = line[2..].split('|').filter(|c| !c.is_empty()).collect();
             for (col, cell) in cells.iter().enumerate() {
                 let cell = cell.trim();
 

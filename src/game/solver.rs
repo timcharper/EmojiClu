@@ -1,10 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::model::{
-    Clue, ClueType, Deduction, GameBoard, HorizontalClueType, PartialSolution,
-    Tile, TileAssertion, VerticalClueType,
+    Clue, ClueType, Deduction, GameBoard, HorizontalClueType, PartialSolution, Tile, TileAssertion,
+    VerticalClueType,
 };
 use log::trace;
+
+use super::hidden_pair_finder::{find_hidden_pairs_in_row, find_naked_pairs_in_row};
 
 fn is_known_deduction(board: &GameBoard, deduction: &Deduction) -> bool {
     let result = if deduction.is_positive {
@@ -686,48 +688,117 @@ where
     grouped_by_columns
 }
 
-pub fn deduce_hidden_pairs(board: &GameBoard) -> Vec<Deduction> {
+pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction> {
     let mut deductions = Vec::new();
 
-    for row in 0..board.solution.n_rows {
-        // Build the map of variant -> possible columns
-        let mut possible_variant_columns = HashMap::new();
-        for col in 0..board.solution.n_variants {
-            for variant in board.solution.variants.iter() {
-                if board.is_candidate_available(row, col, *variant) {
-                    possible_variant_columns
-                        .entry(*variant)
-                        .or_insert(HashSet::new())
-                        .insert(col);
+    // // Build the map of variant -> possible columns
+    // let mut possible_variant_columns = HashMap::new();
+    // for col in 0..board.solution.n_variants {
+    //     for variant in board.solution.variants.iter() {
+    //         if board.is_candidate_available(row, col, *variant) {
+    //             possible_variant_columns
+    //                 .entry(*variant)
+    //                 .or_insert(HashSet::new())
+    //                 .insert(col);
+    //         }
+    //     }
+    // }
+
+    // // Group variants by their possible columns
+    // let grouped_by_columns = group_variants_by_columns(&possible_variant_columns);
+
+    // // Filter to only consider sets of appropriate size and check for hidden sets
+    // for (columns, variants) in grouped_by_columns {
+    //     if columns.len() <= board.solution.n_variants / 2 && variants.len() == columns.len() {
+    //         // Found a hidden set! Add negative deductions for other variants in these columns
+    //         for col in columns {
+    //             for variant in board.solution.variants.iter() {
+    //                 if !variants.contains(variant) {
+    //                     deductions.push(Deduction {
+    //                         tile: Tile::new(row, *variant),
+    //                         column: *col,
+    //                         is_positive: false,
+    //                     });
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    let mut hidden_sets = Vec::new();
+    hidden_sets.extend(find_hidden_pairs_in_row(row, board));
+    if hidden_sets.len() == 0 {
+        hidden_sets.extend(find_naked_pairs_in_row(row, board));
+    }
+    if hidden_sets.len() == 0 {
+        return deductions;
+    }
+
+    trace!(
+        target: "solver",
+        "Found {} hidden sets: {:?}",
+        hidden_sets.len(),
+        hidden_sets
+    );
+
+    // find the smallest one
+    // find the smallest one
+    let smallest_hidden_set = hidden_sets.iter().min_by_key(|set| set.variants.len());
+    if let Some(smallest_hidden_set) = smallest_hidden_set {
+        trace!(
+            target: "solver",
+            "Smallest hidden set: {:?}",
+            smallest_hidden_set
+        );
+        // add negative deductions for the variants that are not in the smallest hidden set
+        let hidden_set_inverse = board
+            .solution
+            .variants
+            .clone()
+            .into_iter()
+            .filter(|v| !smallest_hidden_set.variants.contains(v))
+            .collect::<Vec<_>>();
+
+        for column in 0..board.solution.n_variants {
+            let col_in_set = smallest_hidden_set.columns.contains(&column);
+            if col_in_set {
+                // only the hidden set variants can go here
+                // not in hidden set, but on board? get rid of it.
+                for not_in_set_variant in hidden_set_inverse.iter() {
+                    if board.is_candidate_available(row, column, *not_in_set_variant) {
+                        deductions.push(Deduction {
+                            tile: Tile::new(row, *not_in_set_variant),
+                            column,
+                            is_positive: false,
+                        });
+                    }
                 }
-            }
-        }
-
-        // Group variants by their possible columns
-        let grouped_by_columns = group_variants_by_columns(&possible_variant_columns);
-
-        // Filter to only consider sets of appropriate size and check for hidden sets
-        for (columns, variants) in grouped_by_columns {
-            if columns.len() <= board.solution.n_variants / 2 && variants.len() == columns.len() {
-                // Found a hidden set! Add negative deductions for other variants in these columns
-                for col in columns {
-                    for variant in board.solution.variants.iter() {
-                        if !variants.contains(variant) {
-                            deductions.push(Deduction {
-                                tile: Tile::new(row, *variant),
-                                column: *col,
-                                is_positive: false,
-                            });
-                        }
+            } else {
+                // hidden set variants cannot go here
+                for hidden_set_variant in smallest_hidden_set.variants.iter() {
+                    // eliminate hidden variants from columns not part of set
+                    if board.is_candidate_available(row, column, *hidden_set_variant) {
+                        // remove it! you don't belong here
+                        deductions.push(Deduction {
+                            tile: Tile::new(row, *hidden_set_variant),
+                            column,
+                            is_positive: false,
+                        });
                     }
                 }
             }
         }
     }
-
     deductions
-        .into_iter()
-        .filter(|deduction| !is_known_deduction(board, deduction))
+    // deductions
+    //     .into_iter()
+    //     .filter(|deduction| !is_known_deduction(board, deduction))
+    //     .collect()
+}
+
+pub fn deduce_hidden_sets(board: &GameBoard) -> Vec<Deduction> {
+    (0..board.solution.n_rows)
+        .flat_map(|row| deduce_hidden_sets_in_row(board, row))
         .collect()
 }
 
@@ -774,7 +845,7 @@ pub fn deduce_clue(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EvaluationStepResult {
     Nothing,
-    HiddenPairsFound,
+    HiddenSetsFound,
     DeductionsFound(Clue),
 }
 
@@ -784,10 +855,10 @@ pub fn perform_evaluation_step(board: &mut GameBoard, clues: &Vec<Clue>) -> Eval
         return EvaluationStepResult::Nothing;
     }
 
-    let deductions = deduce_hidden_pairs(board);
+    let deductions = deduce_hidden_sets(board);
     if deductions.len() > 0 {
         board.apply_deductions(&deductions);
-        return EvaluationStepResult::HiddenPairsFound;
+        return EvaluationStepResult::HiddenSetsFound;
     }
 
     // reapply existing clues
@@ -814,31 +885,11 @@ mod tests {
     use test_context::test_context;
 
     use super::*;
+    use crate::game::tests::create_test_solution;
     use crate::{
         game::tests::UsingLogger,
-        model::{Clue, Difficulty, GameBoard, Solution, Tile, MAX_GRID_SIZE},
+        model::{Clue, GameBoard, Tile},
     };
-    use std::rc::Rc;
-
-    fn create_test_solution(n_rows: usize) -> Rc<Solution> {
-        let mut grid = [[Tile::new(0, '0'); MAX_GRID_SIZE]; MAX_GRID_SIZE];
-        // Fill first 4x4 of grid with test data
-        for row in 0..3 {
-            for col in 0..4 {
-                grid[row][col] = Tile::new(row, (b'a' + col as u8) as char);
-            }
-        }
-
-        Rc::new(Solution {
-            variants: vec!['a', 'b', 'c', 'd'],
-            grid,
-            n_rows,
-            n_variants: 4,
-            variants_range: 'a'..='d',
-            difficulty: Difficulty::Easy,
-            seed: 0,
-        })
-    }
 
     #[test]
     fn test_deduce_three_adjacent_empty_board() {
@@ -848,7 +899,7 @@ mod tests {
 2|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         // Create a clue for 3 adjacent tiles in row 1
         let clue = Clue::three_adjacent(Tile::new(0, 'a'), Tile::new(0, 'b'), Tile::new(0, 'c'));
@@ -877,7 +928,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::three_adjacent(Tile::new(0, 'a'), Tile::new(0, 'b'), Tile::new(1, 'a'));
 
@@ -908,7 +959,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::three_adjacent(Tile::new(0, 'a'), Tile::new(0, 'b'), Tile::new(1, 'a'));
 
@@ -930,7 +981,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::adjacent(Tile::new(0, 'a'), Tile::new(1, 'a'));
 
@@ -951,7 +1002,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::adjacent(Tile::new(0, 'a'), Tile::new(1, 'a'));
 
@@ -972,7 +1023,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue =
             Clue::two_apart_not_middle(Tile::new(0, 'a'), Tile::new(0, 'b'), Tile::new(1, 'a'));
@@ -993,7 +1044,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue =
             Clue::two_apart_not_middle(Tile::new(0, 'a'), Tile::new(0, 'b'), Tile::new(1, 'a'));
@@ -1016,7 +1067,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue =
             Clue::two_apart_not_middle(Tile::new(0, 'a'), Tile::new(0, 'b'), Tile::new(1, 'a'));
@@ -1038,7 +1089,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::left_of(Tile::new(0, 'a'), Tile::new(1, 'b'));
 
@@ -1057,7 +1108,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::left_of(Tile::new(0, 'a'), Tile::new(1, 'a'));
 
@@ -1076,7 +1127,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::left_of(Tile::new(0, 'a'), Tile::new(1, 'a'));
 
@@ -1095,7 +1146,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::not_adjacent(Tile::new(0, 'a'), Tile::new(0, 'b'));
@@ -1113,7 +1164,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::not_adjacent(Tile::new(0, 'a'), Tile::new(1, 'a'));
@@ -1141,7 +1192,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::not_adjacent(Tile::new(0, 'a'), Tile::new(0, 'b'));
@@ -1161,7 +1212,7 @@ mod tests {
 -----------------
 2|abcd|abcd|abcd|abcd|";
 
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
 
         let clue = Clue::three_in_column(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
 
@@ -1182,7 +1233,7 @@ mod tests {
 ----------------------
 ";
 
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::parse_vertical("|+0a,+1b,+2c|");
@@ -1205,7 +1256,7 @@ mod tests {
 ----------------------
 ";
 
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::three_in_column(Tile::new(0, 'a'), Tile::new(1, 'a'), Tile::new(2, 'a'));
@@ -1230,7 +1281,7 @@ mod tests {
 ----------------------
 ";
 
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
 
         let clue =
             Clue::two_in_column_without(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1250,7 +1301,7 @@ mod tests {
 ----------------------
 ";
 
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
         println!("Board: {:?}", board);
 
         let clue =
@@ -1274,7 +1325,7 @@ mod tests {
 ----------------------
 ";
 
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
 
         let clue =
             Clue::two_in_column_without(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1295,7 +1346,7 @@ mod tests {
 2|abcd|abcd|abcd|abcd|
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
 
         let clue =
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1314,7 +1365,7 @@ mod tests {
 2|abcd|abcd|abcd|abcd|
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
 
         let clue =
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1334,7 +1385,7 @@ mod tests {
 2|abcd|abcd|abcd|abcd|
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
 
         let clue =
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1355,7 +1406,7 @@ mod tests {
 2|abcd|abcd|abcd|<C> |
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(3));
+        let board = GameBoard::parse(input, create_test_solution(3, 4));
 
         let clue =
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1367,19 +1418,23 @@ mod tests {
         assert!(deductions.contains(&Deduction::parse("0a not col 2").unwrap()));
     }
 
+    #[test_context(UsingLogger)]
     #[test]
-    fn test_deduce_hidden_pairs() {
+    fn test_deduce_hidden_pairs(_: &mut UsingLogger) {
         let input = "\
 0|ab  |ab  |abcd|abcd|
 ----------------------
 1|abcd|abcd|abcd|abcd|
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
-        let deductions = deduce_hidden_pairs(&board);
+        let deductions = deduce_hidden_sets(&board);
         println!("Deductions: {:?}", deductions);
+        for deduction in &deductions {
+            println!("Deduction: {:?}", deduction);
+        }
         assert_eq!(deductions.len(), 4);
         assert!(deductions.contains(&Deduction::parse("0a not col 3").unwrap()));
         assert!(deductions.contains(&Deduction::parse("0b not col 3").unwrap()));
@@ -1395,7 +1450,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::left_of(Tile::new(0, 'a'), Tile::new(1, 'b'));
@@ -1416,7 +1471,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::left_of(Tile::new(0, 'a'), Tile::new(1, 'b'));
@@ -1436,7 +1491,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::left_of(Tile::new(0, 'a'), Tile::new(1, 'b'));
@@ -1456,7 +1511,7 @@ mod tests {
 1|abcd|abcd|abcd|abcd|
 -----------------";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
         println!("Board: {:?}", board);
 
         let clue = Clue::adjacent(Tile::new(0, 'a'), Tile::new(0, 'b'));

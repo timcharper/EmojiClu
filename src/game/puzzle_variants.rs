@@ -9,7 +9,10 @@ use log::{info, trace};
 use rand::{seq::IndexedRandom, Rng, RngCore};
 use std::fmt::Debug;
 
-use super::clue_generator_state::ClueGeneratorState;
+use super::{
+    clue_generator_state::ClueGeneratorState,
+    solver::deduce_hidden_sets_in_row,
+};
 
 #[derive(Debug, Clone)]
 pub struct WeightedClueType {
@@ -69,13 +72,36 @@ fn group_by_scan<T: Eq, U>(
 }
 
 /// basic scoring which punishes clues for revealing too much. Lower score = preferred.
-fn generic_score_clue(_: &Clue, deducations: &Vec<Deduction>) -> usize {
+/// Basic scoring function that punishes clues for revealing too much information
+///
+/// # Arguments
+/// * `board` - The game board state (after applying the proposed deductions)
+/// * `clue` - The clue being scored
+/// * `deductions` - The deductions made from this clue
+///
+/// # Returns
+/// A score where lower values are preferred. The score is calculated as:
+/// (number of deductions + (number of positive deductions * 6)) * 10
+fn generic_score_clue(board: &GameBoard, _: &Clue, deducations: &Vec<Deduction>) -> usize {
     let n_deductions = deducations.len();
+    let deduction_rows = unique_scan(deducations.iter().map(|d| d.tile.row));
+
+    let n_rows_with_hidden_pair_deductions = deduction_rows
+        .iter()
+        .filter(|row| {
+            let hidden_pairs = deduce_hidden_sets_in_row(&board, **row);
+            hidden_pairs.len() > 0
+        })
+        .count();
+
+    let hidden_pair_boost = (n_rows_with_hidden_pair_deductions * 5) + 1;
+
     let n_tiles_revealed = deducations
         .iter()
         .filter(|deduction| deduction.is_positive)
         .count();
-    (n_deductions + (n_tiles_revealed * 6)) * 10
+
+    ((n_deductions + (n_tiles_revealed * 6)) * 10) / hidden_pair_boost
 }
 
 fn generic_starter_evidence(state: &mut ClueGeneratorState, init_board: &GameBoard) {
@@ -114,7 +140,7 @@ pub trait PuzzleVariant: Debug + PuzzleVariantCloneBox {
     fn get_clue_weights(&self) -> Vec<WeightedClueType>;
 
     /// score a clue based on the deductions; smaller score = better
-    fn score_clue(&self, clue: &Clue, deducations: &Vec<Deduction>) -> usize;
+    fn score_clue(&self, board: &GameBoard, clue: &Clue, deducations: &Vec<Deduction>) -> usize;
     fn get_variant_type(&self) -> PuzzleVariantType;
     fn populate_starter_evidence(&self, state: &mut ClueGeneratorState, init_board: &GameBoard);
 }
@@ -167,8 +193,8 @@ impl PuzzleVariant for StandardPuzzleVariant {
         ]
     }
 
-    fn score_clue(&self, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
-        generic_score_clue(clue, deducations)
+    fn score_clue(&self, board: &GameBoard, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
+        generic_score_clue(board, clue, deducations)
     }
 
     fn get_variant_type(&self) -> PuzzleVariantType {
@@ -218,8 +244,8 @@ impl PuzzleVariant for NarrowingPuzzleVariant {
         ]
     }
 
-    fn score_clue(&self, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
-        let score = generic_score_clue(clue, deducations);
+    fn score_clue(&self, board: &GameBoard, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
+        let score = generic_score_clue(board, clue, deducations);
 
         let middle_col = self.difficulty.grid_size() as f32 / 2.0;
         // take the average distance of deductions from the center
@@ -282,8 +308,8 @@ impl PuzzleVariant for StripingPuzzleVariant {
         ]
     }
 
-    fn score_clue(&self, clue: &Clue, deductions: &Vec<Deduction>) -> usize {
-        let score = generic_score_clue(clue, deductions);
+    fn score_clue(&self, board: &GameBoard, clue: &Clue, deductions: &Vec<Deduction>) -> usize {
+        let score = generic_score_clue(board, clue, deductions);
 
         if deductions.len() <= 1 {
             return score;

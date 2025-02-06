@@ -19,11 +19,15 @@ impl Tile {
         Self { row, variant }
     }
 
-    pub fn variant_to_index(variant: char) -> usize {
+    pub fn variant_to_u8(variant: char) -> u8 {
+        variant as u8 - 'a' as u8
+    }
+
+    pub fn variant_to_usize(variant: char) -> usize {
         variant as usize - 'a' as usize
     }
 
-    pub fn index_to_variant(index: usize) -> char {
+    pub fn usize_to_variant(index: usize) -> char {
         (index + 'a' as usize) as u8 as char
     }
 }

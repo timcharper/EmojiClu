@@ -337,7 +337,7 @@ impl ClueGeneratorState {
                     EvaluationStepResult::DeductionsFound(clue) => {
                         used_clues.insert(clue);
                     }
-                    EvaluationStepResult::HiddenPairsFound => {
+                    EvaluationStepResult::HiddenSetsFound => {
                         // nothing
                     }
                 }

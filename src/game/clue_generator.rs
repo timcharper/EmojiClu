@@ -20,7 +20,10 @@ fn evaluate_clue(
 ) -> ClueEvaluation {
     let deductions = deduce_clue(board, clue);
 
-    let score = puzzle_variant.score_clue(clue, &deductions);
+    let mut board_with_deductions = board.clone();
+    board_with_deductions.apply_deductions(&deductions);
+
+    let score = puzzle_variant.score_clue(&board_with_deductions, clue, &deductions);
     ClueEvaluation {
         clue: clue.clone(),
         deductions,
@@ -159,7 +162,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
             );
             state.add_clue(&evaluated_clue.clue, &evaluated_clue.deductions);
 
-            // re-evaluate clues from the beginning after applying new evidence
+            // re-evaluate clues from the beginning after applying new evidence, and re-solve any hidden pairs.
             while perform_evaluation_step(&mut state.board, &state.clues)
                 != EvaluationStepResult::Nothing
             {}
