@@ -7,8 +7,9 @@ use std::{collections::HashSet, rc::Rc};
 
 #[derive(Clone)]
 pub struct GameBoard {
-    pub candidates: [[Vec<Candidate>; MAX_GRID_SIZE]; MAX_GRID_SIZE],
-    pub selected: [[Option<Tile>; MAX_GRID_SIZE]; MAX_GRID_SIZE],
+    candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE],
+    resolved_candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE],
+    selected: [[Option<char>; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     pub solution: Rc<Solution>,
     pub clue_set: Rc<ClueSet>,
     pub completed_horizontal_clues: HashSet<usize>,
@@ -30,7 +31,7 @@ impl std::fmt::Debug for GameBoard {
                 if let Some(tile) = self.selected[row][col] {
                     output.push_str(&format!(
                         "{:<width$}|",
-                        format!("<{}>", tile.variant.to_ascii_uppercase()),
+                        format!("<{}>", tile.to_ascii_uppercase()),
                         width = self.solution.n_variants
                     ));
                 } else {
@@ -58,81 +59,94 @@ impl std::fmt::Debug for GameBoard {
 
 impl GameBoard {
     pub fn new(solution: Rc<Solution>) -> Self {
-        let mut candidates: [[Vec<Candidate>; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
-            std::array::from_fn(|_| std::array::from_fn(|_| Vec::new()));
+        let mut candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
+            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| true)));
+        let mut resolved_candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
+            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| false)));
         let selected = std::array::from_fn(|_| std::array::from_fn(|_| None));
 
         for row in 0..MAX_GRID_SIZE {
             for col in 0..MAX_GRID_SIZE {
-                for &variant in solution.variants.iter() {
-                    candidates[row][col].push(Candidate::new(Tile::new(row, variant)));
+                for variant in 0..solution.n_variants {
+                    candidates[row][col][variant] = true;
                 }
             }
         }
 
-        Self {
+        let mut board = Self {
             candidates,
+            resolved_candidates,
             selected,
             solution,
             clue_set: Rc::new(ClueSet::new(vec![])),
             completed_horizontal_clues: HashSet::new(),
             completed_vertical_clues: HashSet::new(),
             completed_clues: HashSet::new(),
-        }
+        };
+        board.recompute_resolved();
+        board
     }
 
     pub fn remove_candidate(&mut self, row: usize, col: usize, tile: Tile) {
-        if let Some(candidate) = self.candidates[row][col]
-            .iter_mut()
-            .find(|c| c.tile == tile)
-        {
-            candidate.state = CandidateState::Eliminated;
-        }
+        let tile_idx = Tile::variant_to_index(tile.variant);
+        self.candidates[row][col][tile_idx] = false;
+        self.recompute_resolved_row(row);
     }
 
     pub fn show_candidate(&mut self, row: usize, col: usize, tile: Tile) {
-        if let Some(candidate) = self.candidates[row][col]
-            .iter_mut()
-            .find(|c| c.tile == tile)
-        {
-            candidate.state = CandidateState::Available;
+        let tile_idx = Tile::variant_to_index(tile.variant);
+        self.candidates[row][col][tile_idx] = true;
+        self.recompute_resolved_row(row);
+    }
+
+    fn recompute_resolved(&mut self) {
+        for row in 0..self.solution.n_rows {
+            self.recompute_resolved_row(row);
+        }
+    }
+
+    fn recompute_resolved_row(&mut self, row: usize) {
+        let row_selections = self.selected[row]
+            .iter()
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for col in 0..self.solution.n_variants {
+            match self.selected[row][col] {
+                Some(selected_variant) => {
+                    for variant_idx in 0..self.solution.n_variants {
+                        let variant = Tile::index_to_variant(variant_idx);
+                        // only the selected variant is available here
+                        self.resolved_candidates[row][col][variant_idx] =
+                            variant == selected_variant;
+                    }
+                }
+                None => {
+                    for variant_idx in 0..self.solution.n_variants {
+                        let variant = Tile::index_to_variant(variant_idx);
+                        self.resolved_candidates[row][col][variant_idx] = self.candidates[row][col]
+                            [variant_idx]
+                            && !row_selections.contains(&variant);
+                    }
+                }
+            }
         }
     }
 
     pub fn get_candidate(&self, row: usize, col: usize, variant: char) -> Option<Candidate> {
-        // this cell has a selection
-        if let Some(selected_tile) = self.selected[row][col] {
-            // is this the selection?
-            if selected_tile.variant == variant {
-                return Some(Candidate {
-                    tile: selected_tile,
-                    state: CandidateState::Available,
-                });
-            } else {
-                return Some(Candidate {
-                    tile: selected_tile,
-                    state: CandidateState::Eliminated,
-                });
-            }
+        let variant_idx = Tile::variant_to_index(variant);
+        if variant_idx >= self.solution.n_variants
+            || row >= self.solution.n_rows
+            || col >= self.solution.n_variants
+        {
+            return None;
         }
-
-        let maybe_candidate = self.candidates[row][col]
-            .iter()
-            .find(|c| c.tile.variant == variant);
-
-        if let Some(candidate) = maybe_candidate {
-            let mut candidate = candidate.clone();
-            // if another cell in this row has selected this variant as a solution, return state as unavailable
-            if self.selected[row]
-                .iter()
-                .any(|c| c.is_some() && c.unwrap().variant == variant)
-            {
-                candidate.state = CandidateState::Eliminated;
-            }
-            Some(candidate)
-        } else {
-            None
-        }
+        return Some(Candidate::from_bool(
+            row,
+            variant,
+            self.resolved_candidates[row][col][variant_idx],
+        ));
     }
 
     pub fn get_variants(&self) -> Vec<char> {
@@ -140,7 +154,8 @@ impl GameBoard {
     }
 
     pub fn select_tile_at_position(&mut self, row: usize, col: usize, tile: Tile) {
-        self.selected[row][col] = Some(tile);
+        self.selected[row][col] = Some(tile.variant);
+        self.recompute_resolved_row(row);
     }
 
     pub fn select_tile_from_solution(&mut self, tile: Tile) {
@@ -149,7 +164,8 @@ impl GameBoard {
             .iter()
             .position(|t| t == &tile)
             .unwrap();
-        self.selected[row][col] = Some(tile);
+        self.selected[row][col] = Some(tile.variant);
+        self.recompute_resolved_row(row);
     }
 
     pub fn auto_solve_all(&mut self) -> (usize, Vec<(usize, Tile)>) {
@@ -172,7 +188,7 @@ impl GameBoard {
 
             // look in row where there's only one possible place a variant can be
             for variant in self.solution.variants_range.clone() {
-                if self.has_selection(&Tile::new(row, variant)) {
+                if self.has_tile_selected_anywhere(&Tile::new(row, variant)) {
                     // already selected, nothing to do
                     continue;
                 }
@@ -231,9 +247,12 @@ impl GameBoard {
 
     #[cfg(test)]
     pub fn parse(input: &str, solution: Rc<Solution>) -> Self {
-        let mut selected = std::array::from_fn(|_| std::array::from_fn(|_| None));
-        let mut candidates = std::array::from_fn(|_| std::array::from_fn(|_| Vec::new()));
-
+        let mut selected: [[Option<char>; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
+            std::array::from_fn(|_| std::array::from_fn(|_| None));
+        let mut candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
+            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| true)));
+        let mut resolved_candidates =
+            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| false)));
         let lines: Vec<&str> = input.lines().collect();
         let mut row = 0;
 
@@ -253,39 +272,30 @@ impl GameBoard {
                 // Check for selected tile
                 if cell.starts_with('<') && cell.ends_with('>') {
                     let variant = cell[1..2].chars().next().unwrap().to_ascii_lowercase();
-                    selected[row][col] = Some(Tile::new(row, variant));
+                    selected[row][col] = Some(variant);
                     continue;
                 }
 
                 // Parse available candidates
-                let mut cell_candidates = Vec::new();
-                for (_, c) in "abcdef".chars().enumerate() {
-                    if cell.contains(c) {
-                        cell_candidates.push(Candidate {
-                            tile: Tile::new(row, c),
-                            state: CandidateState::Available,
-                        });
-                    } else {
-                        cell_candidates.push(Candidate {
-                            tile: Tile::new(row, c),
-                            state: CandidateState::Eliminated,
-                        });
-                    }
+                for (idx, c) in solution.variants.iter().enumerate() {
+                    candidates[row][col][idx] = cell.contains(*c);
                 }
-                candidates[row][col] = cell_candidates;
             }
             row += 1;
         }
 
-        Self {
+        let mut board = Self {
             solution,
             selected,
             candidates,
+            resolved_candidates,
             clue_set: Rc::new(ClueSet::new(vec![])),
             completed_horizontal_clues: HashSet::new(),
             completed_vertical_clues: HashSet::new(),
             completed_clues: HashSet::new(),
-        }
+        };
+        board.recompute_resolved();
+        board
     }
 
     pub fn set_clues(&mut self, clues: Rc<ClueSet>) {
@@ -293,11 +303,11 @@ impl GameBoard {
     }
 
     /// Check if a tile has already been placed in any column
-    pub fn has_selection(&self, tile: &Tile) -> bool {
+    pub fn has_tile_selected_anywhere(&self, tile: &Tile) -> bool {
         let row = tile.row as usize;
         let selected = self.selected[row]
             .iter()
-            .any(|selected| selected.as_ref() == Some(tile));
+            .any(|selected| selected.as_ref() == Some(&tile.variant));
 
         selected
     }
@@ -315,7 +325,7 @@ impl GameBoard {
         let selected = self.selected[row][column];
 
         if let Some(selected_tile) = selected {
-            selected_tile.variant == tile.variant
+            selected_tile == tile.variant
         } else {
             false
         }
@@ -460,8 +470,8 @@ impl GameBoard {
             for col in 0..self.solution.n_variants {
                 let solution_tile = self.solution.get(row, col);
                 // check selections
-                if let Some(selected_tile) = self.selected[row][col] {
-                    if selected_tile != solution_tile {
+                if let Some(selected_variant) = self.selected[row][col] {
+                    if selected_variant != solution_tile.variant {
                         return true;
                     }
                 } else {
@@ -481,10 +491,32 @@ impl GameBoard {
     }
 
     pub fn get_selected_tiles(&self) -> Vec<Tile> {
-        self.selected
-            .iter()
-            .flat_map(|row| row.iter().filter_map(|tile| tile.clone()))
-            .collect()
+        let mut tiles = Vec::new();
+        for row in 0..self.solution.n_rows {
+            for col in 0..self.solution.n_variants {
+                if let Some(variant) = self.selected[row][col] {
+                    tiles.push(Tile::new(row, variant));
+                }
+            }
+        }
+        tiles
+    }
+
+    pub fn get_selection(&self, row: usize, col: usize) -> Option<Tile> {
+        if let Some(variant) = self.selected[row][col] {
+            Some(Tile::new(row, variant))
+        } else {
+            None
+        }
+    }
+
+    pub fn has_selection(&self, row: usize, col: usize) -> bool {
+        self.selected[row][col].is_some()
+    }
+
+    pub(crate) fn remove_selection(&mut self, row: usize, col: usize) {
+        self.selected[row][col] = None;
+        self.recompute_resolved_row(row);
     }
 }
 
@@ -554,10 +586,10 @@ mod tests {
         let board = GameBoard::parse(input, create_test_solution());
 
         // Check selected tiles
-        assert_eq!(board.selected[0][0], Some(Tile::new(0, 'a')));
-        assert_eq!(board.selected[1][1], Some(Tile::new(1, 'b')));
-        assert_eq!(board.selected[2][2], Some(Tile::new(2, 'c')));
-        assert_eq!(board.selected[3][3], Some(Tile::new(3, 'd')));
+        assert_eq!(board.selected[0][0], Some('a'));
+        assert_eq!(board.selected[1][1], Some('b'));
+        assert_eq!(board.selected[2][2], Some('c'));
+        assert_eq!(board.selected[3][3], Some('d'));
 
         // Check other positions are empty
         for row in 0..4 {

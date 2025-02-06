@@ -158,7 +158,7 @@ impl PuzzleGridUI {
                         if let Some(cell) = self.cells.get(row).and_then(|row| row.get(col)) {
                             let mut cell = cell.borrow_mut();
                             // If there's a solution, show it
-                            if let Some(tile) = board.selected[row][col] {
+                            if let Some(tile) = board.get_selection(row, col) {
                                 cell.set_solution(Some(&tile));
                             } else {
                                 // Otherwise show candidates

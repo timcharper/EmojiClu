@@ -18,6 +18,14 @@ impl Tile {
         let variant = s.chars().nth(1).unwrap();
         Self { row, variant }
     }
+
+    pub fn variant_to_index(variant: char) -> usize {
+        variant as usize - 'a' as usize
+    }
+
+    pub fn index_to_variant(index: usize) -> char {
+        (index + 'a' as usize) as u8 as char
+    }
 }
 
 impl std::fmt::Display for Tile {

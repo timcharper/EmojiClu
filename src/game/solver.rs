@@ -7,11 +7,12 @@ use crate::model::{
 use log::trace;
 
 fn is_known_deduction(board: &GameBoard, deduction: &Deduction) -> bool {
-    if deduction.is_positive {
+    let result = if deduction.is_positive {
         board.is_selected_in_column(&deduction.tile, deduction.column)
     } else {
         board.has_negative_deduction(&deduction.tile, deduction.column)
-    }
+    };
+    result
 }
 
 fn is_partial_solution_valid(board: &GameBoard, solution: &PartialSolution) -> bool {
@@ -819,8 +820,13 @@ pub fn perform_evaluation_step(board: &mut GameBoard, clues: &Vec<Clue>) -> Eval
 
 #[cfg(test)]
 mod tests {
+    use test_context::test_context;
+
     use super::*;
-    use crate::model::{Clue, Difficulty, GameBoard, Solution, Tile, MAX_GRID_SIZE};
+    use crate::{
+        game::tests::UsingLogger,
+        model::{Clue, Difficulty, GameBoard, Solution, Tile, MAX_GRID_SIZE},
+    };
     use std::rc::Rc;
 
     fn create_test_solution(n_rows: usize) -> Rc<Solution> {
@@ -871,8 +877,9 @@ mod tests {
         assert!(deductions.contains(&Deduction::parse("0d not col 2").unwrap()));
     }
 
+    #[test_context(UsingLogger)]
     #[test]
-    fn test_deduce_three_adjacent_partially_solved_board() {
+    fn test_deduce_three_adjacent_partially_solved_board(_: &mut UsingLogger) {
         let input = "\
 0|abcd|<B> |abcd|abcd|
 -----------------
@@ -1163,7 +1170,7 @@ mod tests {
 -----------------
 2|abcd|abcd|abcd|abcd|";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(3));
 
         let clue = Clue::three_in_column(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
 
@@ -1172,8 +1179,9 @@ mod tests {
         assert_eq!(deductions.len(), 0); // No deductions possible on empty board
     }
 
+    #[test_context(UsingLogger)]
     #[test]
-    fn test_deduce_all_in_column_solvable() {
+    fn test_deduce_all_in_column_solvable(_: &mut UsingLogger) {
         let input = "\
 0|abcd|abcd|<A> |abcd|
 ----------------------
@@ -1183,9 +1191,10 @@ mod tests {
 ----------------------
 ";
 
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(3));
+        println!("Board: {:?}", board);
 
-        let clue = Clue::three_in_column(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
+        let clue = Clue::parse_vertical("|+0a,+1b,+2c|");
 
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
@@ -1314,7 +1323,7 @@ mod tests {
 2|abcd|abcd|abcd|abcd|
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(3));
 
         let clue =
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1334,7 +1343,7 @@ mod tests {
 2|abcd|abcd|abcd|abcd|
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(3));
 
         let clue =
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1355,7 +1364,7 @@ mod tests {
 2|abcd|abcd|abcd|<C> |
 ----------------------
 ";
-        let board = GameBoard::parse(input, create_test_solution(2));
+        let board = GameBoard::parse(input, create_test_solution(3));
 
         let clue =
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
@@ -1447,8 +1456,9 @@ mod tests {
         assert!(deductions.contains(&Deduction::parse("1b is col 3").unwrap()));
     }
 
+    #[test_context(UsingLogger)]
     #[test]
-    fn test_eliminate_invalid_solutions() {
+    fn test_eliminate_invalid_solutions(_: &mut UsingLogger) {
         let input = "\
 0|ab  |abcd|abcd|abcd|
 -----------------

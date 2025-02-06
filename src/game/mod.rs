@@ -10,8 +10,11 @@ pub use clue_generator::generate_clues;
 pub use solver::deduce_clue;
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
+    use std::sync::Once;
     use test_context::TestContext;
+
+    static INIT_LOGGER: Once = Once::new();
 
     pub struct UsingLogger {
         _value: String,
@@ -19,7 +22,10 @@ pub mod tests {
 
     impl TestContext for UsingLogger {
         fn setup() -> UsingLogger {
-            env_logger::init();
+            INIT_LOGGER.call_once(|| {
+                env_logger::init();
+            });
+
             UsingLogger {
                 _value: "Hello, World!".to_string(),
             }

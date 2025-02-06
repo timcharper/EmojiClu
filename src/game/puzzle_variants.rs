@@ -41,6 +41,37 @@ pub trait PuzzleVariantCloneBox {
     fn clone_box(&self) -> Box<dyn PuzzleVariant>;
 }
 
+/// unique using scan because sometimes its more efficient to do the dumb thing
+fn unique_scan<T: Eq>(iter: impl Iterator<Item = T>) -> Vec<T> {
+    let mut unique_items = Vec::new();
+
+    for item in iter {
+        if !unique_items.contains(&item) {
+            unique_items.push(item);
+        }
+    }
+
+    unique_items
+}
+
+fn group_by_scan<T: Eq, U>(
+    iter: impl IntoIterator<Item = U>,
+    key_fn: impl Fn(&U) -> T,
+) -> Vec<(T, Vec<U>)> {
+    let mut grouped: Vec<(T, Vec<U>)> = Vec::new();
+
+    for item in iter {
+        let key = key_fn(&item);
+        if let Some(group) = grouped.iter_mut().find(|(k, _)| k == &key) {
+            group.1.push(item);
+        } else {
+            grouped.push((key, vec![item]));
+        }
+    }
+
+    grouped
+}
+
 /// basic scoring which punishes clues for revealing too much. Lower score = preferred.
 fn generic_score_clue(_: &Clue, deducations: &Vec<Deduction>) -> usize {
     let n_deductions = deducations.len();
@@ -262,43 +293,27 @@ impl PuzzleVariant for StripingPuzzleVariant {
             return score;
         }
 
-        let n_unique_cols = deductions.iter().map(|d| d.column).unique().count() as usize;
-        if n_unique_cols <= 1 {
+        let unique_cols = unique_scan(deductions.iter().map(|d| d.column));
+        if unique_cols.len() <= 1 {
             // all in same column? don't boost.
             return score;
         }
 
-        // unique columns
-        let mut unique_columns = BTreeSet::new();
-        for deduction in deductions {
-            unique_columns.insert(deduction.column);
-        }
-        if unique_columns.len() <= 1 {
-            return score;
-        }
-
         // if deduction columns are even, or odd, boost clue
-        let mut deductions_per_variant: BTreeMap<char, BTreeSet<usize>> = BTreeMap::new();
-
-        for deduction in deductions {
-            deductions_per_variant
-                .entry(deduction.tile.variant)
-                .or_insert(BTreeSet::new())
-                .insert(deduction.column);
-        }
+        let deductions_per_variant = group_by_scan(deductions, |d| d.tile.variant);
 
         let all_striped = deductions_per_variant.iter().all(|(_, columns)| {
             if columns.len() <= 1 {
                 return true;
             }
-            let all_even = columns.iter().all(|&c| c % 2 == 0);
-            let all_odd = columns.iter().all(|&c| c % 2 == 1);
+            let all_even = columns.iter().all(|&deduction| deduction.column % 2 == 0);
+            let all_odd = columns.iter().all(|&deduction| deduction.column % 2 == 1);
             all_even || all_odd
         });
 
         if all_striped {
             // we really want these, so reduce their score by a factor of up to 6 so they float to the top.
-            score / n_unique_cols
+            score / unique_cols.len()
         } else {
             score
         }

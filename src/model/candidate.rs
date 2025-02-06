@@ -21,4 +21,19 @@ impl Candidate {
             state: CandidateState::Available,
         }
     }
+
+    pub fn from_bool(row: usize, variant: char, b: bool) -> Self {
+        let tile = Tile::new(row, variant);
+        if b {
+            Self {
+                tile,
+                state: CandidateState::Available,
+            }
+        } else {
+            Self {
+                tile,
+                state: CandidateState::Eliminated,
+            }
+        }
+    }
 }

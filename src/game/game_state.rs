@@ -203,7 +203,7 @@ impl GameState {
 
     fn handle_cell_click(&mut self, row: usize, col: usize, variant: Option<char>) {
         // If there's already a solution in this cell, ignore the click
-        if self.current_board.selected[row][col].is_some() {
+        if self.current_board.get_selection(row, col).is_some() {
             return;
         }
 
@@ -403,9 +403,9 @@ impl GameState {
     fn handle_cell_right_click(&mut self, row: usize, col: usize, variant: Option<char>) {
         let mut current_board = self.current_board.as_ref().clone();
         // First check if there's a solution selected
-        if current_board.selected[row][col].is_some() {
+        if current_board.has_selection(row, col) {
             // Reset the cell back to candidates
-            current_board.selected[row][col] = None;
+            current_board.remove_selection(row, col);
             self.push_board(current_board);
             return;
         }
