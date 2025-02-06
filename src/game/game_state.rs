@@ -442,9 +442,13 @@ impl GameState {
             }
             EvaluationStepResult::HiddenSetsFound => {
                 log::info!("Hidden pairs found");
+                self.game_state_emitter
+                    .emit(GameStateEvent::ClueFocused(None));
             }
-            EvaluationStepResult::DeductionsFound(clues) => {
-                log::info!("Deductions found from clue: {:?}", clues);
+            EvaluationStepResult::DeductionsFound(clue) => {
+                log::info!("Deductions found from clue: {:?}", clue);
+                self.game_state_emitter
+                    .emit(GameStateEvent::ClueFocused(Some(clue)));
             }
         }
         current_board.auto_solve_all();
