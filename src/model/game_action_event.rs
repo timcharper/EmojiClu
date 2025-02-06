@@ -6,8 +6,8 @@ pub enum GameActionEvent {
     CellRightClick(usize, usize, Option<char>),
     ClueToggleComplete(ClueOrientation, usize), // clue_idx
     ClueToggleSelectedComplete,
-    ClueSelect(Option<(ClueOrientation, usize)>), // clue_idx when Some
-    ClueSelectNext(i32),
+    ClueFocus(Option<(ClueOrientation, usize)>), // clue_idx when Some
+    ClueFocusNext(i32),
     NewGame(Difficulty, Option<u64>), // grid rows, grid columns
     InitDisplay,
     CompletePuzzle,

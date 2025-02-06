@@ -148,7 +148,7 @@ image {
  background: #f6d32d; 
 }
 
-.clue-frame.not-selected {
+.clue-frame.not-focused {
   opacity: 0.5;
 }
 

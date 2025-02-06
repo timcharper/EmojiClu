@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
-use crate::model::{Clue, CluesSizing};
+use crate::model::{Clue, ClueSelection, CluesSizing};
 use crate::model::{ClueOrientation, TileAssertion};
 use crate::model::{ClueType, HorizontalClueType, VerticalClueType};
 use crate::model::{GameActionEvent, LayoutConfiguration};
@@ -191,7 +191,7 @@ impl ClueUI {
                     let clue_ui = clue_ui.borrow();
                     clue_ui
                         .game_action_emitter
-                        .emit(GameActionEvent::ClueSelect(Some((
+                        .emit(GameActionEvent::ClueFocus(Some((
                             clue_orientation,
                             clue_idx,
                         ))));
@@ -465,18 +465,28 @@ impl ClueUI {
         tooltip_box
     }
 
-    pub fn set_selected(&self, maybe_clue: &Option<Clue>) {
-        if let Some(clue) = maybe_clue {
-            if clue == &self.clue {
-                self.frame.add_css_class("selected");
-                self.frame.remove_css_class("not-selected");
-            } else {
-                self.frame.remove_css_class("selected");
-                self.frame.add_css_class("not-selected");
-            }
+    pub fn set_selected(&self, clue_selection: &Option<ClueSelection>) {
+        let my_clue_selected = if let Some(clue_selection) = clue_selection {
+            clue_selection.clue == self.clue
+        } else {
+            false
+        };
+        let any_clue_focused = if let Some(clue_selection) = clue_selection {
+            clue_selection.is_focused
+        } else {
+            false
+        };
+
+        if my_clue_selected {
+            self.frame.add_css_class("selected");
         } else {
             self.frame.remove_css_class("selected");
-            self.frame.remove_css_class("not-selected");
+        }
+
+        if any_clue_focused && !my_clue_selected {
+            self.frame.add_css_class("not-focused");
+        } else {
+            self.frame.remove_css_class("not-focused");
         }
     }
 

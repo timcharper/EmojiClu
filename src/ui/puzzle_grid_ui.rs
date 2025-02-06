@@ -179,8 +179,16 @@ impl PuzzleGridUI {
             GameStateEvent::CellHintHighlight { cell, variant } => {
                 self.highlight_candidate(cell.0, cell.1, *variant);
             }
-            GameStateEvent::ClueFocused(clue) => {
-                self.set_current_clue(clue);
+            GameStateEvent::ClueSelected(clue_selection) => {
+                if let Some(clue_selection) = clue_selection {
+                    if clue_selection.is_focused {
+                        self.set_current_clue(&Some(clue_selection.clue.clone()));
+                    } else {
+                        self.set_current_clue(&None);
+                    }
+                } else {
+                    self.set_current_clue(&None);
+                }
             }
             GameStateEvent::ClueHintHighlight { clue_with_grouping } => {
                 self.current_clue_hint = Some(clue_with_grouping.clue.clone());

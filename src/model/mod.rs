@@ -26,7 +26,7 @@ pub use deduction::Deduction;
 pub use difficulty::Difficulty;
 pub use game_action_event::GameActionEvent;
 pub use game_board::GameBoard;
-pub use game_state_event::{GameStateEvent, PuzzleCompletionState};
+pub use game_state_event::{ClueSelection, GameStateEvent, PuzzleCompletionState};
 pub use game_stats::{GameStats, GlobalStats};
 pub use global_event::GlobalEvent;
 pub use partial_solution::PartialSolution;

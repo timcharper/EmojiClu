@@ -72,7 +72,7 @@ impl GameControlsMonitor {
                 let game_controls = game_controls.borrow();
                 game_controls
                     .game_action_emitter
-                    .emit(GameActionEvent::ClueSelect(None));
+                    .emit(GameActionEvent::ClueFocus(None));
                 gesture.set_state(gtk4::EventSequenceState::Claimed);
             }
         });
@@ -122,7 +122,7 @@ impl GameControlsMonitor {
                         gdk::Key::a | gdk::Key::k => {
                             game_controls
                                 .game_action_emitter
-                                .emit(GameActionEvent::ClueSelectNext(-1));
+                                .emit(GameActionEvent::ClueFocusNext(-1));
                             true
                         }
                         gdk::Key::c => {
@@ -140,14 +140,14 @@ impl GameControlsMonitor {
                             } else {
                                 game_controls
                                     .game_action_emitter
-                                    .emit(GameActionEvent::ClueSelectNext(1));
+                                    .emit(GameActionEvent::ClueFocusNext(1));
                                 true
                             }
                         }
                         gdk::Key::Escape => {
                             game_controls
                                 .game_action_emitter
-                                .emit(GameActionEvent::ClueSelect(None));
+                                .emit(GameActionEvent::ClueFocus(None));
                             true
                         }
                         _ => false,

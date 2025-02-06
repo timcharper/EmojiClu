@@ -3,6 +3,12 @@ use crate::model::{GameBoard, GameStats};
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClueSelection {
+    pub clue: Clue,
+    pub is_focused: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PuzzleCompletionState {
     Incomplete,
     Correct(GameStats),
@@ -32,7 +38,7 @@ pub enum GameStateEvent {
         clue_with_grouping: ClueWithGrouping,
     },
     ClueSetUpdate(Rc<ClueSet>, Difficulty),
-    ClueFocused(Option<Clue>),
+    ClueSelected(Option<ClueSelection>),
 }
 
 impl GameStateEvent {}

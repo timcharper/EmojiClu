@@ -10,9 +10,9 @@ use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::game::clue_generator::ClueGeneratorResult;
 use crate::model::{
-    CandidateState, Clue, ClueOrientation, ClueSet, ClueWithGrouping, Deduction, Difficulty,
-    GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent, PuzzleCompletionState,
-    Solution, TimerState,
+    CandidateState, Clue, ClueOrientation, ClueSelection, ClueSet, ClueWithGrouping, Deduction,
+    Difficulty, GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent,
+    PuzzleCompletionState, Solution, TimerState,
 };
 use std::rc::Rc;
 
@@ -54,7 +54,8 @@ pub struct GameState {
     global_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     game_state_emitter: EventEmitter<GameStateEvent>,
     settings: Settings,
-    current_focused_clue: Option<(ClueOrientation, usize)>,
+    current_selected_clue: Option<(ClueOrientation, usize)>,
+    clue_focused: bool,
 }
 
 impl Destroyable for GameState {
@@ -134,7 +135,8 @@ impl GameState {
             global_subscription_id: None,
             game_state_emitter,
             settings,
-            current_focused_clue: None,
+            current_selected_clue: None,
+            clue_focused: false,
         };
         let refcell = Rc::new(RefCell::new(game_state));
         GameState::wire_subscription(refcell.clone(), game_action_observer);
@@ -184,7 +186,8 @@ impl GameState {
         self.is_paused = false;
         self.timer_state = TimerState::default();
         self.sync_board_display();
-        self.select_clue(None);
+        self.current_selected_clue = None;
+        self.clue_focused = false;
         self.game_state_emitter
             .emit(GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
@@ -198,7 +201,7 @@ impl GameState {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
-        self.current_focused_clue = None;
+        self.sync_clue_selection();
     }
 
     fn handle_cell_click(&mut self, row: usize, col: usize, variant: Option<char>) {
@@ -284,8 +287,8 @@ impl GameState {
                 all_cells_filled,
             ));
         if all_cells_filled {
-            self.game_state_emitter
-                .emit(GameStateEvent::ClueFocused(None));
+            self.clue_focused = false;
+            self.sync_clue_selection();
         }
     }
 
@@ -325,21 +328,21 @@ impl GameState {
                 self.handle_clue_toggle_complete(clue_orientation, clue_idx)
             }
             GameActionEvent::ClueToggleSelectedComplete => {
-                if let Some((clue_orientation, clue_idx)) = self.current_focused_clue {
+                if let Some((clue_orientation, clue_idx)) = self.current_selected_clue {
                     self.handle_clue_toggle_complete(clue_orientation, clue_idx)
                 }
             }
-            GameActionEvent::ClueSelect(maybe_clue) => self.handle_clue_focus(maybe_clue),
-            GameActionEvent::ClueSelectNext(direction) => self.handle_clue_focus_next(direction),
+            GameActionEvent::ClueFocus(maybe_clue) => self.handle_clue_selection(maybe_clue),
+            GameActionEvent::ClueFocusNext(direction) => self.handle_clue_focus_next(direction),
         }
     }
     fn handle_clue_focus_next(&mut self, direction: i32) {
-        match self.current_focused_clue {
+        match self.current_selected_clue {
             Some((old_clue_orientation, old_clue_idx)) => {
                 let mut tries = self.clue_set.all_clues().len() + 1;
                 let mut orientation = old_clue_orientation;
                 let mut clue_idx = old_clue_idx as i32;
-                self.current_focused_clue = None;
+                self.current_selected_clue = None;
                 // if all clues are hidden, we don't want to try forever
                 while tries > 0 {
                     clue_idx = clue_idx + direction;
@@ -356,23 +359,19 @@ impl GameState {
                         .current_board
                         .is_clue_completed(orientation, clue_idx as usize)
                     {
-                        self.current_focused_clue = Some((orientation, clue_idx as usize));
+                        self.current_selected_clue = Some((orientation, clue_idx as usize));
                         break;
                     }
                     tries -= 1;
                 }
             }
             None => {
-                self.current_focused_clue = Some((ClueOrientation::Horizontal, 0));
+                self.current_selected_clue = Some((ClueOrientation::Horizontal, 0));
             }
         }
+        self.clue_focused = true;
 
-        self.sync_clue_focused();
-    }
-
-    fn select_clue(&mut self, clue: Option<Clue>) {
-        self.game_state_emitter
-            .emit(GameStateEvent::ClueFocused(clue));
+        self.sync_clue_selection();
     }
 
     fn complete_puzzle(&mut self) {
@@ -443,12 +442,15 @@ impl GameState {
             EvaluationStepResult::HiddenSetsFound => {
                 log::info!("Hidden pairs found");
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueFocused(None));
+                    .emit(GameStateEvent::ClueSelected(None));
             }
             EvaluationStepResult::DeductionsFound(clue) => {
                 log::info!("Deductions found from clue: {:?}", clue);
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueFocused(Some(clue)));
+                    .emit(GameStateEvent::ClueSelected(Some(ClueSelection {
+                        clue,
+                        is_focused: true,
+                    })));
             }
         }
         current_board.auto_solve_all();
@@ -507,9 +509,10 @@ impl GameState {
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
             if let Some(clue_with_grouping) = clue {
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueFocused(Some(
-                        clue_with_grouping.clue.clone(),
-                    )));
+                    .emit(GameStateEvent::ClueSelected(Some(ClueSelection {
+                        clue: clue_with_grouping.clue.clone(),
+                        is_focused: true,
+                    })));
                 self.game_state_emitter
                     .emit(GameStateEvent::ClueHintHighlight {
                         clue_with_grouping: clue_with_grouping.clone(),
@@ -571,7 +574,7 @@ impl GameState {
         let mut current_board = self.current_board.as_ref().clone();
         current_board.toggle_clue_completed(clue_orientation, clue_idx);
         self.push_board(current_board);
-        self.sync_clue_focused();
+        self.sync_clue_selection();
     }
 
     pub fn get_difficulty(&self) -> Difficulty {
@@ -599,20 +602,28 @@ impl GameState {
         }
     }
 
-    fn handle_clue_focus(&mut self, maybe_clue: Option<(ClueOrientation, usize)>) {
-        self.current_focused_clue = maybe_clue;
-        self.sync_clue_focused();
+    fn handle_clue_selection(&mut self, maybe_clue_selection: Option<(ClueOrientation, usize)>) {
+        if maybe_clue_selection.is_some() {
+            self.current_selected_clue = maybe_clue_selection;
+            self.clue_focused = true;
+        } else {
+            self.clue_focused = false;
+        }
+        self.sync_clue_selection();
     }
 
-    fn sync_clue_focused(&mut self) {
-        let clue = self.current_focused_clue.and_then(|(orientation, idx)| {
+    fn sync_clue_selection(&mut self) {
+        let clue = self.current_selected_clue.and_then(|(orientation, idx)| {
             self.current_board
                 .clue_set
                 .get_clue(orientation, idx)
                 .map(|cwg| cwg.clue.clone())
         });
         self.game_state_emitter
-            .emit(GameStateEvent::ClueFocused(clue));
+            .emit(GameStateEvent::ClueSelected(clue.map(|c| ClueSelection {
+                clue: c,
+                is_focused: self.clue_focused,
+            })));
     }
 
     fn update_settings(&mut self, settings: Settings) {
@@ -627,6 +638,6 @@ impl GameState {
     }
 
     pub fn get_focused_clue(&self) -> Option<(ClueOrientation, usize)> {
-        self.current_focused_clue
+        self.current_selected_clue
     }
 }

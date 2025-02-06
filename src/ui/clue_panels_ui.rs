@@ -5,7 +5,10 @@ use gtk4::{
 use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
 use crate::{
-    destroyable::Destroyable, events::Unsubscriber, game::settings::Settings, model::Clue,
+    destroyable::Destroyable,
+    events::Unsubscriber,
+    game::settings::Settings,
+    model::{Clue, ClueSelection},
 };
 use crate::{
     events::{EventEmitter, EventObserver},
@@ -186,8 +189,8 @@ impl CluePanelsUI {
                 self.set_horiz_completion(&grid.completed_horizontal_clues);
                 self.set_vert_completion(&grid.completed_vertical_clues);
             }
-            GameStateEvent::ClueFocused(clue) => {
-                self.set_clue_selected(&clue);
+            GameStateEvent::ClueSelected(clue_selection) => {
+                self.set_clue_selected(&clue_selection);
             }
             _ => {}
         }
@@ -385,13 +388,13 @@ impl CluePanelsUI {
         n_rows * 2
     }
 
-    fn set_clue_selected(&self, clue: &Option<Clue>) {
+    fn set_clue_selected(&self, clue_selection: &Option<ClueSelection>) {
         // dispatch to all clues
         for clue_ui in &self.horizontal_clue_uis {
-            clue_ui.borrow_mut().set_selected(clue);
+            clue_ui.borrow_mut().set_selected(clue_selection);
         }
         for clue_ui in &self.vertical_clue_uis {
-            clue_ui.borrow_mut().set_selected(clue);
+            clue_ui.borrow_mut().set_selected(clue_selection);
         }
     }
 }
