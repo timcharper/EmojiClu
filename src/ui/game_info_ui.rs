@@ -157,13 +157,6 @@ impl GameInfoUI {
         let seconds = elapsed.as_secs() % 60;
         timer_label.set_text(&format!("{:02}:{:02}", minutes, seconds));
     }
-
-    // SAFETY: This is only safe to call from methods that are called on a GameInfoUI that is stored in an Rc<RefCell<>>
-    unsafe fn get_self_rc(&self) -> Rc<RefCell<Self>> {
-        let ptr = self as *const Self;
-        let offset = ptr.offset(-1);
-        Rc::from_raw(offset as *const RefCell<Self>)
-    }
 }
 
 impl Drop for GameInfoUI {

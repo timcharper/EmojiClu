@@ -242,8 +242,7 @@ pub fn build_ui(app: &Application) {
 
     header_bar.pack_start(&difficulty_box);
 
-    let history_controls_ui =
-        HistoryControlsUI::new(game_state_observer.clone(), game_action_emitter.clone());
+    let history_controls_ui = HistoryControlsUI::new(game_state_observer.clone());
 
     let game_info_ui = GameInfoUI::new(
         game_state_observer.clone(),

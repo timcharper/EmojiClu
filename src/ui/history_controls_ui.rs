@@ -7,17 +7,14 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::destroyable::Destroyable;
-use crate::events::EventEmitter;
 use crate::events::EventObserver;
 use crate::events::Unsubscriber;
-use crate::model::GameActionEvent;
 use crate::model::GameStateEvent;
 
 pub struct HistoryControlsUI {
     pub undo_button: Rc<Button>,
     pub redo_button: Rc<Button>,
     subscription_id: Option<Unsubscriber<GameStateEvent>>,
-    game_state_observer: EventObserver<GameStateEvent>,
 }
 
 impl Destroyable for HistoryControlsUI {
@@ -29,10 +26,7 @@ impl Destroyable for HistoryControlsUI {
 }
 
 impl HistoryControlsUI {
-    pub fn new(
-        game_state_observer: EventObserver<GameStateEvent>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
-    ) -> Rc<RefCell<Self>> {
+    pub fn new(game_state_observer: EventObserver<GameStateEvent>) -> Rc<RefCell<Self>> {
         // Create buttons first
         let undo_button = Rc::new(Button::from_icon_name("edit-undo-symbolic"));
         let redo_button = Rc::new(Button::from_icon_name("edit-redo-symbolic"));
@@ -56,7 +50,6 @@ impl HistoryControlsUI {
         let history_controls_ui = Rc::new(RefCell::new(Self {
             undo_button,
             redo_button,
-            game_state_observer: game_state_observer.clone(),
             subscription_id: None,
         }));
 

@@ -1,5 +1,5 @@
 use glib::SignalHandlerId;
-use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Overlay, Widget};
+use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Widget};
 use std::cell::RefCell;
 use std::rc::Rc;
 

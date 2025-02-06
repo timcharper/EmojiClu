@@ -1,7 +1,11 @@
 use crate::{
     game::deduce_clue,
-    model::{Clue, ClueType, Deduction, GameBoard, HorizontalClueType, Tile, VerticalClueType},
+    model::{
+        Clue, ClueType, Deduction, Difficulty, GameBoard, HorizontalClueType, Tile,
+        VerticalClueType,
+    },
 };
+use itertools::Itertools;
 use log::{info, trace};
 use rand::{seq::IndexedRandom, Rng, RngCore};
 use std::{
@@ -17,144 +21,6 @@ pub struct WeightedClueType {
     pub clue_type: ClueType,
 }
 
-/// try and "stripe" the puzzle by eliminating event and odd columns
-fn puzzle_weights_striping() -> Vec<WeightedClueType> {
-    vec![
-        WeightedClueType {
-            weight: 25,
-            clue_type: ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Horizontal(HorizontalClueType::NotAdjacent),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Horizontal(HorizontalClueType::LeftOf),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Vertical(VerticalClueType::ThreeInColumn),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Vertical(VerticalClueType::TwoInColumn),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Vertical(VerticalClueType::NotInSameColumn),
-        },
-        WeightedClueType {
-            weight: 0,
-            clue_type: ClueType::Vertical(VerticalClueType::TwoInColumnWithout),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Vertical(VerticalClueType::OneMatchesEither),
-        },
-        WeightedClueType {
-            weight: 10,
-            clue_type: ClueType::Horizontal(HorizontalClueType::ThreeAdjacent),
-        },
-    ]
-}
-
-/// narrowing puzzle experience; crux involves narrowing and narrowing
-fn puzzle_weights_narrowing() -> Vec<WeightedClueType> {
-    vec![
-        WeightedClueType {
-            weight: 3,
-            clue_type: ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle),
-        },
-        WeightedClueType {
-            weight: 4,
-            clue_type: ClueType::Horizontal(HorizontalClueType::NotAdjacent),
-        },
-        WeightedClueType {
-            weight: 10,
-            clue_type: ClueType::Horizontal(HorizontalClueType::LeftOf),
-        },
-        WeightedClueType {
-            weight: 0,
-            clue_type: ClueType::Vertical(VerticalClueType::ThreeInColumn),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Vertical(VerticalClueType::TwoInColumn),
-        },
-        WeightedClueType {
-            weight: 4,
-            clue_type: ClueType::Vertical(VerticalClueType::NotInSameColumn),
-        },
-        WeightedClueType {
-            weight: 0,
-            clue_type: ClueType::Vertical(VerticalClueType::TwoInColumnWithout),
-        },
-        WeightedClueType {
-            weight: 2,
-            clue_type: ClueType::Vertical(VerticalClueType::OneMatchesEither),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Horizontal(HorizontalClueType::ThreeAdjacent),
-        },
-    ]
-}
-
-// standard puzzle experience, mix of clues
-fn puzzle_weights_standard() -> Vec<WeightedClueType> {
-    vec![
-        WeightedClueType {
-            weight: 3,
-            clue_type: ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
-        },
-        WeightedClueType {
-            weight: 4,
-            clue_type: ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle),
-        },
-        WeightedClueType {
-            weight: 2,
-            clue_type: ClueType::Horizontal(HorizontalClueType::NotAdjacent),
-        },
-        WeightedClueType {
-            weight: 1,
-            clue_type: ClueType::Horizontal(HorizontalClueType::LeftOf),
-        },
-        WeightedClueType {
-            weight: 2,
-            clue_type: ClueType::Vertical(VerticalClueType::ThreeInColumn),
-        },
-        WeightedClueType {
-            weight: 4,
-            clue_type: ClueType::Vertical(VerticalClueType::TwoInColumn),
-        },
-        WeightedClueType {
-            weight: 4,
-            clue_type: ClueType::Vertical(VerticalClueType::NotInSameColumn),
-        },
-        // ClueGenerator {
-        //     weight: 0,
-        //     clue_type: ClueType::Vertical(VerticalClueType::TwoInColumnWithout),
-        // },
-        WeightedClueType {
-            weight: 2,
-            clue_type: ClueType::Vertical(VerticalClueType::OneMatchesEither),
-        },
-        WeightedClueType {
-            weight: 6,
-            clue_type: ClueType::Horizontal(HorizontalClueType::ThreeAdjacent),
-        },
-    ]
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum PuzzleVariantType {
     Standard,
@@ -165,7 +31,9 @@ pub enum PuzzleVariantType {
 #[derive(Debug, Clone, Copy)]
 struct StandardPuzzleVariant {}
 #[derive(Debug, Clone, Copy)]
-struct NarrowingPuzzleVariant {}
+struct NarrowingPuzzleVariant {
+    difficulty: Difficulty,
+}
 #[derive(Debug, Clone, Copy)]
 struct StripingPuzzleVariant {}
 
@@ -173,20 +41,19 @@ pub trait PuzzleVariantCloneBox {
     fn clone_box(&self) -> Box<dyn PuzzleVariant>;
 }
 
-/// basic scoring which punishes clues for revealing too much
+/// basic scoring which punishes clues for revealing too much. Lower score = preferred.
 fn generic_score_clue(_: &Clue, deducations: &Vec<Deduction>) -> usize {
     let n_deductions = deducations.len();
     let n_tiles_revealed = deducations
         .iter()
         .filter(|deduction| deduction.is_positive)
         .count();
-    // return a score between 0 and 18 (obv score of 0 here will be pruned as the clue yields no deductions)
-    (n_deductions + (n_tiles_revealed * 6)) * 3
+    (n_deductions + (n_tiles_revealed * 6)) * 10
 }
 
 fn generic_starter_evidence(state: &mut ClueGeneratorState, init_board: &GameBoard) {
-    if state.rng.gen_bool(0.5) {
-        let n_tiles = state.rng.gen_range(1..=2);
+    if state.rng.random_bool(0.5) {
+        let n_tiles = state.rng.random_range(1..=2);
         for _ in 0..n_tiles {
             let tile = state.random_unsolved_tile();
             state.add_selected_tile(tile);
@@ -234,9 +101,43 @@ where
     }
 }
 
+/// standard puzzle experience, mix of clues
 impl PuzzleVariant for StandardPuzzleVariant {
     fn get_clue_weights(&self) -> Vec<WeightedClueType> {
-        puzzle_weights_standard()
+        vec![
+            WeightedClueType {
+                weight: 3,
+                clue_type: ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
+            },
+            WeightedClueType {
+                weight: 4,
+                clue_type: ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle),
+            },
+            WeightedClueType {
+                weight: 2,
+                clue_type: ClueType::Horizontal(HorizontalClueType::NotAdjacent),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Horizontal(HorizontalClueType::LeftOf),
+            },
+            WeightedClueType {
+                weight: 6,
+                clue_type: ClueType::Vertical(VerticalClueType::TwoInColumn),
+            },
+            WeightedClueType {
+                weight: 2,
+                clue_type: ClueType::Vertical(VerticalClueType::NotInSameColumn),
+            },
+            WeightedClueType {
+                weight: 2,
+                clue_type: ClueType::Vertical(VerticalClueType::OneMatchesEither),
+            },
+            WeightedClueType {
+                weight: 6,
+                clue_type: ClueType::Horizontal(HorizontalClueType::ThreeAdjacent),
+            },
+        ]
     }
 
     fn score_clue(&self, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
@@ -254,12 +155,56 @@ impl PuzzleVariant for StandardPuzzleVariant {
 
 impl PuzzleVariant for NarrowingPuzzleVariant {
     fn get_clue_weights(&self) -> Vec<WeightedClueType> {
-        puzzle_weights_narrowing()
+        vec![
+            WeightedClueType {
+                weight: 3,
+                clue_type: ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle),
+            },
+            WeightedClueType {
+                weight: 4,
+                clue_type: ClueType::Horizontal(HorizontalClueType::NotAdjacent),
+            },
+            WeightedClueType {
+                weight: 6,
+                clue_type: ClueType::Horizontal(HorizontalClueType::LeftOf),
+            },
+            WeightedClueType {
+                weight: 3,
+                clue_type: ClueType::Vertical(VerticalClueType::TwoInColumn),
+            },
+            WeightedClueType {
+                weight: 4,
+                clue_type: ClueType::Vertical(VerticalClueType::NotInSameColumn),
+            },
+            WeightedClueType {
+                weight: 2,
+                clue_type: ClueType::Vertical(VerticalClueType::OneMatchesEither),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Horizontal(HorizontalClueType::ThreeAdjacent),
+            },
+        ]
     }
 
     fn score_clue(&self, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
-        // its enough to just change the clue weights, we don't need to boost certain clue types, although perhaps experiment with it later
-        generic_score_clue(clue, deducations)
+        let score = generic_score_clue(clue, deducations);
+
+        let middle_col = self.difficulty.grid_size() as f32 / 2.0;
+        // take the average distance of deductions from the center
+        // and use that to boost the score
+        let avg_distance_from_center = deducations
+            .iter()
+            .map(|d| (d.column as f32 - middle_col).abs())
+            .sum::<f32>()
+            / deducations.len() as f32;
+
+        let boosted_score = score as f32 / avg_distance_from_center;
+        boosted_score as usize
     }
 
     fn get_variant_type(&self) -> PuzzleVariantType {
@@ -271,14 +216,64 @@ impl PuzzleVariant for NarrowingPuzzleVariant {
     }
 }
 
+/// try and "stripe" the puzzle by eliminating event and odd columns
 impl PuzzleVariant for StripingPuzzleVariant {
     fn get_clue_weights(&self) -> Vec<WeightedClueType> {
-        puzzle_weights_striping()
+        vec![
+            WeightedClueType {
+                weight: 4,
+                clue_type: ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
+            },
+            WeightedClueType {
+                weight: 2,
+                clue_type: ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Horizontal(HorizontalClueType::NotAdjacent),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Horizontal(HorizontalClueType::LeftOf),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Vertical(VerticalClueType::TwoInColumn),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Vertical(VerticalClueType::NotInSameColumn),
+            },
+            WeightedClueType {
+                weight: 1,
+                clue_type: ClueType::Vertical(VerticalClueType::OneMatchesEither),
+            },
+            WeightedClueType {
+                weight: 2,
+                clue_type: ClueType::Horizontal(HorizontalClueType::ThreeAdjacent),
+            },
+        ]
     }
 
     fn score_clue(&self, clue: &Clue, deductions: &Vec<Deduction>) -> usize {
         let score = generic_score_clue(clue, deductions);
+
         if deductions.len() <= 1 {
+            return score;
+        }
+
+        let n_unique_cols = deductions.iter().map(|d| d.column).unique().count() as usize;
+        if n_unique_cols <= 1 {
+            // all in same column? don't boost.
+            return score;
+        }
+
+        // unique columns
+        let mut unique_columns = BTreeSet::new();
+        for deduction in deductions {
+            unique_columns.insert(deduction.column);
+        }
+        if unique_columns.len() <= 1 {
             return score;
         }
 
@@ -300,15 +295,10 @@ impl PuzzleVariant for StripingPuzzleVariant {
             let all_odd = columns.iter().all(|&c| c % 2 == 1);
             all_even || all_odd
         });
-        let max_columns = deductions_per_variant
-            .values()
-            .map(|c| c.len())
-            .max()
-            .unwrap_or(1);
 
         if all_striped {
             // we really want these, so reduce their score by a factor of up to 6 so they float to the top.
-            score / max_columns * 3
+            score / n_unique_cols
         } else {
             score
         }
@@ -321,7 +311,7 @@ impl PuzzleVariant for StripingPuzzleVariant {
     /// select a tile and then add a three-in-a-row clue with it that can go either direction
     fn populate_starter_evidence(&self, state: &mut ClueGeneratorState, init_board: &GameBoard) {
         let randomly_chosen_rows = (0..init_board.solution.n_variants)
-            .map(|_| state.rng.gen_range(0..init_board.solution.n_rows))
+            .map(|_| state.rng.random_range(0..init_board.solution.n_rows))
             .collect::<Vec<usize>>();
 
         // select a tile in the middle
@@ -336,11 +326,10 @@ impl PuzzleVariant for StripingPuzzleVariant {
             middle_col_min, randomly_chosen_rows
         );
 
-        // let selected_col = middle_col_min + state.rng.gen_range(0..=1);
-        // let selected_row = randomly_chosen_rows[selected_col as usize];
+        let selected_col = middle_col_min + state.rng.random_range(0..=1);
+        let selected_row = randomly_chosen_rows[selected_col as usize];
+        let seed_tile = init_board.solution.get(selected_row, selected_col as usize);
 
-        let seed_tile = state.random_unsolved_tile();
-        let (_, selected_col) = init_board.solution.find_tile(&seed_tile);
         let selected_col = selected_col as i32;
         state.add_selected_tile(seed_tile);
 
@@ -372,11 +361,14 @@ impl PuzzleVariant for StripingPuzzleVariant {
     }
 }
 
-pub fn random_puzzle_variant(rng: &mut Box<dyn RngCore>) -> Box<dyn PuzzleVariant> {
+pub fn random_puzzle_variant(
+    difficulty: Difficulty,
+    rng: &mut Box<dyn RngCore>,
+) -> Box<dyn PuzzleVariant> {
     let puzzle_variants: Vec<(Box<dyn PuzzleVariant>, i32)> = vec![
-        (Box::new(StandardPuzzleVariant {}), 3),
-        (Box::new(NarrowingPuzzleVariant {}), 1),
-        (Box::new(StripingPuzzleVariant {}), 2),
+        (Box::new(StandardPuzzleVariant {}), 1),
+        (Box::new(NarrowingPuzzleVariant { difficulty }), 3),
+        (Box::new(StripingPuzzleVariant {}), 3),
     ];
     let lol = puzzle_variants
         .choose_weighted(rng, |(_, weight)| *weight)

@@ -1,4 +1,3 @@
-use gtk4::glib::SignalHandlerId;
 use gtk4::{prelude::*, Label};
 use gtk4::{
     ApplicationWindow, Button, ButtonsType, Dialog, DialogFlags, MessageDialog, MessageType,

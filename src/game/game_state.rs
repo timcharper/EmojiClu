@@ -50,7 +50,6 @@ pub struct GameState {
     current_playthrough_id: Uuid,
     is_paused: bool,
     timer_state: TimerState,
-    game_action_observer: EventObserver<GameActionEvent>,
     subscription_id: Option<Unsubscriber<GameActionEvent>>,
     global_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     game_state_emitter: EventEmitter<GameStateEvent>,
@@ -131,7 +130,6 @@ impl GameState {
             current_playthrough_id: Uuid::new_v4(),
             is_paused: false,
             timer_state,
-            game_action_observer: game_action_observer.clone(),
             subscription_id: None,
             global_subscription_id: None,
             game_state_emitter,
@@ -331,7 +329,6 @@ impl GameState {
                     self.handle_clue_toggle_complete(clue_orientation, clue_idx)
                 }
             }
-            GameActionEvent::ClueSelect(maybe_clue) => self.handle_clue_focus(maybe_clue),
             GameActionEvent::ClueSelect(maybe_clue) => self.handle_clue_focus(maybe_clue),
             GameActionEvent::ClueSelectNext(direction) => self.handle_clue_focus_next(direction),
         }

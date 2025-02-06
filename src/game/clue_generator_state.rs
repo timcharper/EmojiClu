@@ -474,7 +474,7 @@ impl ClueGeneratorState {
                 }
             }
             let tile = maybe_tile.unwrap_or_else(|| {
-                let next_row = self.rng.gen_range(0..self.board.solution.n_rows);
+                let next_row = self.rng.random_range(0..self.board.solution.n_rows);
                 self.board.solution.get(next_row, next_col as usize)
             });
 
@@ -575,7 +575,7 @@ impl ClueGeneratorState {
                             .filter(|&c| c != seed_col)
                             .collect::<Vec<_>>();
 
-                        let row = self.rng.gen_range(0..self.board.solution.n_rows);
+                        let row = self.rng.random_range(0..self.board.solution.n_rows);
                         let col = *possible_cols.choose(&mut self.rng).unwrap();
                         let tile = self.board.solution.get(row, col);
 
@@ -593,7 +593,7 @@ impl ClueGeneratorState {
 
                 match tpe {
                     VerticalClueType::ThreeInColumn | VerticalClueType::TwoInColumn => {
-                        let count = self.rng.gen_range(1..=2);
+                        let count = self.rng.random_range(1..=2);
                         let tiles = self.get_random_vertical_tiles(&seed, count);
                         match tiles.len() {
                             2 => Some(Clue::three_in_column(seed, tiles[0], tiles[1])),
