@@ -7,8 +7,8 @@ use std::{collections::HashSet, rc::Rc};
 
 #[derive(Clone)]
 pub struct GameBoard {
-    candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE],
-    resolved_candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE],
+    candidates: [[u8; MAX_GRID_SIZE]; MAX_GRID_SIZE],
+    resolved_candidates: [[u8; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     selected: [[Option<char>; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     pub solution: Rc<Solution>,
     pub clue_set: Rc<ClueSet>,
@@ -57,19 +57,9 @@ impl std::fmt::Debug for GameBoard {
 
 impl GameBoard {
     pub fn new(solution: Rc<Solution>) -> Self {
-        let mut candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
-            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| true)));
-        let resolved_candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
-            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| false)));
+        let candidates = [[0xFF; MAX_GRID_SIZE]; MAX_GRID_SIZE];
+        let resolved_candidates = [[0x00; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         let selected = std::array::from_fn(|_| std::array::from_fn(|_| None));
-
-        for row in 0..MAX_GRID_SIZE {
-            for col in 0..MAX_GRID_SIZE {
-                for variant in 0..solution.n_variants {
-                    candidates[row][col][variant] = true;
-                }
-            }
-        }
 
         let mut board = Self {
             candidates,
@@ -87,13 +77,13 @@ impl GameBoard {
 
     pub fn remove_candidate(&mut self, row: usize, col: usize, tile: Tile) {
         let tile_idx = Tile::variant_to_index(tile.variant);
-        self.candidates[row][col][tile_idx] = false;
+        self.candidates[row][col] &= !(1 << tile_idx);
         self.recompute_resolved_row(row);
     }
 
     pub fn show_candidate(&mut self, row: usize, col: usize, tile: Tile) {
         let tile_idx = Tile::variant_to_index(tile.variant);
-        self.candidates[row][col][tile_idx] = true;
+        self.candidates[row][col] |= 1 << tile_idx;
         self.recompute_resolved_row(row);
     }
 
@@ -107,26 +97,20 @@ impl GameBoard {
         let row_selections = self.selected[row]
             .iter()
             .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
+            .map(|&variant| 1u8 << Tile::variant_to_index(variant))
+            .fold(0u8, |acc, bit| acc | bit);
 
         for col in 0..self.solution.n_variants {
             match self.selected[row][col] {
                 Some(selected_variant) => {
-                    for variant_idx in 0..self.solution.n_variants {
-                        let variant = Tile::index_to_variant(variant_idx);
-                        // only the selected variant is available here
-                        self.resolved_candidates[row][col][variant_idx] =
-                            variant == selected_variant;
-                    }
+                    // Only the selected variant is available here
+                    let variant_idx = Tile::variant_to_index(selected_variant);
+                    self.resolved_candidates[row][col] = 1 << variant_idx;
                 }
                 None => {
-                    for variant_idx in 0..self.solution.n_variants {
-                        let variant = Tile::index_to_variant(variant_idx);
-                        self.resolved_candidates[row][col][variant_idx] = self.candidates[row][col]
-                            [variant_idx]
-                            && !row_selections.contains(&variant);
-                    }
+                    // Available candidates are those that are still candidates and not selected elsewhere in row
+                    self.resolved_candidates[row][col] =
+                        self.candidates[row][col] & !row_selections;
                 }
             }
         }
@@ -143,13 +127,13 @@ impl GameBoard {
         return Some(Candidate::from_bool(
             row,
             variant,
-            self.resolved_candidates[row][col][variant_idx],
+            (self.resolved_candidates[row][col] & (1 << variant_idx)) != 0,
         ));
     }
 
     pub fn is_candidate_available(&self, row: usize, col: usize, variant: char) -> bool {
         let variant_idx = Tile::variant_to_index(variant);
-        self.resolved_candidates[row][col][variant_idx]
+        (self.resolved_candidates[row][col] & (1 << variant_idx)) != 0
     }
 
     pub fn get_variants(&self) -> Vec<char> {
@@ -250,10 +234,8 @@ impl GameBoard {
     pub fn parse(input: &str, solution: Rc<Solution>) -> Self {
         let mut selected: [[Option<char>; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
             std::array::from_fn(|_| std::array::from_fn(|_| None));
-        let mut candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
-            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| true)));
-        let resolved_candidates =
-            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| false)));
+        let mut candidates = [[0xFF; MAX_GRID_SIZE]; MAX_GRID_SIZE];
+        let resolved_candidates = [[0x00; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         let lines: Vec<&str> = input.lines().collect();
         let mut row = 0;
 
@@ -278,8 +260,11 @@ impl GameBoard {
                 }
 
                 // Parse available candidates
+                candidates[row][col] = 0;
                 for (idx, c) in solution.variants.iter().enumerate() {
-                    candidates[row][col][idx] = cell.contains(*c);
+                    if cell.contains(*c) {
+                        candidates[row][col] |= 1 << idx;
+                    }
                 }
             }
             row += 1;
