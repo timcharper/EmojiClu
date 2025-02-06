@@ -150,9 +150,11 @@ impl<T: std::fmt::Debug + 'static> EventObserver<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::cell::Cell;
 
     #[test]
+    #[serial]
     fn test_event_subscription_and_emission() {
         let (emitter, observer) = Channel::<i32>::new();
         let counter = Rc::new(Cell::new(0));
@@ -168,6 +170,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_multiple_listeners() {
         let (emitter, observer) = Channel::<i32>::new();
         let sum = Rc::new(Cell::new(0));
@@ -188,6 +191,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_clone_and_share() {
         let (emitter1, observer1) = Channel::<i32>::new();
         let emitter2 = emitter1.clone();
@@ -219,6 +223,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_unsubscribe() {
         let (emitter, observer) = Channel::<i32>::new();
         let counter = Rc::new(Cell::new(0));

@@ -5,13 +5,9 @@ use crate::{
         VerticalClueType,
     },
 };
-use itertools::Itertools;
 use log::{info, trace};
 use rand::{seq::IndexedRandom, Rng, RngCore};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
-};
+use std::fmt::Debug;
 
 use super::clue_generator_state::ClueGeneratorState;
 

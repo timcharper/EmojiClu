@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::model::{
-    CandidateState, Clue, ClueType, Deduction, GameBoard, HorizontalClueType, PartialSolution,
+    Clue, ClueType, Deduction, GameBoard, HorizontalClueType, PartialSolution,
     Tile, TileAssertion, VerticalClueType,
 };
 use log::trace;
@@ -197,12 +197,8 @@ impl ClueHandler for LeftOfHandler {
         }
 
         // Check if the left tile can go in this column
-        if let Some(candidate) =
-            board.get_candidate(self.left_tile.row, column, self.left_tile.variant)
-        {
-            if candidate.state == CandidateState::Eliminated {
-                return solutions;
-            }
+        if !board.is_candidate_available(self.left_tile.row, column, self.left_tile.variant) {
+            return solutions;
         }
 
         // For each possible right column (all columns after this one)
@@ -236,13 +232,10 @@ impl ClueHandler for NotAdjacentHandler {
         let max_column = board.solution.n_variants - 1;
 
         // can the positive tile go here and the negative assertion work both ways?
-        if let Some(candidate) =
-            board.get_candidate(self.positive_tile.row, column, self.positive_tile.variant)
+        if !board.is_candidate_available(self.positive_tile.row, column, self.positive_tile.variant)
         {
-            if candidate.state == CandidateState::Eliminated {
-                // positive tile can't go here
-                return Vec::new();
-            }
+            // positive tile can't go here
+            return Vec::new();
         }
 
         let mut solutions = Vec::new();
@@ -701,13 +694,11 @@ pub fn deduce_hidden_pairs(board: &GameBoard) -> Vec<Deduction> {
         let mut possible_variant_columns = HashMap::new();
         for col in 0..board.solution.n_variants {
             for variant in board.solution.variants.iter() {
-                if let Some(candidate) = board.get_candidate(row, col, *variant) {
-                    if candidate.state == CandidateState::Available {
-                        possible_variant_columns
-                            .entry(candidate.tile.variant)
-                            .or_insert(HashSet::new())
-                            .insert(col);
-                    }
+                if board.is_candidate_available(row, col, *variant) {
+                    possible_variant_columns
+                        .entry(*variant)
+                        .or_insert(HashSet::new())
+                        .insert(col);
                 }
             }
         }

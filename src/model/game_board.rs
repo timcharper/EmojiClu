@@ -2,7 +2,7 @@ use super::{
     solution::{Solution, MAX_GRID_SIZE},
     Clue, ClueSet,
 };
-use crate::model::{Candidate, CandidateState, Deduction, PartialSolution, Tile};
+use crate::model::{Candidate, Deduction, PartialSolution, Tile};
 use std::{collections::HashSet, rc::Rc};
 
 #[derive(Clone)]
@@ -37,12 +37,10 @@ impl std::fmt::Debug for GameBoard {
                 } else {
                     let mut cell = String::new();
                     for variant in self.solution.variants.iter() {
-                        if let Some(candidate) = self.get_candidate(row, col, *variant) {
-                            if candidate.state == CandidateState::Available {
-                                cell.push(candidate.tile.variant);
-                            } else {
-                                cell.push(' ');
-                            }
+                        if self.is_candidate_available(row, col, *variant) {
+                            cell.push(*variant);
+                        } else {
+                            cell.push(' ');
                         }
                     }
                     output.push_str(&format!("{}|", cell));
@@ -61,7 +59,7 @@ impl GameBoard {
     pub fn new(solution: Rc<Solution>) -> Self {
         let mut candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
             std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| true)));
-        let mut resolved_candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
+        let resolved_candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
             std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| false)));
         let selected = std::array::from_fn(|_| std::array::from_fn(|_| None));
 
@@ -149,6 +147,11 @@ impl GameBoard {
         ));
     }
 
+    pub fn is_candidate_available(&self, row: usize, col: usize, variant: char) -> bool {
+        let variant_idx = Tile::variant_to_index(variant);
+        self.resolved_candidates[row][col][variant_idx]
+    }
+
     pub fn get_variants(&self) -> Vec<char> {
         self.solution.variants.clone()
     }
@@ -219,10 +222,8 @@ impl GameBoard {
                 // Count available candidates by checking each variant
                 let mut available_candidates = Vec::new();
                 for variant in self.solution.variants.iter() {
-                    if let Some(candidate) = self.get_candidate(row, col, *variant) {
-                        if candidate.state == CandidateState::Available {
-                            available_candidates.push(candidate.tile);
-                        }
+                    if self.is_candidate_available(row, col, *variant) {
+                        available_candidates.push(Tile::new(row, *variant));
                     }
                 }
 
@@ -251,7 +252,7 @@ impl GameBoard {
             std::array::from_fn(|_| std::array::from_fn(|_| None));
         let mut candidates: [[[bool; MAX_GRID_SIZE]; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
             std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| true)));
-        let mut resolved_candidates =
+        let resolved_candidates =
             std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| false)));
         let lines: Vec<&str> = input.lines().collect();
         let mut row = 0;
@@ -336,14 +337,15 @@ impl GameBoard {
         let row = tile.row;
         let col = column;
 
-        let candidate = self.get_candidate(row, col, tile.variant);
-        // Use get_candidate to check if this tile is eliminated in this position
-        if let Some(candidate) = candidate {
-            candidate.state == CandidateState::Eliminated
-        } else {
-            // If we can't find the candidate, consider it eliminated
-            true
-        }
+        return !self.is_candidate_available(row, col, tile.variant);
+        // let candidate = self.get_candidate(row, col, tile.variant);
+        // // Use get_candidate to check if this tile is eliminated in this position
+        // if let Some(candidate) = candidate {
+        //     candidate.state == CandidateState::Eliminated
+        // } else {
+        //     // If we can't find the candidate, consider it eliminated
+        //     true
+        // }
     }
 
     pub fn apply_partial_solution(&mut self, solution: &PartialSolution) {
@@ -372,10 +374,8 @@ impl GameBoard {
         for col in 0..self.solution.n_variants {
             let mut col_has_candidate = false;
             for variant in self.solution.variants.iter() {
-                if let Some(candidate) = self.get_candidate(row, col, *variant) {
-                    if candidate.state == CandidateState::Available {
-                        col_has_candidate = true;
-                    }
+                if self.is_candidate_available(row, col, *variant) {
+                    col_has_candidate = true;
                 }
             }
             if !col_has_candidate {
@@ -475,13 +475,7 @@ impl GameBoard {
                         return true;
                     }
                 } else {
-                    // check candidates
-                    if self
-                        .get_candidate(row, col, solution_tile.variant)
-                        .unwrap()
-                        .state
-                        != CandidateState::Available
-                    {
+                    if !self.is_candidate_available(row, col, solution_tile.variant) {
                         return true;
                     }
                 }
@@ -522,7 +516,7 @@ impl GameBoard {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::Difficulty;
+    use crate::model::{CandidateState, Difficulty};
 
     use super::*;
 
