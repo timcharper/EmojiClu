@@ -7,12 +7,9 @@ use crate::{
 };
 use log::{info, trace};
 use rand::{seq::IndexedRandom, Rng, RngCore};
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::RangeInclusive};
 
-use super::{
-    clue_generator_state::ClueGeneratorState,
-    solver::deduce_hidden_sets_in_row,
-};
+use super::{clue_generator_state::ClueGeneratorState, solver::deduce_hidden_sets_in_row};
 
 #[derive(Debug, Clone)]
 pub struct WeightedClueType {
@@ -71,6 +68,30 @@ fn group_by_scan<T: Eq, U>(
     grouped
 }
 
+const MAX_BOOST: usize = 100;
+
+struct ScoreBoost {
+    amount: usize,
+    expected_range: RangeInclusive<usize>,
+    weight: usize,
+}
+
+impl ScoreBoost {
+    fn multipler(&self) -> usize {
+        let min = *self.expected_range.start();
+        let max = *self.expected_range.end();
+        let range = max - min;
+        let clamped = self.amount.clamp(min, max) - min;
+
+        (((clamped * self.weight) / range) + 1).clamp(1, MAX_BOOST)
+    }
+}
+
+fn reduce_score(base_score: usize, boosts: &Vec<ScoreBoost>) -> usize {
+    let overall_boost = boosts.iter().fold(1, |acc, b| acc * b.multipler());
+    base_score / overall_boost
+}
+
 /// basic scoring which punishes clues for revealing too much. Lower score = preferred.
 /// Basic scoring function that punishes clues for revealing too much information
 ///
@@ -82,7 +103,11 @@ fn group_by_scan<T: Eq, U>(
 /// # Returns
 /// A score where lower values are preferred. The score is calculated as:
 /// (number of deductions + (number of positive deductions * 6)) * 10
-fn generic_score_clue(board: &GameBoard, _: &Clue, deducations: &Vec<Deduction>) -> usize {
+fn compute_base_score(
+    board: &GameBoard,
+    _: &Clue,
+    deducations: &Vec<Deduction>,
+) -> (usize, Vec<ScoreBoost>) {
     let n_deductions = deducations.len();
     let deduction_rows = unique_scan(deducations.iter().map(|d| d.tile.row));
 
@@ -94,14 +119,20 @@ fn generic_score_clue(board: &GameBoard, _: &Clue, deducations: &Vec<Deduction>)
         })
         .count();
 
-    let hidden_pair_boost = (n_rows_with_hidden_pair_deductions * 5) + 1;
-
     let n_tiles_revealed = deducations
         .iter()
         .filter(|deduction| deduction.is_positive)
         .count();
 
-    ((n_deductions + (n_tiles_revealed * 6)) * 10) / hidden_pair_boost
+    let base_score = (n_deductions + (n_tiles_revealed * 6)) * 100;
+
+    let boosts = vec![ScoreBoost {
+        amount: n_rows_with_hidden_pair_deductions,
+        expected_range: 0..=1,
+        weight: 20,
+    }];
+
+    (base_score, boosts)
 }
 
 fn generic_starter_evidence(state: &mut ClueGeneratorState, init_board: &GameBoard) {
@@ -194,7 +225,8 @@ impl PuzzleVariant for StandardPuzzleVariant {
     }
 
     fn score_clue(&self, board: &GameBoard, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
-        generic_score_clue(board, clue, deducations)
+        let (base_score, boosts) = compute_base_score(board, clue, deducations);
+        reduce_score(base_score, &boosts)
     }
 
     fn get_variant_type(&self) -> PuzzleVariantType {
@@ -245,7 +277,7 @@ impl PuzzleVariant for NarrowingPuzzleVariant {
     }
 
     fn score_clue(&self, board: &GameBoard, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
-        let score = generic_score_clue(board, clue, deducations);
+        let (base_score, mut boosts) = compute_base_score(board, clue, deducations);
 
         let middle_col = self.difficulty.grid_size() as f32 / 2.0;
         // take the average distance of deductions from the center
@@ -256,8 +288,13 @@ impl PuzzleVariant for NarrowingPuzzleVariant {
             .sum::<f32>()
             / deducations.len() as f32;
 
-        let boosted_score = score as f32 / avg_distance_from_center;
-        boosted_score as usize
+        boosts.push(ScoreBoost {
+            amount: avg_distance_from_center as usize,
+            expected_range: 0..=((board.solution.n_variants - 1) / 2),
+            weight: 1,
+        });
+
+        reduce_score(base_score, &boosts)
     }
 
     fn get_variant_type(&self) -> PuzzleVariantType {
@@ -309,36 +346,41 @@ impl PuzzleVariant for StripingPuzzleVariant {
     }
 
     fn score_clue(&self, board: &GameBoard, clue: &Clue, deductions: &Vec<Deduction>) -> usize {
-        let score = generic_score_clue(board, clue, deductions);
+        let (base_score, mut boosts) = compute_base_score(board, clue, deductions);
 
-        if deductions.len() <= 1 {
-            return score;
-        }
+        // if this advances the board state towards striping, boost clue
+        let deduced_tiles = unique_scan(deductions.iter().map(|d| d.tile));
 
-        let unique_cols = unique_scan(deductions.iter().map(|d| d.column));
-        if unique_cols.len() <= 1 {
-            // all in same column? don't boost.
-            return score;
-        }
+        let max_striped_cols = deduced_tiles
+            .iter()
+            .map(|tile| {
+                let deduced_columns = (0..board.solution.n_variants)
+                    .filter(|col| board.has_negative_deduction(&tile, *col))
+                    .collect::<Vec<usize>>();
 
-        // if deduction columns are even, or odd, boost clue
-        let deductions_per_variant = group_by_scan(deductions, |d| d.tile.variant);
+                if deduced_columns.len() <= 1 {
+                    return 0;
+                }
 
-        let all_striped = deductions_per_variant.iter().all(|(_, columns)| {
-            if columns.len() <= 1 {
-                return true;
-            }
-            let all_even = columns.iter().all(|&deduction| deduction.column % 2 == 0);
-            let all_odd = columns.iter().all(|&deduction| deduction.column % 2 == 1);
-            all_even || all_odd
+                let all_even = deduced_columns.iter().all(|&col| col % 2 == 0);
+                let all_odd = deduced_columns.iter().all(|&col| col % 2 == 1);
+
+                if all_even || all_odd {
+                    return deduced_columns.len() - 1 /* 2 deduced columns counts as 1 striping */;
+                } else {
+                    return 0;
+                }
+            })
+            .max()
+            .unwrap_or(0);
+
+        boosts.push(ScoreBoost {
+            amount: max_striped_cols,
+            expected_range: 0..=(board.solution.n_variants / 2),
+            weight: 1,
         });
 
-        if all_striped {
-            // we really want these, so reduce their score by a factor of up to 6 so they float to the top.
-            score / unique_cols.len()
-        } else {
-            score
-        }
+        reduce_score(base_score, &boosts)
     }
 
     fn get_variant_type(&self) -> PuzzleVariantType {
@@ -403,8 +445,8 @@ pub fn random_puzzle_variant(
     rng: &mut Box<dyn RngCore>,
 ) -> Box<dyn PuzzleVariant> {
     let puzzle_variants: Vec<(Box<dyn PuzzleVariant>, i32)> = vec![
-        (Box::new(StandardPuzzleVariant {}), 1),
-        (Box::new(NarrowingPuzzleVariant { difficulty }), 3),
+        (Box::new(StandardPuzzleVariant {}), 3),
+        (Box::new(NarrowingPuzzleVariant { difficulty }), 1),
         (Box::new(StripingPuzzleVariant {}), 3),
     ];
     let lol = puzzle_variants
@@ -412,4 +454,118 @@ pub fn random_puzzle_variant(
         .map(|(variant, _)| variant)
         .expect("No puzzle variant chosen");
     lol.clone_box()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_score_boost_multiplier_maximum() {
+        let boost = ScoreBoost {
+            amount: 10,
+            expected_range: 0..=10,
+            weight: MAX_BOOST * 10,
+        };
+        assert_eq!(
+            boost.multipler(),
+            MAX_BOOST,
+            "Maximum value should be clamped to MAX_BOOST"
+        );
+    }
+
+    #[test]
+    fn test_score_boost_multiplier_non_zero_range() {
+        let mut boost = ScoreBoost {
+            amount: 4,
+            expected_range: 2..=6,
+            weight: 4,
+        };
+        assert_eq!(
+            boost.multipler(),
+            3,
+            "Multiplier should be 3 (middle point)"
+        );
+
+        boost.amount = 10;
+        assert_eq!(
+            boost.multipler(),
+            5,
+            "Multiplier should be 4 (clamped, weight + 1)"
+        );
+
+        boost.amount = 0;
+        assert_eq!(
+            boost.multipler(),
+            1,
+            "Multiplier should be 1 (clamped at minimum)"
+        );
+
+        boost.amount = 6;
+        assert_eq!(
+            boost.multipler(),
+            5,
+            "Multiplier should be 5 (max, weight + 1)"
+        );
+    }
+
+    #[test]
+    fn test_reduce_score_boosts_zero() {
+        let base_score = 100;
+        let boosts = vec![
+            ScoreBoost {
+                amount: 0,
+                expected_range: 0..=10,
+                weight: 10,
+            },
+            ScoreBoost {
+                amount: 0,
+                expected_range: 0..=10,
+                weight: 10,
+            },
+        ];
+        let reduced_score = reduce_score(base_score, &boosts);
+        assert_eq!(reduced_score, 100, "Reduced score should be 100");
+    }
+
+    #[test]
+    fn test_reduce_score_boosts_non_zero() {
+        let base_score = 100;
+        let boosts = vec![
+            ScoreBoost {
+                amount: 10,
+                expected_range: 0..=10,
+                weight: 1,
+            },
+            ScoreBoost {
+                amount: 10,
+                expected_range: 0..=10,
+                weight: 1,
+            },
+        ];
+        let reduced_score = reduce_score(base_score, &boosts);
+        assert_eq!(reduced_score, 25, "Reduced score should be 25");
+    }
+
+    #[test]
+    fn test_reduce_score_boosts_uneven_weights() {
+        let base_score = 100;
+        let boosts = vec![
+            ScoreBoost {
+                amount: 10,
+                expected_range: 0..=10,
+                weight: 1,
+            },
+            ScoreBoost {
+                amount: 10,
+                expected_range: 0..=10,
+                weight: 4,
+            },
+        ];
+        let reduced_score = reduce_score(base_score, &boosts);
+        assert_eq!(
+            reduced_score, 10,
+            "Reduced score should be 10 (100 / 2 / 5)"
+        );
+    }
 }

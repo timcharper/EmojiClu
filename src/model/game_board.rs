@@ -319,18 +319,7 @@ impl GameBoard {
 
     /// Check if a tile has been eliminated from a specific column
     pub fn has_negative_deduction(&self, tile: &Tile, column: usize) -> bool {
-        let row = tile.row;
-        let col = column;
-
-        return !self.is_candidate_available(row, col, tile.variant);
-        // let candidate = self.get_candidate(row, col, tile.variant);
-        // // Use get_candidate to check if this tile is eliminated in this position
-        // if let Some(candidate) = candidate {
-        //     candidate.state == CandidateState::Eliminated
-        // } else {
-        //     // If we can't find the candidate, consider it eliminated
-        //     true
-        // }
+        return !self.is_candidate_available(tile.row, column, tile.variant);
     }
 
     pub fn apply_partial_solution(&mut self, solution: &PartialSolution) {
