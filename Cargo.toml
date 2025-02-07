@@ -7,8 +7,7 @@ build = "build.rs"
 [dependencies]
 log = { version = "0.4.25", features = ["max_level_trace"] }
 env_logger = "0.11.6"
-# gtk = { version = "0.7", package = "gtk4", features = ["v4_6"] }
-gtk4 = "0.9.5"
+gtk4 = { version = "0.9.5", package = "gtk4", features = ["v4_14"] }
 gdk-pixbuf = "0.20.7"
 gio = "0.20.7"
 glib = "0.20.7"
@@ -20,6 +19,7 @@ uuid = { version = "1.4", features = ["v4", "serde"] }
 itertools = "0.14"
 serial_test = "3.2.0"
 readonly = "0.2.12"
+fixed = "1.28.0"
 
 [dev-dependencies]
 test-context = "0.3.0"

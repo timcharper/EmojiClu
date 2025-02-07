@@ -1,3 +1,4 @@
+use fixed::types::I8F8;
 use gdk_pixbuf::{InterpType, Pixbuf};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -66,8 +67,12 @@ impl ImageSet {
             maybe_assertion,
         };
 
-        let scaled_icons =
-            ImageSet::rescale_icons(&original_icons, CANDIDATE_IMG_SIZE, SOLUTION_IMG_SIZE);
+        let scaled_icons = ImageSet::rescale_icons(
+            &original_icons,
+            CANDIDATE_IMG_SIZE,
+            SOLUTION_IMG_SIZE,
+            I8F8::from_num(1),
+        );
 
         Self {
             original_icons,
@@ -77,31 +82,42 @@ impl ImageSet {
 
     fn rescale_icons(
         original_icons: &OriginalIcons,
-        candidate_tile_size: i32,
-        solution_tile_size: i32,
+        unscaled_candidate_tile_size: i32,
+        unscaled_solution_tile_size: i32,
+        scale_factor: I8F8,
     ) -> ScaledIcons {
         let mut solution_scale_icons = HashMap::new();
         let mut candidate_scale_icons = HashMap::new();
+
+        let scaled_candidate_tile_size =
+            (unscaled_candidate_tile_size as f32 * scale_factor.to_num::<f32>()) as i32;
+        let scaled_solution_tile_size =
+            (unscaled_solution_tile_size as f32 * scale_factor.to_num::<f32>()) as i32;
 
         // Load all icon variants (8x8 grid of icons)
         for row in 0..8 {
             for col in 0..8 {
                 let original_icon = original_icons.icons.get(&(row, col)).unwrap();
-                let candidate_size = ImageSet::rescale_icon(original_icon, candidate_tile_size);
-                let solution_size = ImageSet::rescale_icon(original_icon, solution_tile_size);
+                let candidate_size =
+                    ImageSet::rescale_icon(original_icon, scaled_candidate_tile_size);
+                let solution_size =
+                    ImageSet::rescale_icon(original_icon, scaled_solution_tile_size);
                 candidate_scale_icons.insert((row, col), Rc::new(candidate_size));
                 solution_scale_icons.insert((row, col), Rc::new(solution_size));
             }
         }
 
         // Load special icons
-        let scaled_negative_assertion =
-            ImageSet::rescale_icon(&original_icons.negative_assertion, candidate_tile_size);
+        let scaled_negative_assertion = ImageSet::rescale_icon(
+            &original_icons.negative_assertion,
+            scaled_candidate_tile_size,
+        );
 
-        let scaled_left_of = ImageSet::rescale_icon(&original_icons.left_of, candidate_tile_size);
+        let scaled_left_of =
+            ImageSet::rescale_icon(&original_icons.left_of, scaled_candidate_tile_size);
 
         let scaled_maybe_assertion =
-            ImageSet::rescale_icon(&original_icons.maybe_assertion, candidate_tile_size);
+            ImageSet::rescale_icon(&original_icons.maybe_assertion, scaled_candidate_tile_size);
 
         let scaled_icons = ScaledIcons {
             solution_scale_icons,
@@ -118,11 +134,13 @@ impl ImageSet {
         &self,
         candidate_tile_size: i32,
         solution_tile_size: i32,
+        scale_factor: I8F8,
     ) -> ImageSet {
         let scaled_icons = ImageSet::rescale_icons(
             &self.original_icons,
             candidate_tile_size,
             solution_tile_size,
+            scale_factor,
         );
         let image_set = ImageSet {
             original_icons: self.original_icons.clone(),

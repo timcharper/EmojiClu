@@ -59,11 +59,14 @@ impl ResourceManager {
             GlobalEvent::OptimizeImages {
                 candidate_tile_size,
                 solution_tile_size,
+                scale_factor,
             } => {
                 trace!(target: "resource_manager", "Optimizing images");
-                let new_image_set = self
-                    .image_set
-                    .optimized_image_set(*candidate_tile_size, *solution_tile_size);
+                let new_image_set = self.image_set.optimized_image_set(
+                    *candidate_tile_size,
+                    *solution_tile_size,
+                    *scale_factor,
+                );
                 self.image_set = Rc::new(new_image_set);
                 trace!(target: "resource_manager", "Emitting images optimized event");
                 self.global_event_emitter

@@ -8,7 +8,7 @@ use crate::{
     destroyable::Destroyable,
     events::Unsubscriber,
     game::settings::Settings,
-    model::{Clue, ClueSelection},
+    model::ClueSelection,
 };
 use crate::{
     events::{EventEmitter, EventObserver},

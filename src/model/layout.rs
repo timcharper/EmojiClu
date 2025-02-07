@@ -1,3 +1,4 @@
+use fixed::types::I8F8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Dimensions {
     pub width: i32,
@@ -67,4 +68,5 @@ pub struct CluesSizing {
 pub struct LayoutConfiguration {
     pub grid: GridSizing,
     pub clues: CluesSizing,
+    pub scale_factor: I8F8,
 }

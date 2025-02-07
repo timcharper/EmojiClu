@@ -10,7 +10,7 @@ use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::game::clue_generator::ClueGeneratorResult;
 use crate::model::{
-    CandidateState, Clue, ClueOrientation, ClueSelection, ClueSet, ClueWithGrouping, Deduction,
+    CandidateState, ClueOrientation, ClueSelection, ClueSet, ClueWithGrouping, Deduction,
     Difficulty, GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent,
     PuzzleCompletionState, Solution, TimerState,
 };

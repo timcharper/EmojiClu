@@ -10,7 +10,7 @@ use crate::{
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
     model::{
-        Clue, GameActionEvent, GameStateEvent, GlobalEvent, InputEvent, LayoutConfiguration,
+        Clue, GameStateEvent, GlobalEvent, InputEvent, LayoutConfiguration,
         Solution,
     },
 };

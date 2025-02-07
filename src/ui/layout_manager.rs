@@ -4,6 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use fixed::types::I8F8;
 use glib::{object::ObjectExt, source::SourceId, timeout_add_local, ControlFlow};
 use gtk4::{
     glib::SignalHandlerId,
@@ -74,6 +75,7 @@ pub struct LayoutManager {
     last_layout: Option<LayoutConfiguration>,
     last_layout_change: Option<Instant>,
     layout_monitor_source: Option<SourceId>,
+    scale_factor: I8F8,
 }
 
 impl Destroyable for LayoutManager {
@@ -125,58 +127,55 @@ impl LayoutManager {
             last_layout: None,
             last_layout_change: Some(Instant::now()),
             layout_monitor_source: None,
+            scale_factor: I8F8::from_num(1),
         }));
 
-        {
+        let game_action_handle = game_action_observer.subscribe({
             let dw = dw.clone();
-            let d2_handle = dw.clone();
-            let handle = game_action_observer.subscribe(move |event| {
-                d2_handle.borrow_mut().handle_game_action_event(event);
-            });
-            dw.borrow_mut().game_action_subscription = Some(handle);
-        }
+            move |event| {
+                dw.borrow_mut().handle_game_action_event(event);
+            }
+        });
 
-        {
+        let game_state_handle = game_state_observer.subscribe({
             let dw = dw.clone();
-            let d2_handle = dw.clone();
-            let handle = game_state_observer.subscribe(move |event| {
-                d2_handle.borrow_mut().handle_game_state_event(event);
-            });
-            dw.borrow_mut().game_state_subscription = Some(handle);
-        }
+            move |event| {
+                dw.borrow_mut().handle_game_state_event(event);
+            }
+        });
 
-        {
-            let window = window.clone();
-
-            {
-                let dw = dw.clone();
-                window.connect_realize(move |window| {
-                    if let Some(surface) = window.surface() {
-                        trace!(target: "layout_manager", "realized; surface: {:?}", surface);
-                        let handle = surface.connect_enter_monitor(move |_, monitor| {
+        window.connect_realize({
+            let dw = dw.clone();
+                move |window| {
+                if let Some(surface) = window.surface() {
+                    trace!(target: "layout_manager", "realized; surface: {:?}", surface);
+                    let handle = surface.connect_enter_monitor({
+                        let dw = dw.clone();
+                        move |_, monitor| {
                             trace!(target: "layout_manager", "Entering monitor {:?}; geometry: {:?}, scale_factor: {}", monitor.display(), monitor.geometry(), monitor.scale_factor());
-                        });
+                            dw.borrow_mut().update_scale_factor(monitor.scale());
+                        }});
 
-                        let d2_handle2 = dw.clone();
-                        let handle2 = surface.connect_layout(move |_, _, _| {
-                            let mut dw = RefCell::borrow_mut(&d2_handle2);
+                    let handle2 = surface.connect_layout({
+                        let dw = dw.clone();
+                        move |_, _, _| {
+                            let mut dw = RefCell::borrow_mut(&dw);
                             let dimensions = Dimensions {
                                 width: dw.scrolled_window.allocated_width(),
                                 height: dw.scrolled_window.allocated_height(),
-                            };
-                            dw.update_dimensions(Some(dimensions));
-                        });
-                        dw.borrow_mut().handle_surface_enter_monitor = Some(handle);
-                        dw.borrow_mut().handle_surface_layout = Some(handle2);
-                    }
-                });
-            }
-        }
+                        };
+                        dw.update_dimensions(Some(dimensions));
+                    }});
+                    dw.borrow_mut().handle_surface_enter_monitor = Some(handle);
+                    dw.borrow_mut().handle_surface_layout = Some(handle2);
+                }
+            }});
 
         // Set up layout monitoring
-        {
+
+        let source_id = timeout_add_local(Duration::from_millis(100), {
             let weak_dw = Rc::downgrade(&dw);
-            let source_id = timeout_add_local(Duration::from_millis(100), move || {
+            move || {
                 if let Some(dw) = weak_dw.upgrade() {
                     let mut manager = dw.borrow_mut();
                     manager.check_layout_stability();
@@ -184,9 +183,11 @@ impl LayoutManager {
                 } else {
                     ControlFlow::Break
                 }
-            });
-            dw.borrow_mut().layout_monitor_source = Some(source_id);
-        }
+            }
+        });
+        dw.borrow_mut().layout_monitor_source = Some(source_id);
+        dw.borrow_mut().game_action_subscription = Some(game_action_handle);
+        dw.borrow_mut().game_state_subscription = Some(game_state_handle);
 
         dw
     }
@@ -202,6 +203,14 @@ impl LayoutManager {
         match event {
             GameStateEvent::ClueSetUpdate(clue_set, _) => self.update_clue_stats(clue_set.as_ref()),
             _ => (),
+        }
+    }
+
+    fn update_scale_factor(&mut self, scale_factor: f64) {
+        if self.scale_factor != scale_factor {
+            self.scale_factor = I8F8::from_num(scale_factor);
+            let new_layout = self.calculate_scaled_layout();
+            self.maybe_publish_layout(new_layout);
         }
     }
 
@@ -250,6 +259,7 @@ impl LayoutManager {
                     self.global_event_emitter.emit(GlobalEvent::OptimizeImages {
                         candidate_tile_size: layout.grid.cell.candidate_image.width,
                         solution_tile_size: layout.grid.cell.solution_image.width,
+                        scale_factor: self.scale_factor,
                     });
                 }
                 self.last_layout_change = None;
@@ -296,6 +306,7 @@ impl LayoutManager {
         let clue_padding = SPACING_MEDIUM;
 
         LayoutConfiguration {
+            scale_factor: I8F8::from_num(1),
             grid: LayoutManager::calc_grid_sizing(GridSizingInputs {
                 solution_image: solution_image,
                 candidate_image: candidate_image,
@@ -431,6 +442,7 @@ impl LayoutManager {
         };
 
         LayoutConfiguration {
+            scale_factor: self.scale_factor,
             grid: LayoutManager::calc_grid_sizing(GridSizingInputs {
                 solution_image: solution_image,
                 candidate_image: candidate_image,

@@ -1,3 +1,5 @@
+use fixed::types::I8F8;
+
 use crate::{game::settings::Settings, ui::ImageSet};
 use std::rc::Rc;
 
@@ -12,6 +14,7 @@ pub enum GlobalEvent {
     OptimizeImages {
         candidate_tile_size: i32,
         solution_tile_size: i32,
+        scale_factor: I8F8,
     },
     ImagesOptimized(Rc<ImageSet>),
 }
