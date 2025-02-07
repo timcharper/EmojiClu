@@ -1,15 +1,15 @@
 use glib::SignalHandlerId;
 use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Widget};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::{cell::Cell, cell::RefCell, rc::Rc, time::Instant};
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
+use crate::model::{Clickable, ClueData, InputEvent};
 use crate::model::{Clue, ClueSelection, CluesSizing};
 use crate::model::{ClueOrientation, TileAssertion};
-use crate::model::{ClueType, HorizontalClueType, VerticalClueType};
-use crate::model::{GameActionEvent, LayoutConfiguration};
+use crate::model::{ClueType, HorizontalClueType, LayoutConfiguration, VerticalClueType};
 use crate::ui::clue_tile_ui::ClueTileUI;
+use crate::ui::register_left_click_handler;
 use crate::ui::ImageSet;
 
 #[derive(Debug)]
@@ -35,11 +35,13 @@ pub struct ClueUI {
     resources: Rc<ImageSet>,
     layout: CluesSizing,
     tooltip_signal: Option<SignalHandlerId>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    input_event_emitter: Rc<EventEmitter<InputEvent>>,
     clue_idx: usize,
     clue: Clue,
     gesture_right: Option<gtk4::GestureClick>,
+    gesture_left: Option<gtk4::GestureClick>,
     clue_xray_enabled: bool,
+    press_start_time: Rc<Cell<Option<Instant>>>,
 }
 
 impl ClueUI {
@@ -47,7 +49,7 @@ impl ClueUI {
         resources: Rc<ImageSet>,
         clue: Clue,
         layout: CluesSizing,
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        input_event_emitter: EventEmitter<InputEvent>,
         clue_idx: usize,
         clue_xray_enabled: bool,
         tooltips_enabled: bool,
@@ -95,11 +97,13 @@ impl ClueUI {
             resources,
             layout,
             tooltip_signal: None,
-            game_action_emitter,
+            input_event_emitter: Rc::new(input_event_emitter),
             clue_idx,
             clue,
             gesture_right: None,
+            gesture_left: None,
             clue_xray_enabled,
+            press_start_time: Rc::new(Cell::new(None)),
         };
         let clue_ui_ref = Rc::new(RefCell::new(clue_ui));
         ClueUI::wire_handlers(clue_ui_ref.clone());
@@ -112,16 +116,6 @@ impl ClueUI {
 
     fn wire_tooltip_handlers(clue_ui: Rc<RefCell<Self>>) {
         let weak_clue_ui = Rc::downgrade(&clue_ui);
-        // let mut clue_ui = clue_ui.borrow_mut();
-        // let frame = clue_ui.frame.clone();
-        // let tooltip_signal = frame.connect_query_tooltip(move |_, _, _, _, tooltip| {
-        //     if let Some(clue_ui) = weak_clue_ui.upgrade() {
-        //         let clue_ui = clue_ui.borrow();
-        //         let tooltip_widget = clue_ui.create_tooltip_widget();
-        //         tooltip.set_custom(Some(tooltip_widget.upcast::<Widget>()));
-        //     }
-        //     true
-        // });
         let mut clue_ui = clue_ui.borrow_mut();
 
         let tooltip_signal =
@@ -137,17 +131,6 @@ impl ClueUI {
                     true
                 });
         clue_ui.tooltip_signal = Some(tooltip_signal);
-
-        // let tooltip_widget_clone = Rc::downgrade(&tooltip_widget);
-        // let tooltip_signal =
-        //     frame.connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
-        //         if let Some(tooltip_widget) = tooltip_widget_clone.upgrade() {
-        //             if let Some(ref w) = *tooltip_widget.borrow() {
-        //                 tooltip.set_custom(Some(w));
-        //             }
-        //         }
-        //         true
-        //     });
     }
 
     pub fn set_tooltips_enabled(&mut self, enabled: bool) {
@@ -159,47 +142,44 @@ impl ClueUI {
         let mut clue_ui = clue_ui.borrow_mut();
         let clue_orientation = clue_ui.orientation;
         let clue_idx = clue_ui.clue_idx;
+        let press_start_time: Rc<Cell<Option<Instant>>> = Rc::new(Cell::new(None));
 
         // Right click handler
-        {
-            let weak_clue_ui = weak_clue_ui.clone();
-            let gesture_right = gtk4::GestureClick::new();
-            gesture_right.set_button(3);
-            gesture_right.connect_pressed(move |gesture, _, _, _| {
-                if let Some(clue_ui) = weak_clue_ui.upgrade() {
-                    let clue_ui = clue_ui.borrow();
-                    clue_ui
-                        .game_action_emitter
-                        .emit(GameActionEvent::ClueToggleComplete(
-                            clue_orientation,
-                            clue_idx,
-                        ));
-                    gesture.set_state(gtk4::EventSequenceState::Claimed);
-                }
-            });
-            clue_ui.frame.add_controller(gesture_right.clone());
-            clue_ui.gesture_right = Some(gesture_right);
-        }
 
-        // Left click handler
-        {
+        let gesture_right = gtk4::GestureClick::new();
+        gesture_right.set_button(3);
+        gesture_right.connect_pressed({
             let weak_clue_ui = weak_clue_ui.clone();
-            let gesture_left = gtk4::GestureClick::new();
-            gesture_left.set_button(1);
-            gesture_left.connect_pressed(move |gesture, _, _, _| {
+
+            move |gesture, _, _, _| {
                 if let Some(clue_ui) = weak_clue_ui.upgrade() {
                     let clue_ui = clue_ui.borrow();
                     clue_ui
-                        .game_action_emitter
-                        .emit(GameActionEvent::ClueFocus(Some((
-                            clue_orientation,
+                        .input_event_emitter
+                        .emit(InputEvent::RightClick(Clickable::Clue(ClueData {
+                            orientation: clue_orientation,
                             clue_idx,
-                        ))));
+                        })));
                     gesture.set_state(gtk4::EventSequenceState::Claimed);
                 }
-            });
-            clue_ui.frame.add_controller(gesture_left.clone());
-        }
+            }
+        });
+        clue_ui.frame.add_controller(gesture_right.clone());
+        clue_ui.gesture_right = Some(gesture_right);
+
+        let gesture_left = gtk4::GestureClick::new();
+        gesture_left.set_button(1);
+        register_left_click_handler(clue_ui.input_event_emitter.clone(), &gesture_left, {
+            move |_, _, _, _| {
+                Some(Clickable::Clue(ClueData {
+                    orientation: clue_orientation,
+                    clue_idx,
+                }))
+            }
+        });
+
+        clue_ui.frame.add_controller(gesture_left.clone());
+        clue_ui.gesture_left = Some(gesture_left);
     }
 
     fn apply_layout(&self) {
@@ -511,10 +491,13 @@ impl Destroyable for ClueUI {
         log::trace!(target: "clue_ui", "Destroying clue UI");
 
         // Remove the click gesture controller
-        if let Some(gesture) = self.gesture_right.take() {
-            self.frame.remove_controller(&gesture);
+        if let Some(gesture_right) = self.gesture_right.take() {
+            self.frame.remove_controller(&gesture_right);
         }
-        log::trace!(target: "clue_ui", "Removed gesture controller");
+        if let Some(gesture_left) = self.gesture_left.take() {
+            self.frame.remove_controller(&gesture_left);
+        }
+        log::trace!(target: "clue_ui", "Removed gesture controllers");
 
         if let Some(tooltip_signal) = self.tooltip_signal.take() {
             self.frame.disconnect(tooltip_signal);

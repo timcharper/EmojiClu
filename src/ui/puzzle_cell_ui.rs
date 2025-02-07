@@ -5,12 +5,16 @@ use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
-use crate::model::{Candidate, CandidateState, Clue, GameActionEvent, GridSizing, Tile};
+use crate::model::{
+    Candidate, CandidateCellTileData, CandidateState, Clickable, Clue, GridSizing, InputEvent,
+    SolutionTileData, Tile,
+};
 use glib::timeout_add_local_once;
 use gtk4::{prelude::*, GestureClick, Widget};
 use gtk4::{Frame, Grid, Image, Overlay};
 use log::{trace, warn};
 
+use super::register_left_click_handler;
 use super::ImageSet;
 
 pub struct PuzzleCellUI {
@@ -24,7 +28,7 @@ pub struct PuzzleCellUI {
     pub resources: Rc<ImageSet>,
     pub row: usize,
     pub col: usize,
-    pub game_action_emitter: EventEmitter<GameActionEvent>,
+    pub input_event_emitter: Rc<EventEmitter<InputEvent>>,
     pub _variants: RangeInclusive<char>,
     pub n_variants: usize,
     current_layout: GridSizing,
@@ -47,7 +51,7 @@ impl PuzzleCellUI {
         resources: Rc<ImageSet>,
         row: usize,
         col: usize,
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        input_event_emitter: EventEmitter<InputEvent>,
         variants: RangeInclusive<char>,
         layout: GridSizing,
     ) -> Rc<RefCell<Self>> {
@@ -119,7 +123,7 @@ impl PuzzleCellUI {
             resources,
             row,
             col,
-            game_action_emitter,
+            input_event_emitter: Rc::new(input_event_emitter),
             _variants: variants.clone(),
             n_variants,
             current_layout: layout,
@@ -215,47 +219,70 @@ impl PuzzleCellUI {
     }
 
     fn register_click_handler(cell_ui: Rc<RefCell<Self>>) {
-        let cell_ui_borrowed = cell_ui.borrow();
+        let mut cell_ui_borrowed = cell_ui.borrow_mut();
         let row = cell_ui_borrowed.row;
         let col = cell_ui_borrowed.col;
-        let game_action_emitter = cell_ui_borrowed.game_action_emitter.clone();
-        drop(cell_ui_borrowed);
 
         // Left click handler
-
         let gesture_click = gtk4::GestureClick::new();
-        {
-            let cell_ui = Rc::downgrade(&cell_ui);
-            let game_action_emitter = game_action_emitter.clone();
-            gesture_click.set_button(1);
-            gesture_click.connect_pressed(move |gesture, _, x, y| {
-                if let Some(cell_ui) = cell_ui.upgrade() {
-                    let variant = cell_ui.borrow_mut().get_variant_at_position(x, y);
-                    game_action_emitter.emit(GameActionEvent::CellClick(row, col, variant));
-                    gesture.set_state(gtk4::EventSequenceState::Claimed);
-                } else {
-                    warn!(target: "puzzle_cell_ui", "Stale handler called!");
+        gesture_click.set_button(1);
+
+        // Track press start time and emit LeftClick on press
+        register_left_click_handler(
+            cell_ui_borrowed.input_event_emitter.clone(),
+            &gesture_click,
+            {
+                let cell_ui = Rc::downgrade(&cell_ui);
+                move |_, _, x, y| {
+                    if let Some(cell_ui) = cell_ui.upgrade() {
+                        let cell_ui = cell_ui.borrow();
+                        if let Some(variant) = cell_ui.get_variant_at_position(x, y) {
+                            Some(Clickable::CandidateCellTile(CandidateCellTileData {
+                                row,
+                                col,
+                                variant,
+                            }))
+                        } else if cell_ui.selected_tile.is_some() {
+                            Some(Clickable::SolutionTile(SolutionTileData { row, col }))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 }
-            });
-        }
+            },
+        );
 
         // Right click handler
         let gesture_right = gtk4::GestureClick::new();
         gesture_right.set_button(3);
-        {
-            let game_action_emitter = game_action_emitter.clone();
+
+        gesture_right.connect_pressed({
             let cell_ui = Rc::downgrade(&cell_ui);
-            gesture_right.connect_pressed(move |gesture, _, x, y| {
+            move |gesture, _, x, y| {
                 if let Some(cell_ui) = cell_ui.upgrade() {
-                    let variant = cell_ui.borrow_mut().get_variant_at_position(x, y);
-                    game_action_emitter.emit(GameActionEvent::CellRightClick(row, col, variant));
+                    let cell_ui = cell_ui.borrow();
+                    if let Some(variant) = cell_ui.get_variant_at_position(x, y) {
+                        cell_ui.input_event_emitter.emit(InputEvent::RightClick(
+                            Clickable::CandidateCellTile(CandidateCellTileData {
+                                row,
+                                col,
+                                variant,
+                            }),
+                        ));
+                    } else if cell_ui.selected_tile.is_some() {
+                        cell_ui.input_event_emitter.emit(InputEvent::RightClick(
+                            Clickable::SolutionTile(SolutionTileData { row, col }),
+                        ));
+                    }
                     gesture.set_state(gtk4::EventSequenceState::Claimed);
                 } else {
                     warn!(target: "puzzle_cell_ui", "Stale handler called!");
                 }
-            });
-        }
-        let mut cell_ui_borrowed = cell_ui.borrow_mut();
+            }
+        });
+
         let frame: &Frame = &cell_ui_borrowed.frame;
         frame.add_controller(gesture_click.clone());
         frame.add_controller(gesture_right.clone());

@@ -10,6 +10,7 @@ mod game_board;
 mod game_state_event;
 mod game_stats;
 mod global_event;
+mod input_event;
 mod layout;
 mod partial_solution;
 mod solution;
@@ -29,6 +30,9 @@ pub use game_board::GameBoard;
 pub use game_state_event::{ClueSelection, GameStateEvent, PuzzleCompletionState};
 pub use game_stats::{GameStats, GlobalStats};
 pub use global_event::GlobalEvent;
+pub use input_event::{
+    CandidateCellTileData, Clickable, ClueData, InputEvent, SolutionTileData, LONG_PRESS_DURATION,
+};
 pub use partial_solution::PartialSolution;
 pub use solution::Solution;
 pub use solution::MAX_GRID_SIZE;

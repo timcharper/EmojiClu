@@ -12,7 +12,7 @@ use crate::{
 };
 use crate::{
     events::{EventEmitter, EventObserver},
-    model::{ClueOrientation, ClueSet, GameActionEvent, GameStateEvent, GlobalEvent},
+    model::{ClueOrientation, ClueSet, GameStateEvent, GlobalEvent, InputEvent},
 };
 use crate::{
     game::clue_generator_state::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
@@ -26,7 +26,7 @@ pub struct CluePanelsUI {
     pub vertical_grid: Grid,
     horizontal_clue_uis: Vec<Rc<RefCell<ClueUI>>>,
     vertical_clue_uis: Vec<Rc<RefCell<ClueUI>>>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
     game_state_subscription_id: Option<Unsubscriber<GameStateEvent>>,
     settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
@@ -60,7 +60,7 @@ impl Destroyable for CluePanelsUI {
 // Parent widget for both horizontal clues and vertical clues
 impl CluePanelsUI {
     pub fn new(
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        input_event_emitter: EventEmitter<InputEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         resources: &Rc<ImageSet>,
@@ -92,7 +92,7 @@ impl CluePanelsUI {
             vertical_grid: vertical_clues_grid,
             horizontal_clue_uis: Vec::with_capacity(MAX_HORIZ_CLUES),
             vertical_clue_uis: Vec::with_capacity(MAX_VERT_CLUES),
-            game_action_emitter: game_action_emitter,
+            input_event_emitter: input_event_emitter,
             resources: Rc::clone(resources),
             game_state_subscription_id: None,
             settings_subscription_id: None,
@@ -209,7 +209,7 @@ impl CluePanelsUI {
                 Rc::clone(&self.resources),
                 clue_with_grouping.clue.clone(),
                 self.current_layout.clues.clone(),
-                self.game_action_emitter.clone(),
+                self.input_event_emitter.clone(),
                 idx,
                 self.current_xray_enabled,
                 self.tooltips_enabled,
@@ -230,7 +230,7 @@ impl CluePanelsUI {
                 Rc::clone(&self.resources),
                 clue_with_grouping.clue.clone(),
                 self.current_layout.clues.clone(),
-                self.game_action_emitter.clone(),
+                self.input_event_emitter.clone(),
                 col,
                 self.current_xray_enabled,
                 self.tooltips_enabled,

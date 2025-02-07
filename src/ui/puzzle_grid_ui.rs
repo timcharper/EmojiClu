@@ -9,7 +9,10 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
-    model::{Clue, GameActionEvent, GameStateEvent, GlobalEvent, LayoutConfiguration, Solution},
+    model::{
+        Clue, GameActionEvent, GameStateEvent, GlobalEvent, InputEvent, LayoutConfiguration,
+        Solution,
+    },
 };
 
 use super::{puzzle_cell_ui::PuzzleCellUI, ImageSet};
@@ -17,7 +20,7 @@ use super::{puzzle_cell_ui::PuzzleCellUI, ImageSet};
 pub struct PuzzleGridUI {
     pub grid: Grid,
     cells: Vec<Vec<Rc<RefCell<PuzzleCellUI>>>>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
     game_state_subscription_id: Option<Unsubscriber<GameStateEvent>>,
     settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
@@ -45,7 +48,7 @@ impl Destroyable for PuzzleGridUI {
 
 impl PuzzleGridUI {
     pub fn new(
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        input_event_emitter: EventEmitter<InputEvent>,
         game_state_observer: EventObserver<GameStateEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         resources: Rc<ImageSet>,
@@ -58,7 +61,7 @@ impl PuzzleGridUI {
         let puzzle_grid_ui = Rc::new(RefCell::new(Self {
             grid,
             cells: vec![],
-            game_action_emitter,
+            input_event_emitter,
             resources,
             game_state_subscription_id: None,
             settings_subscription_id: None,
@@ -267,7 +270,7 @@ impl PuzzleGridUI {
                     self.resources.clone(),
                     row,
                     col,
-                    self.game_action_emitter.clone(),
+                    self.input_event_emitter.clone(),
                     variants_range.clone(),
                     self.current_layout.grid.clone(),
                 );

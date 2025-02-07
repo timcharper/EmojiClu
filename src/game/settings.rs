@@ -17,6 +17,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub clue_xray_enabled: bool,
+
+    #[serde(default)]
+    pub touch_screen_controls: bool,
 }
 
 // Helper functions for default values
@@ -33,6 +36,7 @@ impl Default for Settings {
             difficulty: Difficulty::default(),
             clue_tooltips_enabled: true,
             clue_xray_enabled: false,
+            touch_screen_controls: false,
             version: 1,
         }
     }

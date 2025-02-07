@@ -3,13 +3,14 @@ use crate::events::{Channel, EventEmitter};
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
-use crate::model::{Difficulty, GameActionEvent, GameStateEvent, GlobalEvent};
-use crate::ui::game_controls_monitor::GameControlsMonitor;
+use crate::model::{Difficulty, GameActionEvent, GameStateEvent, GlobalEvent, InputEvent};
+use crate::ui::input_translator::InputTranslator;
 use crate::ui::seed_dialog::SeedDialog;
 use crate::ui::settings_menu_ui::SettingsMenuUI;
 use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
+use crate::ui::top_level_input_event_monitor::TopLevelInputEventMonitor;
 use gio::{Menu, SimpleAction};
 use glib::timeout_add_local_once;
 use gtk4::gdk::{Display, Monitor};
@@ -109,6 +110,7 @@ pub fn build_ui(app: &Application) {
     let (game_action_emitter, game_action_observer) = Channel::<GameActionEvent>::new();
     let (game_state_emitter, game_state_observer) = Channel::<GameStateEvent>::new();
     let (global_event_emitter, global_event_observer) = Channel::<GlobalEvent>::new();
+    let (input_event_emitter, input_event_observer) = Channel::<InputEvent>::new();
 
     let settings = Rc::new(RefCell::new(Settings::load()));
     let resource_manager =
@@ -261,7 +263,7 @@ pub fn build_ui(app: &Application) {
 
     // Create puzzle grid and clue set UI first
     let puzzle_grid_ui = PuzzleGridUI::new(
-        game_action_emitter.clone(),
+        input_event_emitter.clone(),
         game_state_observer.clone(),
         global_event_observer.clone(),
         image_set.clone(),
@@ -270,7 +272,7 @@ pub fn build_ui(app: &Application) {
     );
 
     let clue_set_ui = CluePanelsUI::new(
-        game_action_emitter.clone(),
+        input_event_emitter.clone(),
         game_state_observer.clone(),
         global_event_observer.clone(),
         &image_set,
@@ -471,10 +473,11 @@ pub fn build_ui(app: &Application) {
     );
 
     // Initialize game controls
-    let game_controls = GameControlsMonitor::new(
+    let game_controls = TopLevelInputEventMonitor::new(
         window.clone(),
         scrolled_window.clone(),
         game_action_emitter.clone(),
+        input_event_emitter.clone(),
         global_event_observer.clone(),
         &settings.borrow(),
     );
@@ -502,6 +505,14 @@ pub fn build_ui(app: &Application) {
     });
     window.add_action(&action_restart);
 
+    // Initialize input translator
+    let input_translator = InputTranslator::new(
+        game_action_emitter.clone(),
+        input_event_observer.clone(),
+        global_event_observer.clone(),
+        &settings.borrow(),
+    );
+
     window.connect_destroy(move |_| {
         println!("Destroying window");
         history_controls_ui.borrow_mut().destroy();
@@ -515,6 +526,7 @@ pub fn build_ui(app: &Application) {
         seed_dialog.borrow_mut().destroy();
         settings_menu_ui.borrow_mut().destroy();
         game_controls.borrow_mut().destroy();
+        input_translator.borrow_mut().destroy();
         resource_manager.borrow_mut().destroy();
     });
 }
