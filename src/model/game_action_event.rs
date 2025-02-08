@@ -2,8 +2,8 @@ use super::{ClueOrientation, Difficulty};
 
 #[derive(Debug, Clone)]
 pub enum GameActionEvent {
-    CellClick(usize, usize, Option<char>),
-    CellRightClick(usize, usize, Option<char>),
+    CellSelect(usize, usize, Option<char>),
+    CellClear(usize, usize, Option<char>),
     ClueToggleComplete(ClueOrientation, usize), // clue_idx
     ClueToggleSelectedComplete,
     ClueFocus(Option<(ClueOrientation, usize)>), // clue_idx when Some

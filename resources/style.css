@@ -131,11 +131,11 @@ image {
     background-color: #2d2d2d;  /* Dark grey background */
 }
 
-.clue-xray-positive {
+.clue-spotlight-positive {
     opacity: 1.0;
 }
 
-.clue-xray-negative {
+.clue-spotlight-negative {
     opacity: 0.2;
 }
 

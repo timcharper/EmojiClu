@@ -41,7 +41,6 @@ pub struct ClueUI {
     gesture_right: Option<gtk4::GestureClick>,
     gesture_left: Option<gtk4::GestureClick>,
     clue_xray_enabled: bool,
-    press_start_time: Rc<Cell<Option<Instant>>>,
 }
 
 impl ClueUI {
@@ -103,7 +102,6 @@ impl ClueUI {
             gesture_right: None,
             gesture_left: None,
             clue_xray_enabled,
-            press_start_time: Rc::new(Cell::new(None)),
         };
         let clue_ui_ref = Rc::new(RefCell::new(clue_ui));
         ClueUI::wire_handlers(clue_ui_ref.clone());
@@ -142,7 +140,6 @@ impl ClueUI {
         let mut clue_ui = clue_ui.borrow_mut();
         let clue_orientation = clue_ui.orientation;
         let clue_idx = clue_ui.clue_idx;
-        let press_start_time: Rc<Cell<Option<Instant>>> = Rc::new(Cell::new(None));
 
         // Right click handler
 

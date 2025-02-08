@@ -73,7 +73,7 @@ impl SettingsMenuUI {
             action_toggle_xray = SimpleAction::new_stateful(
                 "toggle-xray",
                 None,
-                &settings.clue_xray_enabled.to_variant(),
+                &settings.clue_spotlight_enabled.to_variant(),
             );
 
             // Create touch screen controls action
@@ -174,7 +174,7 @@ impl SettingsMenuUI {
 
     fn set_clue_xray_enabled(&mut self, enabled: bool) {
         let mut settings = self.settings_ref.borrow_mut();
-        settings.clue_xray_enabled = enabled;
+        settings.clue_spotlight_enabled = enabled;
         if !settings.save().is_ok() {
             log::error!("Failed to save settings");
         }

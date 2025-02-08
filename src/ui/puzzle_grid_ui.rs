@@ -9,10 +9,7 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
-    model::{
-        Clue, GameStateEvent, GlobalEvent, InputEvent, LayoutConfiguration,
-        Solution,
-    },
+    model::{Clue, GameStateEvent, GlobalEvent, InputEvent, LayoutConfiguration, Solution},
 };
 
 use super::{puzzle_cell_ui::PuzzleCellUI, ImageSet};
@@ -27,7 +24,7 @@ pub struct PuzzleGridUI {
     current_layout: LayoutConfiguration,
     n_rows: usize,
     n_variants: usize,
-    current_xray_enabled: bool,
+    current_spotlight_enabled: bool,
     current_focused_clue: Option<Clue>,
     completed_clues: HashSet<Clue>,
     current_clue_hint: Option<Clue>,
@@ -68,7 +65,7 @@ impl PuzzleGridUI {
             current_layout: layout.clone(),
             n_rows: 0,
             n_variants: 0,
-            current_xray_enabled: settings.clue_xray_enabled,
+            current_spotlight_enabled: settings.clue_spotlight_enabled,
             current_focused_clue: None,
             completed_clues: HashSet::new(),
             current_clue_hint: None,
@@ -144,8 +141,8 @@ impl PuzzleGridUI {
                 }
             }
             GlobalEvent::SettingsChanged(settings) => {
-                if settings.clue_xray_enabled != self.current_xray_enabled {
-                    self.set_clue_xray_enabled(settings.clue_xray_enabled);
+                if settings.clue_spotlight_enabled != self.current_spotlight_enabled {
+                    self.set_clue_spotlight_enabled(settings.clue_spotlight_enabled);
                 }
             }
             _ => (),
@@ -193,10 +190,11 @@ impl PuzzleGridUI {
                     self.set_current_clue(&None);
                 }
             }
-            GameStateEvent::ClueHintHighlight { clue_with_grouping } => {
-                self.current_clue_hint = Some(clue_with_grouping.clue.clone());
-                self.sync_xray();
+            GameStateEvent::ClueHintHighlight(clue_with_grouping) => {
+                self.current_clue_hint = clue_with_grouping.as_ref().map(|cwg| cwg.clue.clone());
+                self.sync_spotlight();
             }
+
             _ => {}
         }
     }
@@ -207,10 +205,10 @@ impl PuzzleGridUI {
             // clear the hint state we move on
             self.current_clue_hint = None;
         }
-        self.sync_xray();
+        self.sync_spotlight();
     }
 
-    fn sync_xray(&self) {
+    fn sync_spotlight(&self) {
         let current_focused_clue_completed = self
             .current_focused_clue
             .as_ref()
@@ -219,7 +217,7 @@ impl PuzzleGridUI {
 
         let selected_clue_is_hint = self.current_clue_hint == self.current_focused_clue;
 
-        let xray_clue = if (selected_clue_is_hint || self.current_xray_enabled)
+        let spotlight_clue = if (selected_clue_is_hint || self.current_spotlight_enabled)
             && !current_focused_clue_completed
         {
             self.current_focused_clue.clone()
@@ -228,14 +226,14 @@ impl PuzzleGridUI {
         };
         for row in &self.cells {
             for cell in row {
-                cell.borrow_mut().set_clue_xray(&xray_clue);
+                cell.borrow_mut().set_clue_spotlight(&spotlight_clue);
             }
         }
     }
 
-    fn set_clue_xray_enabled(&mut self, enabled: bool) {
-        self.current_xray_enabled = enabled;
-        self.sync_xray();
+    fn set_clue_spotlight_enabled(&mut self, enabled: bool) {
+        self.current_spotlight_enabled = enabled;
+        self.sync_spotlight();
     }
 
     fn set_grid_size(&mut self, n_rows: usize, n_variants: usize) {

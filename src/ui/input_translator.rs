@@ -105,28 +105,27 @@ impl InputTranslator {
             Clickable::CandidateCellTile(data) => {
                 // Long press = left click, short press = right click
                 if is_long_press {
-                    self.game_action_emitter.emit(GameActionEvent::CellClick(
+                    self.game_action_emitter.emit(GameActionEvent::CellSelect(
                         data.row,
                         data.col,
                         Some(data.variant),
                     ));
                 } else {
-                    self.game_action_emitter
-                        .emit(GameActionEvent::CellRightClick(
-                            data.row,
-                            data.col,
-                            Some(data.variant),
-                        ));
+                    self.game_action_emitter.emit(GameActionEvent::CellClear(
+                        data.row,
+                        data.col,
+                        Some(data.variant),
+                    ));
                 }
             }
             Clickable::SolutionTile(data) => {
                 // Long press = left click, short press = right click
                 if is_long_press {
                     self.game_action_emitter
-                        .emit(GameActionEvent::CellClick(data.row, data.col, None));
+                        .emit(GameActionEvent::CellSelect(data.row, data.col, None));
                 } else {
                     self.game_action_emitter
-                        .emit(GameActionEvent::CellRightClick(data.row, data.col, None));
+                        .emit(GameActionEvent::CellClear(data.row, data.col, None));
                 }
             }
             Clickable::Clue(data) => {
@@ -156,7 +155,7 @@ impl InputTranslator {
     fn handle_left_click(&self, clickable: &Clickable) {
         match clickable {
             Clickable::CandidateCellTile(data) => {
-                self.game_action_emitter.emit(GameActionEvent::CellClick(
+                self.game_action_emitter.emit(GameActionEvent::CellSelect(
                     data.row,
                     data.col,
                     Some(data.variant),
@@ -164,7 +163,7 @@ impl InputTranslator {
             }
             Clickable::SolutionTile(data) => {
                 self.game_action_emitter
-                    .emit(GameActionEvent::CellClick(data.row, data.col, None));
+                    .emit(GameActionEvent::CellSelect(data.row, data.col, None));
             }
             Clickable::Clue(data) => {
                 self.game_action_emitter
@@ -183,16 +182,15 @@ impl InputTranslator {
     fn handle_right_click(&self, clickable: &Clickable) {
         match clickable {
             Clickable::CandidateCellTile(data) => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::CellRightClick(
-                        data.row,
-                        data.col,
-                        Some(data.variant),
-                    ));
+                self.game_action_emitter.emit(GameActionEvent::CellClear(
+                    data.row,
+                    data.col,
+                    Some(data.variant),
+                ));
             }
             Clickable::SolutionTile(data) => {
                 self.game_action_emitter
-                    .emit(GameActionEvent::CellRightClick(data.row, data.col, None));
+                    .emit(GameActionEvent::CellClear(data.row, data.col, None));
             }
             Clickable::Clue(data) => {
                 self.game_action_emitter

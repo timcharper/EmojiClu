@@ -13,7 +13,7 @@ use crate::ui::timer_button_ui::TimerButtonUI;
 use crate::ui::top_level_input_event_monitor::TopLevelInputEventMonitor;
 use gio::{Menu, SimpleAction};
 use glib::timeout_add_local_once;
-use gtk4::gdk::{Display, Monitor};
+use gtk4::gdk::{Display, Monitor, Texture};
 use gtk4::{
     prelude::*, AboutDialog, Application, ApplicationWindow, Button, ButtonsType, CssProvider,
     DialogFlags, HeaderBar, Label, License, MenuButton, MessageDialog, MessageType, Orientation,
@@ -141,6 +141,9 @@ pub fn build_ui(app: &Application) {
             .default_width(desired_width.min(max_desired_width) as i32)
             .build(),
     );
+
+    // let icon = Texture::from_resource("/org/mindhunt/icon.png");
+    // window.set_icon(Some(&icon));
 
     let scrolled_window = gtk4::ScrolledWindow::builder()
         .hexpand_set(true)

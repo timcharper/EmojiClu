@@ -142,12 +142,12 @@ impl PuzzleCellUI {
     }
 
     /// Dimm the puzzle cell if candidates not in clue
-    pub fn set_clue_xray(&mut self, clue_selection: &Option<Clue>) {
+    pub fn set_clue_spotlight(&mut self, clue_selection: &Option<Clue>) {
         self.clue_selection = clue_selection.clone();
-        self.sync_clue_xray();
+        self.sync_clue_spotlight();
     }
 
-    fn sync_clue_xray(&self) {
+    fn sync_clue_spotlight(&self) {
         // clear css on all candidate cells and solution frame
 
         match &self.clue_selection {
@@ -176,16 +176,16 @@ impl PuzzleCellUI {
                 }
 
                 if match_count > 0 {
-                    self.frame.add_css_class("clue-xray-positive");
-                    self.frame.remove_css_class("clue-xray-negative");
+                    self.frame.add_css_class("clue-spotlight-positive");
+                    self.frame.remove_css_class("clue-spotlight-negative");
                 } else {
-                    self.frame.add_css_class("clue-xray-negative");
-                    self.frame.remove_css_class("clue-xray-positive");
+                    self.frame.add_css_class("clue-spotlight-negative");
+                    self.frame.remove_css_class("clue-spotlight-positive");
                 }
             }
             None => {
-                self.frame.remove_css_class("clue-xray-negative");
-                self.frame.remove_css_class("clue-xray-positive");
+                self.frame.remove_css_class("clue-spotlight-negative");
+                self.frame.remove_css_class("clue-spotlight-positive");
             }
         }
     }
@@ -313,7 +313,7 @@ impl PuzzleCellUI {
             }
         }
         self.sync_images();
-        self.sync_clue_xray();
+        self.sync_clue_spotlight();
     }
 
     pub fn set_solution(&mut self, tile: Option<&Tile>) {
@@ -338,7 +338,7 @@ impl PuzzleCellUI {
             self.frame.set_child(Some(&self.candidates_grid));
         }
         self.sync_images();
-        self.sync_clue_xray();
+        self.sync_clue_spotlight();
     }
 
     pub fn get_variant_at_position(&self, x: f64, y: f64) -> Option<char> {

@@ -16,7 +16,7 @@ pub struct Settings {
     pub clue_tooltips_enabled: bool,
 
     #[serde(default)]
-    pub clue_xray_enabled: bool,
+    pub clue_spotlight_enabled: bool,
 
     #[serde(default)]
     pub touch_screen_controls: bool,
@@ -35,7 +35,7 @@ impl Default for Settings {
         Settings {
             difficulty: Difficulty::default(),
             clue_tooltips_enabled: true,
-            clue_xray_enabled: false,
+            clue_spotlight_enabled: false,
             touch_screen_controls: false,
             version: 1,
         }

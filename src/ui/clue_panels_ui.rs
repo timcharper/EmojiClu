@@ -5,10 +5,7 @@ use gtk4::{
 use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
 use crate::{
-    destroyable::Destroyable,
-    events::Unsubscriber,
-    game::settings::Settings,
-    model::ClueSelection,
+    destroyable::Destroyable, events::Unsubscriber, game::settings::Settings, model::ClueSelection,
 };
 use crate::{
     events::{EventEmitter, EventObserver},
@@ -98,7 +95,7 @@ impl CluePanelsUI {
             settings_subscription_id: None,
             current_layout: layout,
             tooltips_enabled: settings.clue_tooltips_enabled,
-            current_xray_enabled: settings.clue_xray_enabled,
+            current_xray_enabled: settings.clue_spotlight_enabled,
         }));
 
         Self::connect_observers(
@@ -135,7 +132,7 @@ impl CluePanelsUI {
         match event {
             GlobalEvent::SettingsChanged(settings) => {
                 self.update_tooltip_visibility(settings.clue_tooltips_enabled);
-                self.update_xray_enabled(settings.clue_xray_enabled);
+                self.update_xray_enabled(settings.clue_spotlight_enabled);
             }
             GlobalEvent::LayoutChanged(new_layout) => {
                 self.update_layout(new_layout);
@@ -178,7 +175,7 @@ impl CluePanelsUI {
             GameStateEvent::ClueSetUpdate(clue_set, difficulty) => {
                 self.set_clues(clue_set, *difficulty);
             }
-            GameStateEvent::ClueHintHighlight { clue_with_grouping } => {
+            GameStateEvent::ClueHintHighlight(Some(clue_with_grouping)) => {
                 self.highlight_clue(
                     clue_with_grouping.orientation,
                     clue_with_grouping.index,

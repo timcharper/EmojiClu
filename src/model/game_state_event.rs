@@ -34,9 +34,7 @@ pub enum GameStateEvent {
     TimerStateChanged(TimerState),
     PuzzleSubmissionReadyChanged(bool),
     PuzzleSuccessfullyCompleted(PuzzleCompletionState),
-    ClueHintHighlight {
-        clue_with_grouping: ClueWithGrouping,
-    },
+    ClueHintHighlight(Option<ClueWithGrouping>),
     ClueSetUpdate(Rc<ClueSet>, Difficulty),
     ClueSelected(Option<ClueSelection>),
 }
