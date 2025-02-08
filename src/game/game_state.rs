@@ -639,9 +639,7 @@ impl GameState {
     }
 
     fn maybe_reset_clue_hint(&mut self) {
-        println!("maybe_reset_clue_hint {:?}", self.current_clue_hint);
         if let Some(clue_with_grouping) = self.current_clue_hint.clone() {
-            println!("clue_with_grouping: {:?}", clue_with_grouping);
             // different clue selected? Clear it.
             if self.current_clue_hint != self.current_selected_clue {
                 self.current_clue_hint = None;
@@ -649,7 +647,6 @@ impl GameState {
 
             // no more deductions remaining? Clear it
             let deductions = deduce_clue(&self.current_board, &clue_with_grouping.clue);
-            println!("Deductions remaining: {:?}", deductions);
             if deductions.is_empty() {
                 self.current_clue_hint = None;
             }
