@@ -199,7 +199,7 @@ impl CompletionDialog {
         content_area.set_spacing(20);
 
         let label = Label::builder()
-            .label("Puzzle Completed!")
+            .label("Submit Solution?")
             .css_classes(["completion-label"])
             .build();
         content_area.append(&label);
@@ -214,7 +214,7 @@ impl CompletionDialog {
             .build();
 
         let undo_button = Button::builder()
-            .label("Undo")
+            .label("Go Back")
             .css_classes(["completion-undo-button"])
             .margin_top(10)
             .margin_bottom(10)

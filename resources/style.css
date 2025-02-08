@@ -149,7 +149,7 @@ image {
 }
 
 .clue-frame.not-focused {
-  opacity: 0.5;
+  opacity: 0.7;
 }
 
 
@@ -166,21 +166,22 @@ image {
     opacity: 0.2;
 }
 
+@keyframes highlight-submit-button {
+    0% { background: #1fa064; }
+    100% { background: #174; }
+}
+
 .completion-submit-button {
-    background: #2ec27e;  /* Green */
-    background-image: none;  /* Override default GTK button gradient */
+    animation: highlight-submit-button 1s alternate infinite;
     color: white;
     font-weight: bold;
     padding: 8px 16px;
     border-radius: 4px;
-    border: none;
-    box-shadow: none;  /* Remove default button shadow */
-    text-shadow: none;  /* Remove text shadow if any */
-    -gtk-icon-shadow: none;
 }
 
 .completion-submit-button:hover {
-    background: #33d88e;  /* Slightly lighter green */
+    animation: none;
+    background: #2caf74;  /* Slightly lighter green */
 }
 
 .completion-undo-button {
@@ -190,10 +191,6 @@ image {
     font-weight: bold;
     padding: 8px 16px;
     border-radius: 4px;
-    border: none;
-    box-shadow: none;  /* Remove default button shadow */
-    text-shadow: none;  /* Remove text shadow if any */
-    -gtk-icon-shadow: none;
 }
 
 .completion-undo-button:hover {
