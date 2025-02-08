@@ -1,0 +1,9 @@
+Package: mindhunt
+Version: 0.13
+Section: games
+Priority: optional
+Architecture: amd64
+Depends: libgtk-4-1, libpango-1.0-0, libgdk-pixbuf-2.0-0, libcairo2, libglib2.0-0, libgobject-2.0-0, libfreetype6, libfontconfig1, libx11-6, libxi6, libxkbcommon0, libwayland-client0, libzstd1, liblzma5, libbz2-1.0, libstdc++6, libvulkan1
+Maintainer: Tim Charper <your.email@example.com>
+Description: MindHunt - A puzzle adventure game
+ MindHunt is an exciting puzzle adventure game designed to challenge your brain.

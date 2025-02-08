@@ -20,6 +20,7 @@ use gtk4::{
     STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
 use std::cell::RefCell;
+use std::env;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -30,6 +31,8 @@ use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
 use super::puzzle_grid_ui::PuzzleGridUI;
 use super::resource_manager::ResourceManager;
+
+const APP_VERSION: &str = env!("APP_VERSION");
 
 fn seed_from_env() -> Option<u64> {
     std::env::var("SEED")
@@ -457,7 +460,7 @@ pub fn build_ui(app: &Application) {
     action_about.connect_activate(move |_, _| {
         let dialog = AboutDialog::builder()
             .program_name("Mind Hunt")
-            .version("1.0")
+            .version(APP_VERSION)
             .authors(vec!["Tim Harper"])
             .website("https://github.com/timcharper/mindhunt")
             .website_label("GitHub Repository")

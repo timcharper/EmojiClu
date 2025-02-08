@@ -1,3 +1,6 @@
+use gtk4::gdk::Display;
+use std::env;
+
 use gio::prelude::*;
 use gio::ApplicationFlags;
 use glib::{Bytes, ExitCode};
@@ -18,8 +21,6 @@ fn main() -> ExitCode {
 
     #[cfg(target_os = "windows")]
     {
-        use gtk4::gdk::Display;
-        use std::env;
         use std::path::Path;
         env::set_var("GTK_THEME", "Adwaita");
         gtk4::init().unwrap();

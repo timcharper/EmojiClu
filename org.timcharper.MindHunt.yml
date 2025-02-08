@@ -3,6 +3,8 @@ runtime: org.gnome.Platform
 runtime-version: "47"
 sdk: org.gnome.Sdk
 command: mindhunt
+tags:
+  - "$(cat version.txt)"
 finish-args:
   # Allow access to the user's configuration directory
   - --filesystem=xdg-config/mindhunt:create

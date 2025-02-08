@@ -39,3 +39,6 @@ Thumbs.db
 
 profile.json.gz
 .flatpak-builder/
+*.deb
+bundle/mindhunt-deb/usr/bin/
+bundle/mindhunt-deb/usr/share/icons/

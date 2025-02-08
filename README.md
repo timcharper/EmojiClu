@@ -46,7 +46,7 @@ Current differences:
 - Puzzle generator
   - Puzzle generator more reliably generates difficult puzzles, with "veteran" difficulty puzzles taking experienced solvers about 1 hour to solve.
   - Puzzles often require advanced deductions such as converging solutions, hidden pair, and contradicting solution deductions.
-  - Puzzle variety system which guides the generator using heuristics to change the overall deduction pattern themes. 
+  - Puzzle variety system which guides the generator using heuristics to change the overall deduction pattern themes.
 - More subtle clue system which nudges the user where to look, with incremental help.
 - A stupid amount of possible puzzles... 18,446,744,073,709,551,615 of them.
 
@@ -63,7 +63,7 @@ There are no plans to make a mobile version of Mind Hunt.
 # Credits Etc
 
 - [https://openmoji.org/] - OpenMoji provided the glyphs used for the tile set.
-- [https://github.com/gtk-rs/gtk4-rs] - gtk4-rs for the amazing Rust GTK bindings 
+- [https://github.com/gtk-rs/gtk4-rs] - gtk4-rs for the amazing Rust GTK bindings
 - [https://www.gnome.org/] - Gnome, for GTK.
 - [https://www.youtube.com/user/Davie504] - Davie504, for the win/lose sounds. Pls don't sue thx.
 
