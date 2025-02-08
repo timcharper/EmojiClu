@@ -5,6 +5,9 @@ RESOURCE_FILES := $(shell find resources -type f)
 
 linux: bundle/mindhunt-linux-x86_64.tar.xz
 
+flatpak: target/release/mindhunt
+	flatpak-builder --user --install --force-clean build-dir org.timcharper.MindHunt.yml
+
 windows: bundle/mindhunt-installer.exe
 
 target/release/mindhunt: $(RUST_SOURCES) $(RESOURCE_FILES)

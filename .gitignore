@@ -35,3 +35,7 @@ Thumbs.db
 ./app.res
 /bundle/*.exe
 *.tar.xz
+
+
+profile.json.gz
+.flatpak-builder/

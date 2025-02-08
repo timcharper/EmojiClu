@@ -1,0 +1,30 @@
+app-id: org.timcharper.MindHunt
+runtime: org.gnome.Platform
+runtime-version: "47"
+sdk: org.gnome.Sdk
+command: mindhunt
+finish-args:
+  # Allow access to the user's configuration directory
+  - --filesystem=xdg-config/mindhunt:create
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+
+modules:
+  - name: mindhunt
+    buildsystem: simple
+    build-commands:
+      - install -D target/release/mindhunt /app/bin/mindhunt
+      - install -D target/release/resources/icons/hicolor/16x16/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/16x16/apps/org.timcharper.MindHunt.png
+      - install -D target/release/resources/icons/hicolor/24x24/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/24x24/apps/org.timcharper.MindHunt.png
+      - install -D target/release/resources/icons/hicolor/32x32/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/32x32/apps/org.timcharper.MindHunt.png
+      - install -D target/release/resources/icons/hicolor/48x48/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/48x48/apps/org.timcharper.MindHunt.png
+      - install -D target/release/resources/icons/hicolor/64x64/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/64x64/apps/org.timcharper.MindHunt.png
+      - install -D target/release/resources/icons/hicolor/128x128/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/128x128/apps/org.timcharper.MindHunt.png
+      - install -D target/release/resources/icons/hicolor/256x256/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/256x256/apps/org.timcharper.MindHunt.png
+      - install -D target/release/resources/icons/hicolor/512x512/apps/org.timcharper.MindHunt.png /app/share/icons/hicolor/512x512/apps/org.timcharper.MindHunt.png
+      - install -D org.timcharper.MindHunt.desktop /app/share/applications/org.timcharper.MindHunt.desktop
+    sources:
+      - type: dir
+        path: . 

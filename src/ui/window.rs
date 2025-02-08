@@ -135,15 +135,13 @@ pub fn build_ui(app: &Application) {
         ApplicationWindow::builder()
             .application(app)
             .title("Mind Hunt")
+            .icon_name("org.timcharper.MindHunt")
             .resizable(true)
             .decorated(true)
             .default_height(desired_height as i32)
             .default_width(desired_width.min(max_desired_width) as i32)
             .build(),
     );
-
-    // let icon = Texture::from_resource("/org/mindhunt/icon.png");
-    // window.set_icon(Some(&icon));
 
     let scrolled_window = gtk4::ScrolledWindow::builder()
         .hexpand_set(true)

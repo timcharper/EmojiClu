@@ -4,7 +4,7 @@ use glib::{Bytes, ExitCode};
 use gtk4::Application;
 use mindhunt::ui::build_ui;
 
-const APP_ID: &str = "org.mindhunt.LogicPuzzle";
+const APP_ID: &str = "org.timcharper.MindHunt";
 
 #[cfg(target_os = "windows")]
 const RESOURCES: &[u8] = include_bytes!("../target/resources/compiled.gresource");
