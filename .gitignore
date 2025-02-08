@@ -42,3 +42,6 @@ profile.json.gz
 *.deb
 bundle/mindhunt-deb/usr/bin/
 bundle/mindhunt-deb/usr/share/icons/
+bundle/flatpak-repo/
+*.flatpak
+

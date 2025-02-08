@@ -1,6 +1,3 @@
-use gtk4::gdk::Display;
-use std::env;
-
 use gio::prelude::*;
 use gio::ApplicationFlags;
 use glib::{Bytes, ExitCode};
@@ -9,11 +6,11 @@ use mindhunt::ui::build_ui;
 
 const APP_ID: &str = "org.timcharper.MindHunt";
 
-#[cfg(target_os = "windows")]
-const RESOURCES: &[u8] = include_bytes!("../target/resources/compiled.gresource");
+#[cfg(debug_assertions)]
+const RESOURCES: &[u8] = include_bytes!("../target/debug/resources/compiled.gresource");
 
-#[cfg(not(target_os = "windows"))]
-const RESOURCES: &[u8] = include_bytes!("../target/resources/compiled.gresource");
+#[cfg(not(debug_assertions))]
+const RESOURCES: &[u8] = include_bytes!("../target/release/resources/compiled.gresource");
 
 fn main() -> ExitCode {
     // Initialize logger
@@ -21,6 +18,8 @@ fn main() -> ExitCode {
 
     #[cfg(target_os = "windows")]
     {
+        use gtk4::gdk::Display;
+        use std::env;
         use std::path::Path;
         env::set_var("GTK_THEME", "Adwaita");
         gtk4::init().unwrap();

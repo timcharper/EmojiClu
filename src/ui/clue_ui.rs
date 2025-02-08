@@ -1,6 +1,6 @@
 use glib::SignalHandlerId;
 use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Widget};
-use std::{cell::Cell, cell::RefCell, rc::Rc, time::Instant};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;

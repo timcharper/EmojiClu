@@ -66,7 +66,7 @@ fn main() {
     // Copy the compiled resource
     fs::copy(
         Path::new(&out_dir).join("compiled.gresource"),
-        resources_dir.join("compiled.gresource"),
+        target_dir.join("compiled.gresource"),
     )
     .unwrap();
 
@@ -97,5 +97,4 @@ fn main() {
 
     // Tell cargo to rerun if resources change
     println!("cargo:rerun-if-changed=resources");
-    println!("cargo:rerun-if-changed=resources/mindhunt-icon.png");
 }

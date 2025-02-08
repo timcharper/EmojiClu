@@ -13,7 +13,7 @@ use crate::ui::timer_button_ui::TimerButtonUI;
 use crate::ui::top_level_input_event_monitor::TopLevelInputEventMonitor;
 use gio::{Menu, SimpleAction};
 use glib::timeout_add_local_once;
-use gtk4::gdk::{Display, Monitor, Texture};
+use gtk4::gdk::{Display, Monitor};
 use gtk4::{
     prelude::*, AboutDialog, Application, ApplicationWindow, Button, ButtonsType, CssProvider,
     DialogFlags, HeaderBar, Label, License, MenuButton, MessageDialog, MessageType, Orientation,

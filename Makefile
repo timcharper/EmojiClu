@@ -3,14 +3,29 @@ SHELL := /bin/bash
 RUST_SOURCES := $(shell find src -name "*.rs")
 RESOURCE_FILES := $(shell find resources -type f)
 
-.PHONY: linux windows
+VERSION := $(shell cat version.txt)
 
-linux: bundle/mindhunt-linux-x86_64.tar.xz
+.PHONY: linux windows deb flatpak
+
+clean:
+	rm bundle/*.deb bundle/*.exe
+	cargo clean
+	rm bundle/mindhunt-deb/usr/bin/mindhunt
+	rm -rf bundle/mindhunt-deb/usr/share/icons/hicolor
+
+linux: bundle/mindhunt-linux-$(VERSION)-x86_64.tar.xz
 
 flatpak: target/release/mindhunt
-	flatpak-builder --user --install --force-clean build-dir org.timcharper.MindHunt.yml
+	flatpak-builder --user --install --user --force-clean bundle/flatpak-build-dir org.timcharper.MindHunt.yml
+	flatpak build-export bundle/flatpak-repo bundle/flatpak-build-dir org.timcharper.MindHunt
+	flatpak remote-add --if-not-exists --user mindhunt-local bundle/flatpak-repo --no-gpg-verify
+	flatpak build-bundle bundle/flatpak-repo bundle/mindhunt-$(VERSION).flatpak org.timcharper.MindHunt master
 
-windows: bundle/mindhunt-installer.exe
+windows: bundle/mindhunt-installer-$(VERSION).exe
+
+bundle/installer.nsi: version.txt
+	sed -i 's/!define APPVERSION .*/!define APPVERSION $(VERSION)/' bundle/installer.nsi
+	sed -i 's/!define OUTFILE .*/!define OUTFILE mindhunt-installer-$(VERSION).exe/' bundle/installer.nsi
 
 bundle/mindhunt-deb/DEBIAN/control: version.txt
 	sed -i 's/Version: .*/Version: $(shell cat version.txt)/' bundle/mindhunt-deb/DEBIAN/control
@@ -40,7 +55,7 @@ deb: target/release/mindhunt bundle/mindhunt-deb/DEBIAN/control
 target/release/mindhunt: $(RUST_SOURCES) $(RESOURCE_FILES)
 	cargo build --release
 
-bundle/mindhunt-linux-x86_64.tar.xz: target/release/mindhunt
+bundle/mindhunt-linux-$(VERSION)-x86_64.tar.xz: target/release/mindhunt
 	cd target/release && tar c mindhunt | xz -7 -T 0 | pv  > ../../bundle/mindhunt-linux-x86_64.tar.xz
 
 target/x86_64-pc-windows-gnu/release/mindhunt.exe: $(RUST_SOURCES) $(RESOURCE_FILES) resources/mindhunt-icon.ico
@@ -49,7 +64,7 @@ target/x86_64-pc-windows-gnu/release/mindhunt.exe: $(RUST_SOURCES) $(RESOURCE_FI
 bundle/mindhunt/bin/mindhunt.exe: target/x86_64-pc-windows-gnu/release/mindhunt.exe
 	./package-windows.sh
 
-bundle/mindhunt-installer.exe: bundle/mindhunt/bin/mindhunt.exe resources/mindhunt-icon.ico bundle/installer.nsi
+bundle/mindhunt-installer-$(VERSION).exe: bundle/mindhunt/bin/mindhunt.exe resources/mindhunt-icon.ico bundle/installer.nsi
 	cp resources/mindhunt-icon.ico bundle/mindhunt/icon.ico
 	makensis ./bundle/installer.nsi
 
