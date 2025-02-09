@@ -56,7 +56,7 @@ target/release/mindhunt: $(RUST_SOURCES) $(RESOURCE_FILES)
 	cargo build --release
 
 bundle/mindhunt-linux-$(VERSION)-x86_64.tar.xz: target/release/mindhunt
-	cd target/release && tar c mindhunt | xz -7 -T 0 | pv  > ../../bundle/mindhunt-linux-x86_64.tar.xz
+	cd target/release && tar c mindhunt | xz -7 -T 0 | pv  > ../../$@
 
 target/x86_64-pc-windows-gnu/release/mindhunt.exe: $(RUST_SOURCES) $(RESOURCE_FILES) resources/mindhunt-icon.ico
 	./build-windows.sh

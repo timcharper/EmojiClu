@@ -2,13 +2,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use log::trace;
 
-use crate::model::{Clue, ClueOrientation, ClueWithGrouping};
+use crate::model::{Clue, ClueOrientation, ClueWithAddress};
 
-#[derive(Debug, Clone, Default)]
+use super::ClueAddress;
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ClueSet {
-    horizontal_clues: Vec<ClueWithGrouping>,
-    vertical_clues: Vec<ClueWithGrouping>,
-    all_clues: Vec<ClueWithGrouping>,
+    horizontal_clues: Vec<ClueWithAddress>,
+    vertical_clues: Vec<ClueWithAddress>,
 }
 
 fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> BTreeMap<Clue, usize> {
@@ -154,7 +155,7 @@ fn remove_redundant_clues(clues: &mut Vec<Clue>) {
     }
 }
 
-fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithGrouping> {
+fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
     vert_clues.sort_by(|a, b| a.sort_index.cmp(&b.sort_index));
     trace!(target: "clue_set", "before assigning clue grouping: {:?}", vert_clues);
     let clue_grouping = assign_clue_grouping(vert_clues, false);
@@ -174,15 +175,17 @@ fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithGrouping> {
         trace!(target: "clue_set", "after compressing vertical clues: {:?}", clues);
     });
 
-    let mut clue_grouping: Vec<ClueWithGrouping> = vec![];
+    let mut clue_grouping: Vec<ClueWithAddress> = vec![];
 
     for (group, clues) in clues_by_grouping.into_iter() {
         for clue in clues.into_iter() {
-            clue_grouping.push(ClueWithGrouping {
+            clue_grouping.push(ClueWithAddress {
                 clue,
                 group,
-                orientation: ClueOrientation::Vertical,
-                index: 0,
+                address: ClueAddress {
+                    orientation: ClueOrientation::Vertical,
+                    index: 0,
+                },
             });
         }
     }
@@ -195,23 +198,25 @@ fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithGrouping> {
     });
 
     for (idx, clue_grouping) in clue_grouping.iter_mut().enumerate() {
-        clue_grouping.index = idx;
+        clue_grouping.address.index = idx;
     }
 
     trace!(target: "clue_set", "after sorting vertical clues: {:?}", clue_grouping);
     clue_grouping
 }
 
-fn sort_horiz_clues(horiz_clues: &mut Vec<Clue>) -> Vec<ClueWithGrouping> {
+fn sort_horiz_clues(horiz_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
     horiz_clues.sort_by(|a, b| a.sort_index.cmp(&b.sort_index));
     let clue_grouping = assign_clue_grouping(horiz_clues, true);
-    let mut clue_grouping: Vec<ClueWithGrouping> = clue_grouping
+    let mut clue_grouping: Vec<ClueWithAddress> = clue_grouping
         .into_iter()
-        .map(|(clue, group)| ClueWithGrouping {
+        .map(|(clue, group)| ClueWithAddress {
             clue,
             group,
-            orientation: ClueOrientation::Horizontal,
-            index: 0,
+            address: ClueAddress {
+                orientation: ClueOrientation::Horizontal,
+                index: 0,
+            },
         })
         .collect();
 
@@ -222,7 +227,7 @@ fn sort_horiz_clues(horiz_clues: &mut Vec<Clue>) -> Vec<ClueWithGrouping> {
     });
 
     for (idx, clue_grouping) in clue_grouping.iter_mut().enumerate() {
-        clue_grouping.index = idx;
+        clue_grouping.address.index = idx;
     }
 
     clue_grouping
@@ -243,26 +248,16 @@ impl ClueSet {
 
         let horizontal_clues = sort_horiz_clues(&mut ungrouped_horizontal_clues);
         let vertical_clues = sort_vert_clues(&mut ungrouped_vertical_clues);
-        let all_clues = horizontal_clues
-            .iter()
-            .chain(vertical_clues.iter())
-            .cloned()
-            .collect();
 
         Self {
             horizontal_clues,
             vertical_clues,
-            all_clues,
         }
     }
-    pub fn get_clue(
-        &self,
-        orientation: ClueOrientation,
-        index: usize,
-    ) -> Option<&ClueWithGrouping> {
-        match orientation {
-            ClueOrientation::Horizontal => self.horizontal_clues.get(index),
-            ClueOrientation::Vertical => self.vertical_clues.get(index),
+    pub fn get_clue(&self, clue_address: ClueAddress) -> Option<&ClueWithAddress> {
+        match clue_address.orientation {
+            ClueOrientation::Horizontal => self.horizontal_clues.get(clue_address.index),
+            ClueOrientation::Vertical => self.vertical_clues.get(clue_address.index),
         }
     }
     pub fn get_clue_count(&self, orientation: ClueOrientation) -> usize {
@@ -272,16 +267,22 @@ impl ClueSet {
         }
     }
 
-    pub fn horizontal_clues(&self) -> &Vec<ClueWithGrouping> {
+    pub fn horizontal_clues(&self) -> &Vec<ClueWithAddress> {
         &self.horizontal_clues
     }
 
-    pub fn vertical_clues(&self) -> &Vec<ClueWithGrouping> {
+    pub fn vertical_clues(&self) -> &Vec<ClueWithAddress> {
         &self.vertical_clues
     }
 
-    pub fn all_clues(&self) -> &Vec<ClueWithGrouping> {
-        &self.all_clues
+    pub fn all_clues(&self) -> impl Iterator<Item = &ClueWithAddress> {
+        self.horizontal_clues
+            .iter()
+            .chain(self.vertical_clues.iter())
+    }
+
+    pub fn find_clue(&self, clue: &Clue) -> Option<&ClueWithAddress> {
+        self.all_clues().find(|cwa| &cwa.clue == clue)
     }
 }
 

@@ -128,20 +128,14 @@ impl InputTranslator {
                         .emit(GameActionEvent::CellClear(data.row, data.col, None));
                 }
             }
-            Clickable::Clue(data) => {
+            Clickable::Clue(address) => {
                 // Long press = left click (focus), short press = right click (toggle complete)
                 if is_long_press {
                     self.game_action_emitter
-                        .emit(GameActionEvent::ClueFocus(Some((
-                            data.orientation,
-                            data.clue_idx,
-                        ))));
+                        .emit(GameActionEvent::ClueFocus(Some(*address)));
                 } else {
                     self.game_action_emitter
-                        .emit(GameActionEvent::ClueToggleComplete(
-                            data.orientation,
-                            data.clue_idx,
-                        ));
+                        .emit(GameActionEvent::ClueToggleComplete(*address));
                 }
             }
             Clickable::Surface => {
@@ -165,12 +159,9 @@ impl InputTranslator {
                 self.game_action_emitter
                     .emit(GameActionEvent::CellSelect(data.row, data.col, None));
             }
-            Clickable::Clue(data) => {
+            Clickable::Clue(address) => {
                 self.game_action_emitter
-                    .emit(GameActionEvent::ClueFocus(Some((
-                        data.orientation,
-                        data.clue_idx,
-                    ))));
+                    .emit(GameActionEvent::ClueFocus(Some(*address)));
             }
             Clickable::Surface => {
                 self.game_action_emitter
@@ -192,12 +183,9 @@ impl InputTranslator {
                 self.game_action_emitter
                     .emit(GameActionEvent::CellClear(data.row, data.col, None));
             }
-            Clickable::Clue(data) => {
+            Clickable::Clue(address) => {
                 self.game_action_emitter
-                    .emit(GameActionEvent::ClueToggleComplete(
-                        data.orientation,
-                        data.clue_idx,
-                    ));
+                    .emit(GameActionEvent::ClueToggleComplete(*address));
             }
             _ => {} // No right-click handling for other clickables
         }

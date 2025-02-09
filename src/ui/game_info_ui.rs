@@ -98,7 +98,6 @@ impl GameInfoUI {
     }
 
     pub fn update_hints_used(&mut self, hints_used: u32) {
-        println!("update_hints_used: {}", hints_used);
         self.hints_used = hints_used;
         self.hints_label.set_text(&format!("{}", hints_used));
     }

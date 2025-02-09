@@ -18,7 +18,7 @@ pub struct SettingsMenuUI {
     window: Rc<ApplicationWindow>,
     settings_menu: Menu,
     action_toggle_tooltips: SimpleAction,
-    action_toggle_xray: SimpleAction,
+    action_toggle_spotlight: SimpleAction,
     action_toggle_touch_controls: SimpleAction,
     game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
     settings_ref: Rc<RefCell<Settings>>,
@@ -33,7 +33,8 @@ impl Destroyable for SettingsMenuUI {
         // Remove actions from window
         self.window
             .remove_action(&self.action_toggle_tooltips.name());
-        self.window.remove_action(&self.action_toggle_xray.name());
+        self.window
+            .remove_action(&self.action_toggle_spotlight.name());
         self.window
             .remove_action(&self.action_toggle_touch_controls.name());
     }
@@ -53,30 +54,27 @@ impl SettingsMenuUI {
         );
 
         if Settings::is_debug_mode() {
-            settings_menu.append(Some("Show Clue X-Ray"), Some("win.toggle-xray"));
+            settings_menu.append(Some("Show Clue X-Ray"), Some("win.toggle-spotlight"));
         }
 
         let action_toggle_tooltips: SimpleAction;
-        let action_toggle_xray: SimpleAction;
+        let action_toggle_spotlight: SimpleAction;
         let action_toggle_touch_controls: SimpleAction;
 
         {
             let settings = settings_ref.borrow();
-            // Create toggle tooltips action
             action_toggle_tooltips = SimpleAction::new_stateful(
                 "toggle-tooltips",
                 None,
                 &settings.clue_tooltips_enabled.to_variant(),
             );
 
-            // Create x-ray mode action
-            action_toggle_xray = SimpleAction::new_stateful(
-                "toggle-xray",
+            action_toggle_spotlight = SimpleAction::new_stateful(
+                "toggle-spotlight",
                 None,
                 &settings.clue_spotlight_enabled.to_variant(),
             );
 
-            // Create touch screen controls action
             action_toggle_touch_controls = SimpleAction::new_stateful(
                 "toggle-touch-controls",
                 None,
@@ -88,7 +86,7 @@ impl SettingsMenuUI {
             window: window.clone(),
             settings_menu,
             action_toggle_tooltips,
-            action_toggle_xray,
+            action_toggle_spotlight,
             action_toggle_touch_controls,
             game_state_subscription: None,
             settings_ref: settings_ref,
@@ -127,7 +125,7 @@ impl SettingsMenuUI {
         {
             let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
             settings_menu_ui_ref
-                .action_toggle_xray
+                .action_toggle_spotlight
                 .connect_activate(move |action, _| {
                     let current_state = action.state().unwrap().get::<bool>().unwrap();
                     let new_state = !current_state;
@@ -135,10 +133,10 @@ impl SettingsMenuUI {
                     if let Some(settings_menu_ui) = weak_settings_menu_ui.upgrade() {
                         settings_menu_ui
                             .borrow_mut()
-                            .set_clue_xray_enabled(new_state);
+                            .set_clue_spotlight_enabled(new_state);
                     }
                 });
-            window.add_action(&settings_menu_ui_ref.action_toggle_xray);
+            window.add_action(&settings_menu_ui_ref.action_toggle_spotlight);
         }
 
         // Connect touch screen controls action
@@ -172,7 +170,7 @@ impl SettingsMenuUI {
             .emit(GlobalEvent::SettingsChanged(settings));
     }
 
-    fn set_clue_xray_enabled(&mut self, enabled: bool) {
+    fn set_clue_spotlight_enabled(&mut self, enabled: bool) {
         let mut settings = self.settings_ref.borrow_mut();
         settings.clue_spotlight_enabled = enabled;
         if !settings.save().is_ok() {

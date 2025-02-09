@@ -6,8 +6,8 @@ use std::rc::Rc;
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::model::{
-    Candidate, CandidateCellTileData, CandidateState, Clickable, Clue, GridSizing, InputEvent,
-    SolutionTileData, Tile,
+    Candidate, CandidateCellTileData, CandidateState, Clickable, ClueWithAddress, GridSizing,
+    InputEvent, SolutionTileData, Tile,
 };
 use glib::timeout_add_local_once;
 use gtk4::{prelude::*, GestureClick, Widget};
@@ -36,7 +36,7 @@ pub struct PuzzleCellUI {
     gesture_right: Option<GestureClick>,
     available_tiles: HashSet<Tile>,
     selected_tile: Option<Tile>,
-    clue_selection: Option<Clue>,
+    clue_selection: Option<ClueWithAddress>,
 }
 
 impl PuzzleCellUI {
@@ -142,7 +142,7 @@ impl PuzzleCellUI {
     }
 
     /// Dimm the puzzle cell if candidates not in clue
-    pub fn set_clue_spotlight(&mut self, clue_selection: &Option<Clue>) {
+    pub fn set_clue_spotlight(&mut self, clue_selection: &Option<ClueWithAddress>) {
         self.clue_selection = clue_selection.clone();
         self.sync_clue_spotlight();
     }
@@ -151,19 +151,19 @@ impl PuzzleCellUI {
         // clear css on all candidate cells and solution frame
 
         match &self.clue_selection {
-            Some(clue) => {
+            Some(cwa) => {
                 let mut match_count = 0;
 
                 // Handle solution tile if present
                 if let Some(selected_tile) = &self.selected_tile {
-                    for assertion in &clue.assertions {
+                    for assertion in &cwa.clue.assertions {
                         if assertion.tile == *selected_tile {
                             match_count += 1;
                         }
                     }
                 } else {
                     // Handle candidate tiles
-                    for assertion in &clue.assertions {
+                    for assertion in &cwa.clue.assertions {
                         let tile_is_avail = if assertion.tile.row != self.row {
                             false
                         } else {

@@ -24,7 +24,9 @@ const SORT_INDEX_TWO_IN_COLUMN_ONE_NOT: usize = 2;
 const SORT_INDEX_NOT_IN_SAME_COLUMN: usize = 3;
 const SORT_INDEX_ONE_MATCHES_EITHER: usize = 4;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy, serde::Serialize, serde::Deserialize,
+)]
 pub enum HorizontalClueType {
     ThreeAdjacent,     // ABC, either order
     TwoApartNotMiddle, // A, not B, C
@@ -33,7 +35,9 @@ pub enum HorizontalClueType {
     NotAdjacent,       // A not next to B
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy, serde::Serialize, serde::Deserialize,
+)]
 pub enum VerticalClueType {
     ThreeInColumn,      // Three tiles in same column
     TwoInColumn,        // Two tiles in same column
@@ -43,7 +47,7 @@ pub enum VerticalClueType {
 }
 
 #[readonly::make]
-#[derive(Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, PartialEq, Eq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct Clue {
     /// DO NOT MUTATE
     #[readonly]
@@ -53,7 +57,7 @@ pub struct Clue {
     pub assertions: Vec<TileAssertion>,
     /// DO NOT MUTATE
     #[readonly]
-    pub(super) sort_index: usize,
+    pub sort_index: usize,
     cached_hash: u64,
 }
 
@@ -63,7 +67,9 @@ impl Hash for Clue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy, serde::Serialize, serde::Deserialize,
+)]
 pub enum ClueType {
     Horizontal(HorizontalClueType),
     Vertical(VerticalClueType),

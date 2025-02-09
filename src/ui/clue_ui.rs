@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
-use crate::model::{Clickable, ClueData, InputEvent};
+use crate::model::{Clickable, ClueWithAddress, InputEvent};
 use crate::model::{Clue, ClueSelection, CluesSizing};
 use crate::model::{ClueOrientation, TileAssertion};
 use crate::model::{ClueType, HorizontalClueType, LayoutConfiguration, VerticalClueType};
@@ -29,31 +29,28 @@ pub struct ClueUI {
     pub frame: Frame,
     grid: Grid,
     clue_tiles: Vec<ClueTileUI>,
-    orientation: ClueOrientation,
     tooltip_data: Option<ClueTooltipData>,
     tooltip_widget: Option<Box>,
     resources: Rc<ImageSet>,
     layout: CluesSizing,
     tooltip_signal: Option<SignalHandlerId>,
     input_event_emitter: Rc<EventEmitter<InputEvent>>,
-    clue_idx: usize,
-    clue: Clue,
+    clue: ClueWithAddress,
     gesture_right: Option<gtk4::GestureClick>,
     gesture_left: Option<gtk4::GestureClick>,
-    clue_xray_enabled: bool,
+    clue_spotlight_enabled: bool,
 }
 
 impl ClueUI {
     pub fn new(
         resources: Rc<ImageSet>,
-        clue: Clue,
+        clue: ClueWithAddress,
         layout: CluesSizing,
         input_event_emitter: EventEmitter<InputEvent>,
-        clue_idx: usize,
-        clue_xray_enabled: bool,
+        clue_spotlight_enabled: bool,
         tooltips_enabled: bool,
     ) -> Rc<RefCell<Self>> {
-        let orientation = clue.orientation();
+        let orientation = clue.address.orientation;
         let frame = Frame::builder()
             .name(&format!("clue-frame-{}", orientation))
             .css_classes(["clue-frame"])
@@ -71,7 +68,7 @@ impl ClueUI {
         // Create the three cells for this clue
         let mut cells = Vec::new();
         for i in 0..3 {
-            let clue_cell = ClueTileUI::new(Rc::clone(&resources), Some(clue.clone()), i);
+            let clue_cell = ClueTileUI::new(Rc::clone(&resources), Some(clue.clue.clone()), i);
             match orientation {
                 ClueOrientation::Horizontal => {
                     grid.attach(&clue_cell.frame, i as i32, 0, 1, 1);
@@ -90,25 +87,23 @@ impl ClueUI {
             frame,
             grid,
             clue_tiles: cells,
-            orientation,
             tooltip_data: None,
             tooltip_widget: None,
             resources,
             layout,
             tooltip_signal: None,
             input_event_emitter: Rc::new(input_event_emitter),
-            clue_idx,
             clue,
             gesture_right: None,
             gesture_left: None,
-            clue_xray_enabled,
+            clue_spotlight_enabled,
         };
         let clue_ui_ref = Rc::new(RefCell::new(clue_ui));
         ClueUI::wire_handlers(clue_ui_ref.clone());
         ClueUI::wire_tooltip_handlers(clue_ui_ref.clone());
         clue_ui_ref
             .borrow_mut()
-            .update_xray_enabled(clue_xray_enabled);
+            .update_spotlight_enabled(clue_spotlight_enabled);
         clue_ui_ref
     }
 
@@ -138,8 +133,7 @@ impl ClueUI {
     fn wire_handlers(clue_ui: Rc<RefCell<Self>>) {
         let weak_clue_ui = Rc::downgrade(&clue_ui);
         let mut clue_ui = clue_ui.borrow_mut();
-        let clue_orientation = clue_ui.orientation;
-        let clue_idx = clue_ui.clue_idx;
+        let clue_address = clue_ui.clue.address();
 
         // Right click handler
 
@@ -153,10 +147,7 @@ impl ClueUI {
                     let clue_ui = clue_ui.borrow();
                     clue_ui
                         .input_event_emitter
-                        .emit(InputEvent::RightClick(Clickable::Clue(ClueData {
-                            orientation: clue_orientation,
-                            clue_idx,
-                        })));
+                        .emit(InputEvent::RightClick(Clickable::Clue(clue_address)));
                     gesture.set_state(gtk4::EventSequenceState::Claimed);
                 }
             }
@@ -167,12 +158,7 @@ impl ClueUI {
         let gesture_left = gtk4::GestureClick::new();
         gesture_left.set_button(1);
         register_left_click_handler(clue_ui.input_event_emitter.clone(), &gesture_left, {
-            move |_, _, _, _| {
-                Some(Clickable::Clue(ClueData {
-                    orientation: clue_orientation,
-                    clue_idx,
-                }))
-            }
+            move |_, _, _, _| Some(Clickable::Clue(clue_address))
         });
 
         clue_ui.frame.add_controller(gesture_left.clone());
@@ -180,7 +166,7 @@ impl ClueUI {
     }
 
     fn apply_layout(&self) {
-        match self.orientation {
+        match self.clue.address.orientation {
             ClueOrientation::Horizontal => {
                 self.frame.set_size_request(
                     self.layout.horizontal_clue_panel.clue_dimensions.width,
@@ -467,8 +453,8 @@ impl ClueUI {
         }
     }
 
-    pub(crate) fn update_xray_enabled(&mut self, enabled: bool) {
-        self.clue_xray_enabled = enabled;
+    pub(crate) fn update_spotlight_enabled(&mut self, enabled: bool) {
+        self.clue_spotlight_enabled = enabled;
     }
 
     pub(crate) fn set_image_set(&mut self, image_set: Rc<ImageSet>) {

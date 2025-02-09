@@ -1,4 +1,4 @@
-use super::ClueOrientation;
+use super::ClueAddress;
 use gtk4::gdk;
 use std::time::Duration;
 
@@ -18,16 +18,10 @@ pub struct SolutionTileData {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
-pub struct ClueData {
-    pub orientation: ClueOrientation,
-    pub clue_idx: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum Clickable {
     CandidateCellTile(CandidateCellTileData),
     SolutionTile(SolutionTileData),
-    Clue(ClueData),
+    Clue(ClueAddress),
     Surface,
 }
 

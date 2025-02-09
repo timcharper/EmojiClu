@@ -1,12 +1,12 @@
-use super::{ClueOrientation, Difficulty};
+use super::{ClueAddress, Difficulty};
 
 #[derive(Debug, Clone)]
 pub enum GameActionEvent {
     CellSelect(usize, usize, Option<char>),
     CellClear(usize, usize, Option<char>),
-    ClueToggleComplete(ClueOrientation, usize), // clue_idx
+    ClueToggleComplete(ClueAddress), // clue_idx
     ClueToggleSelectedComplete,
-    ClueFocus(Option<(ClueOrientation, usize)>), // clue_idx when Some
+    ClueFocus(Option<ClueAddress>), // clue_idx when Some
     ClueFocusNext(i32),
     NewGame(Difficulty, Option<u64>), // grid rows, grid columns
     InitDisplay,

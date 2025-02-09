@@ -5,7 +5,10 @@ use gtk4::{
 use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
 use crate::{
-    destroyable::Destroyable, events::Unsubscriber, game::settings::Settings, model::ClueSelection,
+    destroyable::Destroyable,
+    events::Unsubscriber,
+    game::settings::Settings,
+    model::{ClueAddress, ClueSelection},
 };
 use crate::{
     events::{EventEmitter, EventObserver},
@@ -13,7 +16,7 @@ use crate::{
 };
 use crate::{
     game::clue_generator_state::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
-    model::ClueWithGrouping,
+    model::ClueWithAddress,
 };
 use crate::{model::Difficulty, ui::ImageSet};
 use crate::{model::LayoutConfiguration, ui::clue_ui::ClueUI};
@@ -29,7 +32,7 @@ pub struct CluePanelsUI {
     settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     current_layout: LayoutConfiguration,
     tooltips_enabled: bool,
-    current_xray_enabled: bool,
+    current_spotlight_enabled: bool,
 }
 
 impl Destroyable for CluePanelsUI {
@@ -95,7 +98,7 @@ impl CluePanelsUI {
             settings_subscription_id: None,
             current_layout: layout,
             tooltips_enabled: settings.clue_tooltips_enabled,
-            current_xray_enabled: settings.clue_spotlight_enabled,
+            current_spotlight_enabled: settings.clue_spotlight_enabled,
         }));
 
         Self::connect_observers(
@@ -132,7 +135,7 @@ impl CluePanelsUI {
         match event {
             GlobalEvent::SettingsChanged(settings) => {
                 self.update_tooltip_visibility(settings.clue_tooltips_enabled);
-                self.update_xray_enabled(settings.clue_spotlight_enabled);
+                self.update_spotlight_enabled(settings.clue_spotlight_enabled);
             }
             GlobalEvent::LayoutChanged(new_layout) => {
                 self.update_layout(new_layout);
@@ -151,22 +154,22 @@ impl CluePanelsUI {
         }
     }
 
-    fn update_xray_enabled(&mut self, enabled: bool) {
-        self.current_xray_enabled = enabled;
-        self.sync_xray_enabled();
+    fn update_spotlight_enabled(&mut self, enabled: bool) {
+        self.current_spotlight_enabled = enabled;
+        self.sync_spotlight_enabled();
     }
 
-    fn sync_xray_enabled(&mut self) {
+    fn sync_spotlight_enabled(&mut self) {
         // dispatch to clue_uis
         for clue_ui in &mut self.horizontal_clue_uis {
             clue_ui
                 .borrow_mut()
-                .update_xray_enabled(self.current_xray_enabled);
+                .update_spotlight_enabled(self.current_spotlight_enabled);
         }
         for clue_ui in &mut self.vertical_clue_uis {
             clue_ui
                 .borrow_mut()
-                .update_xray_enabled(self.current_xray_enabled);
+                .update_spotlight_enabled(self.current_spotlight_enabled);
         }
     }
 
@@ -175,16 +178,11 @@ impl CluePanelsUI {
             GameStateEvent::ClueSetUpdate(clue_set, difficulty) => {
                 self.set_clues(clue_set, *difficulty);
             }
-            GameStateEvent::ClueHintHighlight(Some(clue_with_grouping)) => {
-                self.highlight_clue(
-                    clue_with_grouping.orientation,
-                    clue_with_grouping.index,
-                    Duration::from_secs(4),
-                );
+            GameStateEvent::ClueHintHighlight(Some(clue_with_address)) => {
+                self.highlight_clue(clue_with_address.address, Duration::from_secs(4));
             }
             GameStateEvent::GridUpdate(grid) => {
-                self.set_horiz_completion(&grid.completed_horizontal_clues);
-                self.set_vert_completion(&grid.completed_vertical_clues);
+                self.set_clue_completion(&grid.completed_clues);
             }
             GameStateEvent::ClueSelected(clue_selection) => {
                 self.set_clue_selected(&clue_selection);
@@ -198,17 +196,16 @@ impl CluePanelsUI {
         let clues_per_column = n_rows * 2;
 
         // horizontal clues
-        for (idx, clue_with_grouping) in clue_set.horizontal_clues().iter().enumerate() {
+        for (idx, addressed_clue) in clue_set.horizontal_clues().iter().enumerate() {
             let grid_col = idx / clues_per_column;
             let grid_row = idx % clues_per_column;
 
             let clue_set = ClueUI::new(
                 Rc::clone(&self.resources),
-                clue_with_grouping.clue.clone(),
+                addressed_clue.clone(),
                 self.current_layout.clues.clone(),
                 self.input_event_emitter.clone(),
-                idx,
-                self.current_xray_enabled,
+                self.current_spotlight_enabled,
                 self.tooltips_enabled,
             );
             self.horizontal_grid.attach(
@@ -222,14 +219,13 @@ impl CluePanelsUI {
         }
 
         // Create vertical clue cells (3 tiles high for each clue)
-        for (col, clue_with_grouping) in clue_set.vertical_clues().iter().enumerate() {
+        for (col, addressed_clue) in clue_set.vertical_clues().iter().enumerate() {
             let clue_set = ClueUI::new(
                 Rc::clone(&self.resources),
-                clue_with_grouping.clue.clone(),
+                addressed_clue.clone(),
                 self.current_layout.clues.clone(),
                 self.input_event_emitter.clone(),
-                col,
-                self.current_xray_enabled,
+                self.current_spotlight_enabled,
                 self.tooltips_enabled,
             );
             self.vertical_grid
@@ -238,15 +234,15 @@ impl CluePanelsUI {
         }
     }
 
-    fn highlight_clue(&self, orientation: ClueOrientation, clue_idx: usize, duration: Duration) {
-        match orientation {
+    fn highlight_clue(&self, address: ClueAddress, duration: Duration) {
+        match address.orientation {
             ClueOrientation::Horizontal => {
-                self.horizontal_clue_uis[clue_idx]
+                self.horizontal_clue_uis[address.index]
                     .borrow_mut()
                     .highlight_for(duration);
             }
             ClueOrientation::Vertical => {
-                self.vertical_clue_uis[clue_idx]
+                self.vertical_clue_uis[address.index]
                     .borrow_mut()
                     .highlight_for(duration);
             }
@@ -280,7 +276,7 @@ impl CluePanelsUI {
     }
 
     fn populate_clue_uis(&mut self, clue_set: &ClueSet) {
-        let mut previous_clue: Option<&ClueWithGrouping> = None;
+        let mut previous_clue: Option<&ClueWithAddress> = None;
         for (idx, clue_ui) in self.horizontal_clue_uis.iter().enumerate() {
             let clue = clue_set.horizontal_clues().get(idx);
             let is_new_group = match (clue, previous_clue) {
@@ -313,19 +309,25 @@ impl CluePanelsUI {
             .set_size_request(horiz_dim.width, horiz_dim.height);
     }
 
-    fn set_horiz_completion(&self, completed_clues: &HashSet<usize>) {
+    fn set_clue_completion(&self, completed_clues: &HashSet<ClueAddress>) {
         for (idx, clue_ui) in self.horizontal_clue_uis.iter().enumerate() {
+            let clue_address = ClueAddress {
+                orientation: ClueOrientation::Horizontal,
+                index: idx,
+            };
             clue_ui
                 .borrow_mut()
-                .set_completed(completed_clues.contains(&idx));
+                .set_completed(completed_clues.contains(&clue_address));
         }
-    }
 
-    fn set_vert_completion(&self, completed_clues: &HashSet<usize>) {
         for (idx, clue_ui) in self.vertical_clue_uis.iter().enumerate() {
+            let clue_address = ClueAddress {
+                orientation: ClueOrientation::Vertical,
+                index: idx,
+            };
             clue_ui
                 .borrow_mut()
-                .set_completed(completed_clues.contains(&idx));
+                .set_completed(completed_clues.contains(&clue_address));
         }
     }
 

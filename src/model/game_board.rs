@@ -1,20 +1,18 @@
 use super::{
     solution::{Solution, MAX_GRID_SIZE},
-    Clue, ClueSet,
+    ClueAddress, ClueSet,
 };
 use crate::model::{Candidate, Deduction, PartialSolution, Tile};
 use std::{collections::HashSet, rc::Rc};
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct GameBoard {
     candidates: [[u8; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     resolved_candidates: [[u8; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     selected: [[Option<char>; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     pub solution: Rc<Solution>,
     pub clue_set: Rc<ClueSet>,
-    pub completed_horizontal_clues: HashSet<usize>,
-    pub completed_vertical_clues: HashSet<usize>,
-    pub completed_clues: HashSet<Clue>,
+    pub completed_clues: HashSet<ClueAddress>,
 }
 
 impl std::fmt::Debug for GameBoard {
@@ -67,8 +65,6 @@ impl GameBoard {
             selected,
             solution,
             clue_set: Rc::new(ClueSet::new(vec![])),
-            completed_horizontal_clues: HashSet::new(),
-            completed_vertical_clues: HashSet::new(),
             completed_clues: HashSet::new(),
         };
         board.recompute_resolved();
@@ -276,8 +272,6 @@ impl GameBoard {
             candidates,
             resolved_candidates,
             clue_set: Rc::new(ClueSet::new(vec![])),
-            completed_horizontal_clues: HashSet::new(),
-            completed_vertical_clues: HashSet::new(),
             completed_clues: HashSet::new(),
         };
         board.recompute_resolved();
@@ -388,54 +382,24 @@ impl GameBoard {
     }
 
     /// returns final state, is clue completed
-    pub(crate) fn toggle_clue_completed(
-        &mut self,
-        clue_orientation: super::ClueOrientation,
-        clue_idx: usize,
-    ) -> bool {
-        let cwg = self.clue_set.get_clue(clue_orientation, clue_idx);
-        if !cwg.is_some() {
+    pub(crate) fn toggle_clue_completed(&mut self, clue_address: ClueAddress) -> bool {
+        let cwa = self.clue_set.get_clue(clue_address);
+        if !cwa.is_some() {
             return false;
         }
-        let clue = &cwg.unwrap().clue;
+        let clue = &cwa.unwrap().clue;
 
-        let is_completed = match clue_orientation {
-            super::ClueOrientation::Horizontal => {
-                if !self.completed_horizontal_clues.remove(&clue_idx) {
-                    self.completed_horizontal_clues.insert(clue_idx);
-                    true
-                } else {
-                    false
-                }
-            }
-            super::ClueOrientation::Vertical => {
-                if !self.completed_vertical_clues.remove(&clue_idx) {
-                    self.completed_vertical_clues.insert(clue_idx);
-                    true
-                } else {
-                    false
-                }
-            }
-        };
-        if is_completed {
-            self.completed_clues.insert(clue.clone());
+        let is_completed = if !self.completed_clues.remove(&clue_address) {
+            self.completed_clues.insert(clue_address.clone());
+            true
         } else {
-            self.completed_clues.remove(clue);
-        }
+            false
+        };
         is_completed
     }
 
-    pub(crate) fn is_clue_completed(
-        &self,
-        clue_orientation: super::ClueOrientation,
-        clue_idx: usize,
-    ) -> bool {
-        match clue_orientation {
-            super::ClueOrientation::Horizontal => {
-                self.completed_horizontal_clues.contains(&clue_idx)
-            }
-            super::ClueOrientation::Vertical => self.completed_vertical_clues.contains(&clue_idx),
-        }
+    pub(crate) fn is_clue_completed(&self, clue_address: &ClueAddress) -> bool {
+        self.completed_clues.contains(clue_address)
     }
 
     /// Check if the board is incorrect. Returns false for boards that are not complete, but have no errors.
@@ -485,6 +449,10 @@ impl GameBoard {
     pub(crate) fn remove_selection(&mut self, row: usize, col: usize) {
         self.selected[row][col] = None;
         self.recompute_resolved_row(row);
+    }
+
+    pub(crate) fn completed_clues(&self) -> &HashSet<ClueAddress> {
+        &self.completed_clues
     }
 }
 

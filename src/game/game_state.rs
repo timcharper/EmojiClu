@@ -10,8 +10,8 @@ use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::game::clue_generator::ClueGeneratorResult;
 use crate::model::{
-    CandidateState, ClueOrientation, ClueSelection, ClueSet, ClueWithGrouping, Deduction,
-    Difficulty, GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent,
+    CandidateState, ClueAddress, ClueSelection, ClueSet, ClueWithAddress,
+    Deduction, Difficulty, GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent,
     PuzzleCompletionState, Solution, TimerState,
 };
 use std::rc::Rc;
@@ -20,7 +20,7 @@ const HINT_LEVEL_MAX: u8 = 1;
 
 struct DeductionResult {
     deductions: Vec<Deduction>,
-    clue: Option<ClueWithGrouping>,
+    clue: Option<ClueWithAddress>,
 }
 impl std::fmt::Debug for DeductionResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -54,9 +54,9 @@ pub struct GameState {
     global_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     game_state_emitter: EventEmitter<GameStateEvent>,
     settings: Settings,
-    current_selected_clue: Option<ClueWithGrouping>,
+    current_selected_clue: Option<ClueWithAddress>,
     clue_focused: bool,
-    current_clue_hint: Option<ClueWithGrouping>,
+    current_clue_hint: Option<ClueWithAddress>,
 }
 
 impl Destroyable for GameState {
@@ -326,15 +326,12 @@ impl GameState {
                 let current_difficulty = self.current_board.solution.difficulty;
                 self.new_game(current_difficulty, Some(current_seed));
             }
-            GameActionEvent::ClueToggleComplete(clue_orientation, clue_idx) => {
-                self.handle_clue_toggle_complete(clue_orientation, clue_idx)
+            GameActionEvent::ClueToggleComplete(clue_address) => {
+                self.handle_clue_toggle_complete(clue_address)
             }
             GameActionEvent::ClueToggleSelectedComplete => {
-                if let Some(clue_with_grouping) = &self.current_selected_clue {
-                    self.handle_clue_toggle_complete(
-                        clue_with_grouping.orientation,
-                        clue_with_grouping.index,
-                    )
+                if let Some(addressed_clue) = &self.current_selected_clue {
+                    self.handle_clue_toggle_complete(addressed_clue.address())
                 }
             }
             GameActionEvent::ClueFocus(maybe_clue) => self.focus_clue(maybe_clue),
@@ -343,10 +340,10 @@ impl GameState {
     }
     fn focus_next_clue(&mut self, direction: i32) {
         match &self.current_selected_clue {
-            Some(clue_with_grouping) => {
-                let mut tries = self.clue_set.all_clues().len() + 1;
-                let mut orientation = clue_with_grouping.orientation;
-                let mut clue_idx = clue_with_grouping.index as i32;
+            Some(addressed_clue) => {
+                let mut tries = self.clue_set.all_clues().count() + 1;
+                let mut orientation = addressed_clue.address.orientation;
+                let mut clue_idx = addressed_clue.address.index as i32;
                 self.current_selected_clue = None;
                 // if all clues are hidden, we don't want to try forever
                 while tries > 0 {
@@ -360,14 +357,17 @@ impl GameState {
                         clue_idx = 0;
                     }
 
-                    if !self
-                        .current_board
-                        .is_clue_completed(orientation, clue_idx as usize)
-                    {
+                    if !self.current_board.is_clue_completed(&ClueAddress {
+                        orientation,
+                        index: clue_idx as usize,
+                    }) {
                         self.current_selected_clue = self
                             .current_board
                             .clue_set
-                            .get_clue(orientation, clue_idx as usize)
+                            .get_clue(ClueAddress {
+                                orientation,
+                                index: clue_idx as usize,
+                            })
                             .cloned();
                         break;
                     }
@@ -431,12 +431,7 @@ impl GameState {
     }
 
     fn try_solve(&mut self) {
-        let all_clues = self
-            .clue_set
-            .all_clues()
-            .iter()
-            .map(|c| c.clue.clone())
-            .collect();
+        let all_clues = self.clue_set.all_clues().map(|c| c.clue.clone()).collect();
         let mut current_board = self.current_board.as_ref().clone();
         let solution = perform_evaluation_step(&mut current_board, &all_clues);
         match solution {
@@ -454,9 +449,15 @@ impl GameState {
             }
             EvaluationStepResult::DeductionsFound(clue) => {
                 log::info!("Deductions found from clue: {:?}", clue);
+                let addressed_clue = self
+                    .clue_set
+                    .find_clue(&clue)
+                    .cloned()
+                    .expect("This should have returned a clue");
+
                 self.game_state_emitter
                     .emit(GameStateEvent::ClueSelected(Some(ClueSelection {
-                        clue,
+                        clue: addressed_clue,
                         is_focused: true,
                     })));
             }
@@ -514,34 +515,28 @@ impl GameState {
         );
 
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
-            if let Some(clue_with_grouping) = clue {
+            if let Some(addressed_clue) = clue {
                 self.game_state_emitter
                     .emit(GameStateEvent::ClueSelected(Some(ClueSelection {
-                        clue: clue_with_grouping.clue.clone(),
+                        clue: addressed_clue.clone(),
                         is_focused: true,
                     })));
-                self.current_clue_hint = Some(clue_with_grouping.clone());
+                self.current_clue_hint = Some(addressed_clue.clone());
 
-                self.focus_clue(Some((
-                    clue_with_grouping.orientation,
-                    clue_with_grouping.index,
-                )));
+                self.focus_clue(Some(addressed_clue.address()));
 
                 // is the clue disabled? Automatically re-enable it
                 if self
                     .current_board
-                    .is_clue_completed(clue_with_grouping.orientation, clue_with_grouping.index)
+                    .is_clue_completed(&addressed_clue.address())
                 {
                     let mut current_board = self.current_board.as_ref().clone();
-                    current_board.toggle_clue_completed(
-                        clue_with_grouping.orientation,
-                        clue_with_grouping.index,
-                    );
+                    current_board.toggle_clue_completed(addressed_clue.address());
                     self.push_board(current_board);
                 }
 
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueHintHighlight(Some(clue_with_grouping)));
+                    .emit(GameStateEvent::ClueHintHighlight(Some(addressed_clue)));
             }
 
             if self.hint_status.hint_level > 0 {
@@ -595,9 +590,9 @@ impl GameState {
         stats
     }
 
-    fn handle_clue_toggle_complete(&mut self, clue_orientation: ClueOrientation, clue_idx: usize) {
+    fn handle_clue_toggle_complete(&mut self, clue_address: ClueAddress) {
         let mut current_board = self.current_board.as_ref().clone();
-        current_board.toggle_clue_completed(clue_orientation, clue_idx);
+        current_board.toggle_clue_completed(clue_address);
         self.push_board(current_board);
         self.sync_clue_selection();
     }
@@ -627,9 +622,9 @@ impl GameState {
         }
     }
 
-    fn focus_clue(&mut self, maybe_clue_selection: Option<(ClueOrientation, usize)>) {
-        if let Some((orientation, clue_idx)) = maybe_clue_selection {
-            self.current_selected_clue = self.clue_set.get_clue(orientation, clue_idx).cloned();
+    fn focus_clue(&mut self, maybe_clue_selection: Option<ClueAddress>) {
+        if let Some(clue_address) = maybe_clue_selection {
+            self.current_selected_clue = self.clue_set.get_clue(clue_address).cloned();
             self.clue_focused = true;
         } else {
             self.clue_focused = false;
@@ -639,14 +634,14 @@ impl GameState {
     }
 
     fn maybe_reset_clue_hint(&mut self) {
-        if let Some(clue_with_grouping) = self.current_clue_hint.clone() {
+        if let Some(addressed_clue) = self.current_clue_hint.clone() {
             // different clue selected? Clear it.
             if self.current_clue_hint != self.current_selected_clue {
                 self.current_clue_hint = None;
             }
 
             // no more deductions remaining? Clear it
-            let deductions = deduce_clue(&self.current_board, &clue_with_grouping.clue);
+            let deductions = deduce_clue(&self.current_board, &addressed_clue.clue);
             if deductions.is_empty() {
                 self.current_clue_hint = None;
             }
@@ -659,10 +654,7 @@ impl GameState {
     }
 
     fn sync_clue_selection(&mut self) {
-        let clue = self
-            .current_selected_clue
-            .as_ref()
-            .map(|cwg| cwg.clue.clone());
+        let clue = self.current_selected_clue.clone();
 
         self.game_state_emitter
             .emit(GameStateEvent::ClueSelected(clue.map(|c| ClueSelection {

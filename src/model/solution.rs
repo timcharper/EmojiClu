@@ -6,11 +6,10 @@ use log::trace;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
 use rand::{seq::SliceRandom, SeedableRng};
-use serde::{Deserialize, Serialize};
 
 pub const MAX_GRID_SIZE: usize = 8;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Solution {
     pub variants: Vec<char>,
     pub variants_range: RangeInclusive<char>,

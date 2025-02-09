@@ -1,6 +1,8 @@
 use super::Tile;
 
-#[derive(Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+#[derive(
+    Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy, serde::Serialize, serde::Deserialize,
+)]
 pub struct TileAssertion {
     pub tile: Tile,
     pub assertion: bool, // true = positive assertion (tile exists), false = negative assertion (tile does not exist)

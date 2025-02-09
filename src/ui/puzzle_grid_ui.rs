@@ -9,7 +9,10 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
-    model::{Clue, GameStateEvent, GlobalEvent, InputEvent, LayoutConfiguration, Solution},
+    model::{
+        ClueAddress, ClueWithAddress, GameStateEvent, GlobalEvent, InputEvent,
+        LayoutConfiguration, Solution,
+    },
 };
 
 use super::{puzzle_cell_ui::PuzzleCellUI, ImageSet};
@@ -25,9 +28,9 @@ pub struct PuzzleGridUI {
     n_rows: usize,
     n_variants: usize,
     current_spotlight_enabled: bool,
-    current_focused_clue: Option<Clue>,
-    completed_clues: HashSet<Clue>,
-    current_clue_hint: Option<Clue>,
+    current_focused_clue: Option<ClueWithAddress>,
+    completed_clues: HashSet<ClueAddress>,
+    current_clue_hint: Option<ClueWithAddress>,
 }
 
 impl Destroyable for PuzzleGridUI {
@@ -174,7 +177,7 @@ impl PuzzleGridUI {
                         }
                     }
                 }
-                self.completed_clues = board.completed_clues.clone();
+                self.completed_clues = board.completed_clues().clone();
             }
             GameStateEvent::CellHintHighlight { cell, variant } => {
                 self.highlight_candidate(cell.0, cell.1, *variant);
@@ -190,8 +193,8 @@ impl PuzzleGridUI {
                     self.set_current_clue(&None);
                 }
             }
-            GameStateEvent::ClueHintHighlight(clue_with_grouping) => {
-                self.current_clue_hint = clue_with_grouping.as_ref().map(|cwg| cwg.clue.clone());
+            GameStateEvent::ClueHintHighlight(addressed_clue) => {
+                self.current_clue_hint = addressed_clue.clone();
                 self.sync_spotlight();
             }
 
@@ -199,7 +202,7 @@ impl PuzzleGridUI {
         }
     }
 
-    fn set_current_clue(&mut self, clue: &Option<Clue>) {
+    fn set_current_clue(&mut self, clue: &Option<ClueWithAddress>) {
         self.current_focused_clue = clue.clone();
         if self.current_focused_clue != self.current_clue_hint {
             // clear the hint state we move on
@@ -212,7 +215,7 @@ impl PuzzleGridUI {
         let current_focused_clue_completed = self
             .current_focused_clue
             .as_ref()
-            .map(|clue| self.completed_clues.contains(clue))
+            .map(|clue| self.completed_clues.contains(&clue.address()))
             .unwrap_or(false);
 
         let selected_clue_is_hint = self.current_clue_hint == self.current_focused_clue;
