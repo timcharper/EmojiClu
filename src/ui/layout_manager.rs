@@ -161,8 +161,8 @@ impl LayoutManager {
                         move |_, _, _| {
                             let mut dw = RefCell::borrow_mut(&dw);
                             let dimensions = Dimensions {
-                                width: dw.scrolled_window.allocated_width(),
-                                height: dw.scrolled_window.allocated_height(),
+                                width: dw.scrolled_window.width(),
+                                height: dw.scrolled_window.height(),
                         };
                         dw.update_dimensions(Some(dimensions));
                     }});

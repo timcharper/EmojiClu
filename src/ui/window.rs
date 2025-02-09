@@ -93,6 +93,14 @@ pub fn build_ui(app: &Application) {
 
     let settings = Rc::new(RefCell::new(Settings::load()));
     let saved_game_state = game_state_snapshot::load_game_state_snapshot();
+    if let Some(save_state) = &saved_game_state {
+        log::info!(target: "window", "Loaded saved game state");
+        // if these disagree, then bad things happen.
+        settings.borrow_mut().difficulty = save_state.board.solution.difficulty;
+    } else {
+        log::info!(target: "window", "No saved game state found");
+    }
+
     let resource_manager =
         ResourceManager::new(global_event_observer.clone(), global_event_emitter.clone());
     let image_set = resource_manager.borrow().get_image_set();
@@ -458,7 +466,6 @@ pub fn build_ui(app: &Application) {
     let game_controls = TopLevelInputEventMonitor::new(
         window.clone(),
         scrolled_window.clone(),
-        game_action_emitter.clone(),
         input_event_emitter.clone(),
         global_event_observer.clone(),
         &settings.borrow(),

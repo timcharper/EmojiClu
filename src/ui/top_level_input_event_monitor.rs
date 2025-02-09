@@ -6,7 +6,7 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
-    model::{Clickable, GameActionEvent, GlobalEvent, InputEvent},
+    model::{Clickable, GlobalEvent, InputEvent},
 };
 
 pub struct TopLevelInputEventMonitor {
@@ -14,7 +14,6 @@ pub struct TopLevelInputEventMonitor {
     scrolled_window: ScrolledWindow,
     key_controller: Option<EventControllerKey>,
     click_controller: Option<GestureClick>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
     input_event_emitter: EventEmitter<InputEvent>,
     settings: Settings,
     global_subscription: Option<Unsubscriber<GlobalEvent>>,
@@ -41,7 +40,6 @@ impl TopLevelInputEventMonitor {
     pub fn new(
         window: Rc<ApplicationWindow>,
         scrolled_window: ScrolledWindow,
-        game_action_emitter: EventEmitter<GameActionEvent>,
         input_event_emitter: EventEmitter<InputEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         settings: &Settings,
@@ -51,7 +49,6 @@ impl TopLevelInputEventMonitor {
             scrolled_window,
             key_controller: None,
             click_controller: None,
-            game_action_emitter,
             input_event_emitter,
             settings: settings.clone(),
             global_subscription: None,

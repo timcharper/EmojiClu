@@ -309,8 +309,8 @@ impl ClueUI {
                         .get(tile_idx)
                         .and_then(|_| clue_data.clue.assertions.get(tile_idx))
                         .and_then(|ta| self.resources.get_candidate_icon(&ta.tile))
-                        .map(|pixbuf| {
-                            let image = gtk4::Image::from_pixbuf(Some(&pixbuf));
+                        .map(|paintable| {
+                            let image = gtk4::Image::from_paintable(Some(paintable.as_ref()));
                             image.upcast::<Widget>()
                         })
                 }

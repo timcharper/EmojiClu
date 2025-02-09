@@ -429,13 +429,13 @@ impl PuzzleCellUI {
                 row: self.row,
                 variant,
             }) {
-                img.set_from_pixbuf(Some(icon.as_ref()));
+                img.set_paintable(Some(icon.as_ref()));
             }
         }
 
         if let Some(tile) = &self.selected_tile {
             if let Some(icon) = self.resources.get_solution_icon(tile) {
-                self.solution_image.set_from_pixbuf(Some(icon.as_ref()));
+                self.solution_image.set_paintable(Some(icon.as_ref()));
             }
         }
     }

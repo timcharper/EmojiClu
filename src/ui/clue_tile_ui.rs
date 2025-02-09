@@ -128,7 +128,7 @@ impl ClueTileUI {
 
     fn set_negative(&self) {
         let x_pixbuf = self.resources.get_negative_assertion();
-        self.x_image.set_from_pixbuf(Some(&x_pixbuf));
+        self.x_image.set_paintable(Some(x_pixbuf.as_ref()));
         self.x_image.set_visible(true);
         self.maybe_image.set_visible(false);
         self.decoration_frame.set_visible(true);
@@ -138,8 +138,8 @@ impl ClueTileUI {
     }
 
     fn set_maybe(&self) {
-        let maybe_pixbuf = self.resources.get_maybe_assertion();
-        self.maybe_image.set_from_pixbuf(Some(&maybe_pixbuf));
+        let paintable = self.resources.get_maybe_assertion();
+        self.maybe_image.set_paintable(Some(paintable.as_ref()));
         self.maybe_image.set_visible(true);
         self.x_image.set_visible(false);
         self.decoration_frame.set_visible(true);
@@ -189,8 +189,8 @@ impl ClueTileUI {
 
             match my_tile_info {
                 ClueTileContents::TileAssertion(tile, decoration) => {
-                    if let Some(pixbuf) = self.resources.get_solution_icon(&tile) {
-                        self.image.set_from_pixbuf(Some(&pixbuf));
+                    if let Some(paintable) = self.resources.get_solution_icon(&tile) {
+                        self.image.set_paintable(Some(paintable.as_ref()));
                         self.image.set_visible(true);
                     }
                     if let Some(decoration) = decoration {
@@ -201,13 +201,13 @@ impl ClueTileUI {
                     }
                 }
                 ClueTileContents::LeftOf => {
-                    let dot_pixbuf = self.resources.get_left_of();
-                    self.left_of.set_from_pixbuf(Some(&dot_pixbuf));
+                    let left_of = self.resources.get_left_of();
+                    self.left_of.set_paintable(Some(left_of.as_ref()));
                     self.left_of.set_visible(true);
-                    self.image.set_from_pixbuf(None);
+                    self.image.clear();
                 }
                 ClueTileContents::None => {
-                    self.image.set_from_pixbuf(None);
+                    self.image.clear();
                 }
             }
         }
