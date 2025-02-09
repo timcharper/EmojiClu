@@ -1236,7 +1236,7 @@ mod tests {
         let board = GameBoard::parse(input, create_test_solution(3, 4));
         println!("Board: {:?}", board);
 
-        let clue = Clue::parse_vertical("|+0a,+1b,+2c|");
+        let clue = Clue::parse("|+0a,+1b,+2c|");
 
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);

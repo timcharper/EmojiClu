@@ -13,7 +13,7 @@ pub const MAX_GRID_SIZE: usize = 8;
 pub struct Solution {
     pub variants: Vec<char>,
     pub variants_range: RangeInclusive<char>,
-    pub grid: [[Tile; MAX_GRID_SIZE]; MAX_GRID_SIZE], // [row][col]
+    pub grid: [[char; MAX_GRID_SIZE]; MAX_GRID_SIZE], // [row][col]
     pub n_rows: usize,
     pub n_variants: usize,
     pub difficulty: Difficulty,
@@ -25,7 +25,7 @@ impl Default for Solution {
         Solution {
             variants: vec![],
             variants_range: 'a'..='a',
-            grid: [[Tile::new(0, 'a'); MAX_GRID_SIZE]; MAX_GRID_SIZE],
+            grid: [['a'; MAX_GRID_SIZE]; MAX_GRID_SIZE],
             n_rows: 0,
             n_variants: 0,
             difficulty: Difficulty::default(),
@@ -58,7 +58,7 @@ impl Solution {
             MAX_GRID_SIZE
         );
 
-        let mut grid = [[Tile::new(0, '0'); MAX_GRID_SIZE]; MAX_GRID_SIZE];
+        let mut grid = [['a'; MAX_GRID_SIZE]; MAX_GRID_SIZE];
 
         let seed = seed.unwrap_or(OsRng.try_next_u64().expect("Failed to generate seed"));
 
@@ -69,10 +69,7 @@ impl Solution {
 
         for row in 0..n_rows {
             // Generate tiles for this row
-            let mut row_tiles: Vec<Tile> = variants
-                .iter()
-                .map(|&variant| Tile::new(row, variant))
-                .collect();
+            let mut row_tiles: Vec<char> = variants.iter().map(|&variant| variant).collect();
 
             // Shuffle just this row's tiles
             row_tiles.shuffle(&mut rng);
@@ -96,17 +93,18 @@ impl Solution {
     }
 
     pub fn get(&self, row: usize, col: usize) -> Tile {
-        self.grid[row][col]
+        let variant = self.grid[row][col];
+        Tile::new(row, variant)
     }
 
-    pub fn find_tile(&self, tile: &Tile) -> (usize, usize) {
-        for row in 0..self.n_rows {
-            for col in 0..self.n_variants {
-                if self.grid[row][col] == *tile {
-                    return (row, col);
-                }
+    pub fn find_tile(&self, tile: Tile) -> (usize, usize) {
+        let Tile { row, variant } = tile;
+        for solution_col in 0..self.n_variants {
+            if self.grid[row][solution_col] == variant {
+                return (row, solution_col);
             }
         }
+
         panic!("Tile {:?} not found in solution", tile);
     }
 
@@ -132,7 +130,7 @@ impl Display for Solution {
             // Cells
             for col in 0..self.n_variants {
                 let tile = self.grid[row][col];
-                output.push_str(&format!("{}|", tile.variant.to_ascii_uppercase()));
+                output.push_str(&format!("{}|", tile.to_ascii_uppercase()));
             }
             output.push('\n');
             output.push_str(&"-".repeat(self.n_variants * 2 + 2));

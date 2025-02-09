@@ -5,6 +5,7 @@ use std::{
 };
 
 use log::warn;
+use serde::{Deserialize, Serialize};
 
 use crate::model::tile::Tile;
 
@@ -24,9 +25,7 @@ const SORT_INDEX_TWO_IN_COLUMN_ONE_NOT: usize = 2;
 const SORT_INDEX_NOT_IN_SAME_COLUMN: usize = 3;
 const SORT_INDEX_ONE_MATCHES_EITHER: usize = 4;
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub enum HorizontalClueType {
     ThreeAdjacent,     // ABC, either order
     TwoApartNotMiddle, // A, not B, C
@@ -35,9 +34,7 @@ pub enum HorizontalClueType {
     NotAdjacent,       // A not next to B
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub enum VerticalClueType {
     ThreeInColumn,      // Three tiles in same column
     TwoInColumn,        // Two tiles in same column
@@ -47,7 +44,7 @@ pub enum VerticalClueType {
 }
 
 #[readonly::make]
-#[derive(Clone, PartialEq, Eq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Clue {
     /// DO NOT MUTATE
     #[readonly]
@@ -61,15 +58,33 @@ pub struct Clue {
     cached_hash: u64,
 }
 
+impl Serialize for Clue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let clue_str = self.to_string();
+        serializer.serialize_str(&clue_str)
+    }
+}
+
+impl<'de> Deserialize<'de> for Clue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Clue::parse(&s))
+    }
+}
+
 impl Hash for Clue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.cached_hash);
     }
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub enum ClueType {
     Horizontal(HorizontalClueType),
     Vertical(VerticalClueType),
@@ -350,7 +365,7 @@ impl Clue {
             ClueType::Horizontal(h_type) => match h_type {
                 HorizontalClueType::LeftOf => {
                     format!(
-                        "{}...{}",
+                        "<{}...{}>",
                         self.assertions[0].tile.to_string(),
                         self.assertions[1].tile.to_string()
                     )
@@ -387,8 +402,47 @@ impl Clue {
         }
     }
 
-    #[cfg(test)]
-    pub fn parse_vertical(s: &str) -> Self {
+    fn parse_horizontal(s: &str) -> Self {
+        let content = s.trim_matches('<').trim_matches('>');
+        if content.contains("...") {
+            let tiles: Vec<_> = content.split("...").collect();
+            assert_eq!(tiles.len(), 2);
+            let left = Tile::parse(tiles[0]);
+            let right = Tile::parse(tiles[1]);
+            Clue::left_of(left, right)
+        } else {
+            let assertions: Vec<_> = content.split(',').collect();
+            let tile_assertions: Vec<TileAssertion> =
+                assertions.iter().map(|a| TileAssertion::parse(a)).collect();
+            match tile_assertions.len() {
+                2 => {
+                    if tile_assertions[1].is_positive() {
+                        Clue::adjacent(tile_assertions[0].tile, tile_assertions[1].tile)
+                    } else {
+                        Clue::not_adjacent(tile_assertions[0].tile, tile_assertions[1].tile)
+                    }
+                }
+                3 => {
+                    if tile_assertions[1].is_positive() {
+                        Clue::three_adjacent(
+                            tile_assertions[0].tile,
+                            tile_assertions[1].tile,
+                            tile_assertions[2].tile,
+                        )
+                    } else {
+                        Clue::two_apart_not_middle(
+                            tile_assertions[0].tile,
+                            tile_assertions[1].tile,
+                            tile_assertions[2].tile,
+                        )
+                    }
+                }
+                _ => panic!("Invalid number of assertions for horizontal clue"),
+            }
+        }
+    }
+
+    fn parse_vertical(s: &str) -> Self {
         let content = s.trim_matches('|');
         let assertions: Vec<_> = content.split(',').collect();
 
@@ -442,6 +496,14 @@ impl Clue {
                 }
             }
             _ => panic!("Invalid number of assertions for vertical clue"),
+        }
+    }
+
+    pub fn parse(s: &str) -> Self {
+        if s.starts_with('<') {
+            Clue::parse_horizontal(s)
+        } else {
+            Clue::parse_vertical(s)
         }
     }
 
@@ -737,7 +799,7 @@ mod tests {
     #[test]
     fn test_parse_vertical() {
         // Test two_in_column
-        let clue = Clue::parse_vertical("|+0a,+1b|");
+        let clue = Clue::parse("|+0a,+1b|");
         assert_eq!(
             clue.clue_type,
             ClueType::Vertical(VerticalClueType::TwoInColumn)
@@ -749,7 +811,7 @@ mod tests {
         assert_eq!(clue.assertions[1].assertion, true);
 
         // Test three_in_column
-        let clue = Clue::parse_vertical("|+0f,+3b,+5a|");
+        let clue = Clue::parse("|+0f,+3b,+5a|");
         assert_eq!(
             clue.clue_type,
             ClueType::Vertical(VerticalClueType::ThreeInColumn)
@@ -763,7 +825,7 @@ mod tests {
         assert_eq!(clue.assertions[2].assertion, true);
 
         // Test two_in_column_without
-        let clue = Clue::parse_vertical("|+0f,-3b,+5a|");
+        let clue = Clue::parse("|+0f,-3b,+5a|");
         assert_eq!(
             clue.clue_type,
             ClueType::Vertical(VerticalClueType::TwoInColumnWithout)
@@ -777,7 +839,7 @@ mod tests {
         assert_eq!(clue.assertions[2].assertion, true);
 
         // Test one_matches_either
-        let clue = Clue::parse_vertical("|+1f,?3c,?4b|");
+        let clue = Clue::parse("|+1f,?3c,?4b|");
         assert_eq!(
             clue.clue_type,
             ClueType::Vertical(VerticalClueType::OneMatchesEither)
@@ -791,7 +853,7 @@ mod tests {
         assert_eq!(clue.assertions[2].assertion, true);
 
         // Test two_not_in_same_column
-        let clue = Clue::parse_vertical("|+1a,-3f|");
+        let clue = Clue::parse("|+1a,-3f|");
         assert_eq!(
             clue.clue_type,
             ClueType::Vertical(VerticalClueType::NotInSameColumn)
@@ -801,5 +863,73 @@ mod tests {
         assert_eq!(clue.assertions[0].assertion, true);
         assert_eq!(clue.assertions[1].tile, Tile::new(3, 'f'));
         assert_eq!(clue.assertions[1].assertion, false);
+    }
+
+    #[test]
+    fn test_parse_horizontal() {
+        let clue = Clue::parse("<+0a,+0b>");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Horizontal(HorizontalClueType::TwoAdjacent)
+        );
+        assert_eq!(clue.assertions.len(), 2);
+        assert_eq!(clue.assertions[0].tile, Tile::new(0, 'a'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(0, 'b'));
+        assert_eq!(clue.assertions[1].assertion, true);
+
+        let clue = Clue::parse("<+0a,-0b>");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Horizontal(HorizontalClueType::NotAdjacent)
+        );
+        assert_eq!(clue.assertions.len(), 2);
+        assert_eq!(clue.assertions[0].tile, Tile::new(0, 'a'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(0, 'b'));
+        assert_eq!(clue.assertions[1].assertion, false);
+
+        let clue = Clue::parse("<+0a,+0b,+0c>");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Horizontal(HorizontalClueType::ThreeAdjacent)
+        );
+        assert_eq!(clue.assertions.len(), 3);
+        assert_eq!(clue.assertions[0].tile, Tile::new(0, 'a'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(0, 'b'));
+        assert_eq!(clue.assertions[1].assertion, true);
+        assert_eq!(clue.assertions[2].tile, Tile::new(0, 'c'));
+        assert_eq!(clue.assertions[2].assertion, true);
+
+        let clue = Clue::parse("<+0a,-0b,+0c>");
+        assert_eq!(
+            clue.clue_type,
+            ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle)
+        );
+        assert_eq!(clue.assertions.len(), 3);
+        assert_eq!(clue.assertions[0].tile, Tile::new(0, 'a'));
+        assert_eq!(clue.assertions[0].assertion, true);
+        assert_eq!(clue.assertions[1].tile, Tile::new(0, 'b'));
+        assert_eq!(clue.assertions[1].assertion, false);
+        assert_eq!(clue.assertions[2].tile, Tile::new(0, 'c'));
+        assert_eq!(clue.assertions[2].assertion, true);
+    }
+
+    #[test]
+    fn test_serialization() {
+        for clue_str in vec![
+            "|+0a,+1b|",
+            "|+0a,+1b,+2c|",
+            "|+0a,?1b,?2b|",
+            "<+0a,+1b>",
+            "<+0a,-1b>",
+            "<0a...1b>",
+            "<+0a,+1b,+2c>",
+            "<+0a,-1b,+2c>",
+        ] {
+            let clue = Clue::parse(clue_str);
+            assert_eq!(clue.to_string(), clue_str);
+        }
     }
 }

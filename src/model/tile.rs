@@ -11,11 +11,15 @@ impl Tile {
         Self { row, variant }
     }
 
-    #[cfg(test)]
     /// Parse a tile from a string of the form "0a" or "1b" etc.
     pub fn parse(s: &str) -> Self {
-        let row = s.chars().next().unwrap().to_digit(10).unwrap() as usize;
-        let variant = s.chars().nth(1).unwrap();
+        let row = s
+            .chars()
+            .next()
+            .and_then(|c| c.to_digit(10))
+            .map(|d| d as usize)
+            .expect("Invalid row number");
+        let variant = s.chars().nth(1).expect("Missing variant character");
         Self { row, variant }
     }
 

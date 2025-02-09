@@ -4,19 +4,26 @@ use super::{Clue, ClueAddress};
 pub struct ClueWithAddress {
     pub clue: Clue,
     pub group: usize,
-    pub address: ClueAddress,
+    pub index: usize,
 }
 
 impl ClueWithAddress {
-    pub fn new(clue: Clue, address: ClueAddress, group: usize) -> Self {
+    pub fn new_from_address(clue: Clue, address: ClueAddress, group: usize) -> Self {
         Self {
             clue,
-            address,
             group,
+            index: address.index,
         }
     }
 
     pub fn address(&self) -> ClueAddress {
-        self.address
+        ClueAddress {
+            orientation: self.clue.orientation(),
+            index: self.index,
+        }
+    }
+
+    pub(crate) fn new(clue: Clue, group: usize, index: usize) -> ClueWithAddress {
+        Self { clue, group, index }
     }
 }

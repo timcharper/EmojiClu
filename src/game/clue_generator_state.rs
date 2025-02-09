@@ -261,7 +261,7 @@ impl ClueGeneratorState {
             "Adding selected tile: {:?}",
             tile
         );
-        let (_, column) = self.board.solution.find_tile(&tile);
+        let (_, column) = self.board.solution.find_tile(tile);
 
         self.board.select_tile_from_solution(tile);
         self.board.select_tile_from_solution(tile);
@@ -390,7 +390,7 @@ impl ClueGeneratorState {
     fn get_random_horiz_tiles(&mut self, count: usize, seed: &Tile) -> (Vec<Tile>, Vec<usize>) {
         let mut num_unsolved_tiles = 1; // try to get at least one unsolved tile.
         let mut tiles = Vec::new();
-        let (row, col) = self.board.solution.find_tile(seed);
+        let (row, col) = self.board.solution.find_tile(*seed);
 
         let mut possible_directions = Vec::new();
         if col + count < self.board.solution.n_variants {
@@ -442,7 +442,7 @@ impl ClueGeneratorState {
     fn get_random_vertical_tiles(&mut self, seed: &Tile, count: usize) -> Vec<Tile> {
         let mut tiles: Vec<Tile> = Vec::new();
         let mut num_unsolved_tiles = 0; // try to get at least one unsolved tile.
-        let (row, col) = self.board.solution.find_tile(seed);
+        let (row, col) = self.board.solution.find_tile(*seed);
 
         let mut possible_rows = (0..self.board.solution.n_rows)
             .filter(|&r| r != row)
@@ -514,7 +514,7 @@ impl ClueGeneratorState {
                         Some(Clue::adjacent(seed, tiles[1]))
                     }
                     HorizontalClueType::NotAdjacent => {
-                        let (_, seed_col) = self.board.solution.find_tile(&seed);
+                        let (_, seed_col) = self.board.solution.find_tile(seed);
 
                         let tile = self.get_random_tile_not_from_columns(
                             vec![(seed_col as i32) - 1, (seed_col as i32) + 1],
@@ -525,7 +525,7 @@ impl ClueGeneratorState {
                     }
 
                     HorizontalClueType::LeftOf => {
-                        let (_, seed_col) = self.board.solution.find_tile(&seed);
+                        let (_, seed_col) = self.board.solution.find_tile(seed);
                         let possible_cols = (0..self.board.solution.n_variants)
                             .filter(|&c| c != seed_col)
                             .collect::<Vec<_>>();
@@ -557,7 +557,7 @@ impl ClueGeneratorState {
                         }
                     }
                     VerticalClueType::NotInSameColumn => {
-                        let (_, seed_col) = self.board.solution.find_tile(&seed);
+                        let (_, seed_col) = self.board.solution.find_tile(seed);
                         let not_tile = self
                             .get_random_tile_not_from_columns(vec![seed_col as i32], |t| {
                                 t != &seed
@@ -565,7 +565,7 @@ impl ClueGeneratorState {
                         Some(Clue::two_not_in_same_column(seed, not_tile))
                     }
                     VerticalClueType::TwoInColumnWithout => {
-                        let (_, seed_col) = self.board.solution.find_tile(&seed);
+                        let (_, seed_col) = self.board.solution.find_tile(seed);
                         let tiles = self.get_random_vertical_tiles(&seed, 1);
                         let not_tile = self
                             .get_random_tile_not_from_columns(vec![seed_col as i32], |t| {
@@ -574,7 +574,7 @@ impl ClueGeneratorState {
                         Some(Clue::two_in_column_without(seed, not_tile, tiles[0]))
                     }
                     VerticalClueType::OneMatchesEither => {
-                        let (_, seed_col) = self.board.solution.find_tile(&seed);
+                        let (_, seed_col) = self.board.solution.find_tile(seed);
                         let tiles = self.get_random_vertical_tiles(&seed, 1);
                         let not_tile = self
                             .get_random_tile_not_from_columns(vec![seed_col as i32], |t| {

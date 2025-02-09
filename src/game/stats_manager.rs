@@ -77,7 +77,7 @@ impl StatsManager {
 
     fn save_scores(&self, difficulty: Difficulty) -> std::io::Result<()> {
         if let Some(scores) = self.scores.get(&difficulty) {
-            let contents = serde_json::to_string_pretty(scores)?;
+            let contents = serde_json::to_string(scores)?;
             fs::write(self.scores_path(difficulty), contents)?;
         }
         Ok(())
@@ -85,7 +85,7 @@ impl StatsManager {
 
     fn save_global_stats(&self, difficulty: Difficulty) -> std::io::Result<()> {
         if let Some(stats) = self.global_stats.get(&difficulty) {
-            let contents = serde_json::to_string_pretty(stats)?;
+            let contents = serde_json::to_string(stats)?;
             fs::write(self.global_stats_path(difficulty), contents)?;
         }
         Ok(())

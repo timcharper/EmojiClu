@@ -1,11 +1,18 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime};
 
-#[derive(Clone, Debug)]
+use serde_with::serde_as;
+use serde_with::TimestampSeconds;
+
+#[serde_as]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TimerState {
-    pub paused_timestamp: Option<Instant>,
+    #[serde_as(as = "Option<TimestampSeconds>")]
+    pub paused_timestamp: Option<SystemTime>,
     pub paused_duration: Duration,
-    pub started_timestamp: Instant,
-    pub ended_timestamp: Option<Instant>,
+    #[serde_as(as = "TimestampSeconds")]
+    pub started_timestamp: SystemTime,
+    #[serde_as(as = "Option<TimestampSeconds>")]
+    pub ended_timestamp: Option<SystemTime>,
 }
 
 impl Default for TimerState {
@@ -13,22 +20,49 @@ impl Default for TimerState {
         Self {
             paused_timestamp: None,
             paused_duration: Duration::from_secs(0),
-            started_timestamp: Instant::now(),
+            started_timestamp: SystemTime::now(),
             ended_timestamp: None,
         }
     }
 }
 
 impl TimerState {
+    pub fn is_paused(&self) -> bool {
+        self.paused_timestamp.is_some()
+    }
+
     pub fn elapsed(&self) -> Duration {
         let until_time = self
             .paused_timestamp
             .or(self.ended_timestamp)
-            .unwrap_or(Instant::now());
+            .unwrap_or(SystemTime::now());
 
         until_time
-            .saturating_duration_since(self.started_timestamp)
+            .duration_since(self.started_timestamp)
+            .unwrap_or(Duration::default())
             .saturating_sub(self.paused_duration)
+    }
+
+    pub fn paused(&self, now: SystemTime) -> TimerState {
+        let mut new_state = self.clone();
+        new_state.paused_timestamp = Some(now);
+        new_state
+    }
+
+    pub fn resumed(&self) -> TimerState {
+        let mut new_state = self.clone();
+        if let Some(pause_time) = new_state.paused_timestamp.take() {
+            new_state.paused_duration = new_state
+                .paused_duration
+                .saturating_add(pause_time.elapsed().unwrap_or(Duration::default()));
+        }
+        new_state
+    }
+
+    pub fn ended(&self, now: SystemTime) -> TimerState {
+        let mut new_state = self.clone();
+        new_state.ended_timestamp = Some(now);
+        new_state
     }
 }
 
@@ -38,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_elapsed_with_pause() {
-        let now = Instant::now();
+        let now = SystemTime::now();
         let timer = TimerState {
             started_timestamp: now,
             paused_timestamp: Some(now + Duration::from_secs(5)),
@@ -51,7 +85,7 @@ mod tests {
 
     #[test]
     fn test_elapsed_with_end() {
-        let now = Instant::now();
+        let now = SystemTime::now();
         let timer = TimerState {
             started_timestamp: now,
             paused_timestamp: None,
@@ -64,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_elapsed_with_pause_and_accumulated_pause() {
-        let now = Instant::now();
+        let now = SystemTime::now();
         let timer = TimerState {
             started_timestamp: now,
             paused_timestamp: Some(now + Duration::from_secs(10)),
@@ -77,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_elapsed_running() {
-        let now = Instant::now();
+        let now = SystemTime::now();
         let timer = TimerState {
             started_timestamp: now - Duration::from_secs(5), // Started 5 seconds ago
             paused_timestamp: None,

@@ -53,6 +53,26 @@ impl std::fmt::Debug for GameBoard {
     }
 }
 
+impl Default for GameBoard {
+    fn default() -> Self {
+        let candidates = [[0xFF; MAX_GRID_SIZE]; MAX_GRID_SIZE];
+        let resolved_candidates = [[0x00; MAX_GRID_SIZE]; MAX_GRID_SIZE];
+        let selected = std::array::from_fn(|_| std::array::from_fn(|_| None));
+        let solution = Rc::new(Solution::default());
+        let clue_set = Rc::new(ClueSet::new(vec![]));
+        let completed_clues = HashSet::new();
+
+        Self {
+            candidates,
+            resolved_candidates,
+            selected,
+            solution,
+            clue_set,
+            completed_clues,
+        }
+    }
+}
+
 impl GameBoard {
     pub fn new(solution: Rc<Solution>) -> Self {
         let candidates = [[0xFF; MAX_GRID_SIZE]; MAX_GRID_SIZE];
@@ -145,7 +165,7 @@ impl GameBoard {
         let row = tile.row;
         let col = self.solution.grid[row]
             .iter()
-            .position(|t| t == &tile)
+            .position(|t| t == &tile.variant)
             .unwrap();
         self.selected[row][col] = Some(tile.variant);
         self.recompute_resolved_row(row);
@@ -463,11 +483,11 @@ mod tests {
     use super::*;
 
     fn create_test_solution() -> Rc<Solution> {
-        let mut grid = [[Tile::new(0, '0'); MAX_GRID_SIZE]; MAX_GRID_SIZE];
+        let mut grid = [['0'; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         // Fill first 4x4 of grid with test data
         for row in 0..4 {
             for col in 0..4 {
-                grid[row][col] = Tile::new(row, (b'a' + col as u8) as char);
+                grid[row][col] = Tile::usize_to_variant(col);
             }
         }
 

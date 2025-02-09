@@ -3,7 +3,9 @@ use crate::events::{Channel, EventEmitter};
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
-use crate::model::{Difficulty, GameActionEvent, GameStateEvent, GlobalEvent, InputEvent};
+use crate::model::{
+    game_state_snapshot, Difficulty, GameActionEvent, GameStateEvent, GlobalEvent, InputEvent,
+};
 use crate::ui::input_translator::InputTranslator;
 use crate::ui::seed_dialog::SeedDialog;
 use crate::ui::settings_menu_ui::SettingsMenuUI;
@@ -33,12 +35,6 @@ use super::puzzle_grid_ui::PuzzleGridUI;
 use super::resource_manager::ResourceManager;
 
 const APP_VERSION: &str = env!("APP_VERSION");
-
-fn seed_from_env() -> Option<u64> {
-    std::env::var("SEED")
-        .map(|v| v.parse::<u64>().unwrap())
-        .ok()
-}
 
 fn pause_screen() -> Rc<gtk4::Box> {
     let pause_label = Label::builder()
@@ -116,6 +112,7 @@ pub fn build_ui(app: &Application) {
     let (input_event_emitter, input_event_observer) = Channel::<InputEvent>::new();
 
     let settings = Rc::new(RefCell::new(Settings::load()));
+    let saved_game_state = game_state_snapshot::load_game_state_snapshot();
     let resource_manager =
         ResourceManager::new(global_event_observer.clone(), global_event_emitter.clone());
     let image_set = resource_manager.borrow().get_image_set();
@@ -487,10 +484,17 @@ pub fn build_ui(app: &Application) {
     );
 
     // Initialize game with saved difficulty
-    game_action_emitter.emit(GameActionEvent::NewGame(
-        settings.borrow().difficulty,
-        seed_from_env(),
-    ));
+    match saved_game_state {
+        Some(save_state) => {
+            game_action_emitter.emit(GameActionEvent::LoadState(save_state));
+        }
+        None => {
+            game_action_emitter.emit(GameActionEvent::NewGame(
+                settings.borrow().difficulty,
+                Settings::seed_from_env(),
+            ));
+        }
+    }
     global_event_emitter.emit(GlobalEvent::SettingsChanged(settings.borrow().clone()));
 
     // Add seed action
@@ -517,8 +521,11 @@ pub fn build_ui(app: &Application) {
         &settings.borrow(),
     );
 
-    window.connect_destroy(move |_| {
+    window.connect_close_request(move |_| {
         println!("Destroying window");
+        if !game_state.borrow_mut().get_game_save_state().save() {
+            log::error!(target: "window", "Failed to save game state");
+        }
         history_controls_ui.borrow_mut().destroy();
         game_state.borrow_mut().destroy();
         game_info_ui.borrow_mut().destroy();
@@ -532,5 +539,8 @@ pub fn build_ui(app: &Application) {
         game_controls.borrow_mut().destroy();
         input_translator.borrow_mut().destroy();
         resource_manager.borrow_mut().destroy();
+
+        // save game here
+        glib::signal::Propagation::Proceed
     });
 }

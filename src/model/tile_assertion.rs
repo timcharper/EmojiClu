@@ -27,16 +27,9 @@ impl TileAssertion {
         };
 
         let tile_str = &s[1..];
-        let row = tile_str
-            .chars()
-            .next()
-            .and_then(|c| c.to_digit(10))
-            .map(|d| d as usize)
-            .expect("Invalid row number");
-        let variant = tile_str.chars().nth(1).expect("Missing variant character");
 
         Self {
-            tile: Tile::new(row, variant),
+            tile: Tile::parse(tile_str),
             assertion: is_positive,
         }
     }

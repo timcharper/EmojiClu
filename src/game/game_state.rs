@@ -1,18 +1,18 @@
 use log::trace;
 use std::cell::RefCell;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+use super::deduce_clue;
 use super::settings::Settings;
 use super::solver::{deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult};
-use super::{deduce_clue, generate_clues};
 use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
-use crate::game::clue_generator::ClueGeneratorResult;
+use crate::model::game_state_snapshot::GameStateSnapshot;
 use crate::model::{
-    CandidateState, ClueAddress, ClueSelection, ClueSet, ClueWithAddress,
-    Deduction, Difficulty, GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent,
-    PuzzleCompletionState, Solution, TimerState,
+    CandidateState, ClueAddress, ClueSelection, ClueSet, ClueWithAddress, Deduction, Difficulty,
+    GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent, PuzzleCompletionState,
+    Solution, TimerState,
 };
 use std::rc::Rc;
 
@@ -70,59 +70,20 @@ impl Destroyable for GameState {
     }
 }
 
-pub struct GameBoardSet {
-    pub clue_set: Rc<ClueSet>,
-    pub board: GameBoard,
-    pub solution: Rc<Solution>,
-    pub debug_mode: bool,
-}
-impl Default for GameBoardSet {
-    fn default() -> Self {
-        let solution = Rc::new(Solution::default());
-        Self {
-            clue_set: Rc::new(ClueSet::new(vec![])),
-            board: GameBoard::new(solution.clone()),
-            solution: solution,
-            debug_mode: false,
-        }
-    }
-}
-
 impl GameState {
-    pub fn new_board_set(difficulty: Difficulty, seed: Option<u64>) -> GameBoardSet {
-        let solution = Rc::new(Solution::new(difficulty, seed));
-        trace!(target: "game_state", "Generated solution: {:?}", solution);
-        let blank_board = GameBoard::new(Rc::clone(&solution));
-        let ClueGeneratorResult {
-            clues,
-            board,
-            revealed_tiles: _,
-        } = generate_clues(&blank_board);
-
-        let debug_mode = Settings::is_debug_mode();
-
-        GameBoardSet {
-            clue_set: Rc::new(ClueSet::new(clues)),
-            board,
-            solution,
-            debug_mode,
-        }
-    }
-
     pub fn new(
         game_action_observer: EventObserver<GameActionEvent>,
         game_state_emitter: EventEmitter<GameStateEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         settings: Settings,
     ) -> Rc<RefCell<Self>> {
-        let board_set = GameBoardSet::default();
-        let timer_state = TimerState::default();
+        let empty_board = Rc::new(GameBoard::default());
         let game_state = Self {
-            clue_set: board_set.clue_set.clone(),
-            history: vec![Rc::new(board_set.board.clone())],
-            current_board: Rc::new(board_set.board),
-            solution: board_set.solution.clone(),
-            debug_mode: board_set.debug_mode,
+            clue_set: empty_board.clue_set.clone(),
+            history: vec![empty_board.clone()],
+            current_board: empty_board.clone(),
+            solution: empty_board.solution.clone(),
+            debug_mode: Settings::is_debug_mode(),
             history_index: 0,
             hints_used: 0,
             hint_status: HintStatus {
@@ -131,7 +92,7 @@ impl GameState {
             },
             current_playthrough_id: Uuid::new_v4(),
             is_paused: false,
-            timer_state,
+            timer_state: TimerState::default(),
             subscription_id: None,
             global_subscription_id: None,
             game_state_emitter,
@@ -170,33 +131,32 @@ impl GameState {
         game_state.borrow_mut().global_subscription_id = Some(subscription_id);
     }
 
-    fn new_game(&mut self, difficulty: Difficulty, seed: Option<u64>) {
-        let board_set = GameState::new_board_set(difficulty, seed);
+    fn set_game_state(&mut self, game_state_snapshot: &GameStateSnapshot) {
         println!(
             "New game; difficulty: {:?}; seed: {:?}",
-            difficulty, board_set.board.solution.seed
+            game_state_snapshot.board.solution.difficulty, game_state_snapshot.board.solution.seed
         );
-        self.current_board = Rc::new(board_set.board);
-        self.clue_set = board_set.clue_set;
-        self.solution = board_set.solution;
-        self.debug_mode = board_set.debug_mode;
+        self.current_board = Rc::new(game_state_snapshot.board.clone());
+        self.clue_set = Rc::clone(&self.current_board.clue_set);
+        self.solution = Rc::clone(&self.current_board.solution);
+        self.debug_mode = Settings::is_debug_mode();
         self.history.clear();
         self.history.push(self.current_board.clone());
         self.history_index = 0;
-        self.hints_used = 0;
+        self.hints_used = game_state_snapshot.hints_used;
         self.current_playthrough_id = Uuid::new_v4();
         self.is_paused = false;
-        self.timer_state = TimerState::default();
-        self.sync_board_display();
+        self.timer_state = game_state_snapshot.timer_state.resumed();
         self.current_selected_clue = None;
         self.clue_focused = false;
+        self.sync_board_display();
         self.game_state_emitter
             .emit(GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
             .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
         self.game_state_emitter.emit(GameStateEvent::ClueSetUpdate(
             self.clue_set.clone(),
-            difficulty,
+            self.current_board.solution.difficulty,
         ));
         self.game_state_emitter
             .emit(GameStateEvent::HistoryChanged {
@@ -303,7 +263,13 @@ impl GameState {
             GameActionEvent::CellClear(row, col, variant) => {
                 self.handle_cell_clear(row, col, variant)
             }
-            GameActionEvent::NewGame(difficulty, seed) => self.new_game(difficulty, seed),
+            GameActionEvent::NewGame(difficulty, seed) => {
+                self.set_game_state(&GameStateSnapshot::generate_new(difficulty, seed));
+            }
+            GameActionEvent::LoadState(save_state) => {
+                trace!(target: "game_state", "Loading saved state {:?}", save_state);
+                self.set_game_state(&save_state);
+            }
             GameActionEvent::InitDisplay => {
                 self.sync_board_display();
             }
@@ -324,7 +290,10 @@ impl GameState {
                 // Start a new game with current difficulty and seed
                 let current_seed = self.current_board.solution.seed;
                 let current_difficulty = self.current_board.solution.difficulty;
-                self.new_game(current_difficulty, Some(current_seed));
+                self.set_game_state(&GameStateSnapshot::generate_new(
+                    current_difficulty,
+                    Some(current_seed),
+                ));
             }
             GameActionEvent::ClueToggleComplete(clue_address) => {
                 self.handle_clue_toggle_complete(clue_address)
@@ -342,8 +311,8 @@ impl GameState {
         match &self.current_selected_clue {
             Some(addressed_clue) => {
                 let mut tries = self.clue_set.all_clues().count() + 1;
-                let mut orientation = addressed_clue.address.orientation;
-                let mut clue_idx = addressed_clue.address.index as i32;
+                let mut orientation = addressed_clue.address().orientation;
+                let mut clue_idx = addressed_clue.address().index as i32;
                 self.current_selected_clue = None;
                 // if all clues are hidden, we don't want to try forever
                 while tries > 0 {
@@ -396,7 +365,7 @@ impl GameState {
                         PuzzleCompletionState::Correct(self.get_game_stats()),
                     ));
 
-                self.timer_state.ended_timestamp = Some(Instant::now());
+                self.timer_state = self.timer_state.ended(SystemTime::now());
                 self.game_state_emitter
                     .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
             }
@@ -604,7 +573,7 @@ impl GameState {
     fn pause_game(&mut self) {
         if !self.is_paused {
             self.is_paused = true;
-            self.timer_state.paused_timestamp = Some(Instant::now());
+            self.timer_state = self.timer_state.paused(SystemTime::now());
             self.game_state_emitter
                 .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
         }
@@ -613,12 +582,9 @@ impl GameState {
     fn resume_game(&mut self) {
         if self.is_paused {
             self.is_paused = false;
-            if let Some(pause_time) = self.timer_state.paused_timestamp.take() {
-                // Add the duration of this pause to total_paused_duration
-                self.timer_state.paused_duration += pause_time.elapsed();
-                self.game_state_emitter
-                    .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
-            }
+            self.timer_state = self.timer_state.resumed();
+            self.game_state_emitter
+                .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
         }
     }
 
@@ -672,5 +638,13 @@ impl GameState {
             GlobalEvent::SettingsChanged(settings) => self.update_settings(settings.clone()),
             _ => (),
         }
+    }
+
+    pub fn get_game_save_state(&self) -> GameStateSnapshot {
+        GameStateSnapshot::new(
+            self.current_board.as_ref().clone(),
+            self.timer_state.paused(SystemTime::now()),
+            self.hints_used,
+        )
     }
 }

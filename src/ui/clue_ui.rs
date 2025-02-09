@@ -50,7 +50,7 @@ impl ClueUI {
         clue_spotlight_enabled: bool,
         tooltips_enabled: bool,
     ) -> Rc<RefCell<Self>> {
-        let orientation = clue.address.orientation;
+        let orientation = clue.address().orientation;
         let frame = Frame::builder()
             .name(&format!("clue-frame-{}", orientation))
             .css_classes(["clue-frame"])
@@ -166,7 +166,7 @@ impl ClueUI {
     }
 
     fn apply_layout(&self) {
-        match self.clue.address.orientation {
+        match self.clue.address().orientation {
             ClueOrientation::Horizontal => {
                 self.frame.set_size_request(
                     self.layout.horizontal_clue_panel.clue_dimensions.width,

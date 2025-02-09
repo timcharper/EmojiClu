@@ -1,4 +1,4 @@
-use super::{ClueAddress, Difficulty};
+use super::{ClueAddress, Difficulty, GameStateSnapshot};
 
 #[derive(Debug, Clone)]
 pub enum GameActionEvent {
@@ -22,4 +22,5 @@ pub enum GameActionEvent {
     Quit,
     Submit,
     Restart,
+    LoadState(GameStateSnapshot),
 }

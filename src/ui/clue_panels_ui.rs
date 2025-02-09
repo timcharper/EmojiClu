@@ -179,7 +179,7 @@ impl CluePanelsUI {
                 self.set_clues(clue_set, *difficulty);
             }
             GameStateEvent::ClueHintHighlight(Some(clue_with_address)) => {
-                self.highlight_clue(clue_with_address.address, Duration::from_secs(4));
+                self.highlight_clue(clue_with_address.address(), Duration::from_secs(4));
             }
             GameStateEvent::GridUpdate(grid) => {
                 self.set_clue_completion(&grid.completed_clues);

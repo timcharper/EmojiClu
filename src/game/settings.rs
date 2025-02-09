@@ -62,7 +62,7 @@ impl Settings {
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir)?;
         }
-        let contents = serde_json::to_string_pretty(self)?;
+        let contents = serde_json::to_string(self)?;
         fs::write(path, contents)
     }
 
@@ -84,5 +84,11 @@ impl Settings {
 
     pub fn is_debug_mode() -> bool {
         std::env::var("DEBUG").map(|v| v == "1").unwrap_or(false)
+    }
+
+    pub fn seed_from_env() -> Option<u64> {
+        std::env::var("SEED")
+            .map(|v| v.parse::<u64>().unwrap())
+            .ok()
     }
 }

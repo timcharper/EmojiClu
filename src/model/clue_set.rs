@@ -179,14 +179,7 @@ fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
 
     for (group, clues) in clues_by_grouping.into_iter() {
         for clue in clues.into_iter() {
-            clue_grouping.push(ClueWithAddress {
-                clue,
-                group,
-                address: ClueAddress {
-                    orientation: ClueOrientation::Vertical,
-                    index: 0,
-                },
-            });
+            clue_grouping.push(ClueWithAddress::new(clue, group, 0));
         }
     }
 
@@ -198,7 +191,7 @@ fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
     });
 
     for (idx, clue_grouping) in clue_grouping.iter_mut().enumerate() {
-        clue_grouping.address.index = idx;
+        clue_grouping.index = idx;
     }
 
     trace!(target: "clue_set", "after sorting vertical clues: {:?}", clue_grouping);
@@ -210,14 +203,7 @@ fn sort_horiz_clues(horiz_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
     let clue_grouping = assign_clue_grouping(horiz_clues, true);
     let mut clue_grouping: Vec<ClueWithAddress> = clue_grouping
         .into_iter()
-        .map(|(clue, group)| ClueWithAddress {
-            clue,
-            group,
-            address: ClueAddress {
-                orientation: ClueOrientation::Horizontal,
-                index: 0,
-            },
-        })
+        .map(|(clue, group)| ClueWithAddress::new(clue, group, 0))
         .collect();
 
     clue_grouping.sort_by(|a, b| {
@@ -227,7 +213,7 @@ fn sort_horiz_clues(horiz_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
     });
 
     for (idx, clue_grouping) in clue_grouping.iter_mut().enumerate() {
-        clue_grouping.address.index = idx;
+        clue_grouping.index = idx;
     }
 
     clue_grouping
@@ -314,18 +300,18 @@ mod tests {
     #[test]
     fn test_group_clues_no_clues_should_go_missing() {
         let mut clues = vec![
-            Clue::parse_vertical("|+1f,+3c,+4b|"),
-            Clue::parse_vertical("|+1a,+3f,+4c|"),
-            Clue::parse_vertical("|+0a,+1b|"),
-            Clue::parse_vertical("|+1a,+2d|"),
-            Clue::parse_vertical("|+1d,+2e,+3e|"),
-            Clue::parse_vertical("|+0c,+5c|"),
-            Clue::parse_vertical("|+2c,+3c|"),
-            Clue::parse_vertical("|+0f,-3b,+5a|"),
-            Clue::parse_vertical("|+0a,-3f,+4e|"),
-            Clue::parse_vertical("|-0e,+2e,+5c|"),
-            Clue::parse_vertical("|+2b,+4e|"),
-            Clue::parse_vertical("|+0e,+4f|"),
+            Clue::parse("|+1f,+3c,+4b|"),
+            Clue::parse("|+1a,+3f,+4c|"),
+            Clue::parse("|+0a,+1b|"),
+            Clue::parse("|+1a,+2d|"),
+            Clue::parse("|+1d,+2e,+3e|"),
+            Clue::parse("|+0c,+5c|"),
+            Clue::parse("|+2c,+3c|"),
+            Clue::parse("|+0f,-3b,+5a|"),
+            Clue::parse("|+0a,-3f,+4e|"),
+            Clue::parse("|-0e,+2e,+5c|"),
+            Clue::parse("|+2b,+4e|"),
+            Clue::parse("|+0e,+4f|"),
         ];
         clues.sort();
 
@@ -346,9 +332,9 @@ mod tests {
     #[test]
     fn test_group_clues_expand_grouping() {
         let clues = vec![
-            Clue::parse_vertical("|+0a,+1b|"),
-            Clue::parse_vertical("|+2b,+4e|"),
-            Clue::parse_vertical("|+0a,-3f,+4e|"),
+            Clue::parse("|+0a,+1b|"),
+            Clue::parse("|+2b,+4e|"),
+            Clue::parse("|+0a,-3f,+4e|"),
         ];
 
         let clue_grouping = assign_clue_grouping(&clues, false);

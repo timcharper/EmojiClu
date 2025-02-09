@@ -9,6 +9,7 @@ mod difficulty;
 mod game_action_event;
 mod game_board;
 mod game_state_event;
+pub mod game_state_snapshot;
 mod game_stats;
 mod global_event;
 mod input_event;
@@ -30,6 +31,7 @@ pub use difficulty::Difficulty;
 pub use game_action_event::GameActionEvent;
 pub use game_board::GameBoard;
 pub use game_state_event::{ClueSelection, GameStateEvent, PuzzleCompletionState};
+pub use game_state_snapshot::GameStateSnapshot;
 pub use game_stats::{GameStats, GlobalStats};
 pub use global_event::GlobalEvent;
 pub use input_event::{

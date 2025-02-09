@@ -40,11 +40,11 @@ mod tests {
     }
 
     pub fn create_test_solution(n_rows: usize, n_variants: usize) -> Rc<Solution> {
-        let mut grid = [[Tile::new(0, '0'); MAX_GRID_SIZE]; MAX_GRID_SIZE];
+        let mut grid = [['0'; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         // Fill first 4x4 of grid with test data
         for row in 0..3 {
             for col in 0..4 {
-                grid[row][col] = Tile::new(row, (b'a' + col as u8) as char);
+                grid[row][col] = Tile::usize_to_variant(col);
             }
         }
 
