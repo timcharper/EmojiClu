@@ -407,7 +407,6 @@ impl GameBoard {
         if !cwa.is_some() {
             return false;
         }
-        let clue = &cwa.unwrap().clue;
 
         let is_completed = if !self.completed_clues.remove(&clue_address) {
             self.completed_clues.insert(clue_address.clone());

@@ -1,6 +1,10 @@
+use std::cell::Cell;
 use std::{cell::RefCell, rc::Rc};
 
-use gtk4::{prelude::*, ApplicationWindow, Dialog, Entry, ResponseType};
+use glib::Propagation;
+use gtk4::gdk;
+use gtk4::EventControllerKey;
+use gtk4::{prelude::*, ApplicationWindow, Entry};
 
 use crate::{
     destroyable::Destroyable,
@@ -53,37 +57,95 @@ impl SeedDialog {
     }
 
     pub fn show_seed(&self) {
-        let dialog = Dialog::builder()
+        let content_area = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .spacing(10)
+            .margin_bottom(10)
+            .margin_top(10)
+            .margin_start(20)
+            .margin_end(20)
+            .build();
+
+        let dialog = gtk4::Window::builder()
             .title("Game Seed")
             .transient_for(self.window.as_ref())
             .modal(true)
+            .child(&content_area)
+            .default_width(300)
             .build();
 
-        dialog.add_button("OK", ResponseType::Ok);
-        dialog.add_button("Cancel", ResponseType::Cancel);
-
-        let content_area = dialog.content_area();
         let entry = Entry::builder()
             .text(self.current_seed.map_or("".to_string(), |s| s.to_string()))
             .build();
         content_area.append(&entry);
 
-        let game_action_emitter = self.game_action_emitter.clone();
-        let current_seed = self.current_seed;
-        let current_difficulty = self.current_difficulty;
+        let button_box = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .build();
+        let ok_button = gtk4::Button::builder().label("OK").build();
+        let cancel_button = gtk4::Button::builder().label("Cancel").build();
+        button_box.append(&cancel_button);
+        button_box.append(&ok_button);
+        button_box.set_halign(gtk4::Align::End);
+        content_area.append(&button_box);
 
-        dialog.connect_response(move |dialog, response| {
-            if response == ResponseType::Ok {
-                if let Ok(new_seed) = entry.text().as_str().parse::<u64>() {
-                    if Some(new_seed) != current_seed {
-                        game_action_emitter
-                            .emit(GameActionEvent::NewGame(current_difficulty, Some(new_seed)));
-                    }
-                }
+        cancel_button.connect_clicked({
+            let dialog = dialog.clone();
+            move |_| {
+                dialog.close();
             }
-            dialog.close();
         });
 
-        dialog.show();
+        let value_accepted = Rc::new(Cell::new(false));
+
+        ok_button.connect_clicked({
+            let dialog = dialog.clone();
+            let value_accepted = value_accepted.clone();
+
+            move |_| {
+                value_accepted.set(true);
+                dialog.close();
+            }
+        });
+
+        entry.connect_activate({
+            let dialog = dialog.clone();
+            let value_accepted = value_accepted.clone();
+            move |_| {
+                value_accepted.set(true);
+                dialog.close();
+            }
+        });
+
+        let key_controller = EventControllerKey::new();
+        key_controller.connect_key_pressed({
+            let dialog = dialog.clone();
+            move |_, keyval, _, _| {
+                if keyval == gdk::Key::Escape {
+                    dialog.close();
+                    return Propagation::Stop;
+                }
+                Propagation::Proceed
+            }
+        });
+        dialog.connect_close_request({
+            let value_accepted = value_accepted.clone();
+            let game_action_emitter = self.game_action_emitter.clone();
+            let current_seed = self.current_seed;
+            let current_difficulty = self.current_difficulty;
+            move |_| {
+                if value_accepted.take() {
+                    if let Ok(new_seed) = entry.text().as_str().parse::<u64>() {
+                        if Some(new_seed) != current_seed {
+                            game_action_emitter
+                                .emit(GameActionEvent::NewGame(current_difficulty, Some(new_seed)));
+                        }
+                    }
+                }
+                return Propagation::Proceed;
+            }
+        });
+        dialog.add_controller(key_controller);
+        dialog.present();
     }
 }

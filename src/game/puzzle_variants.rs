@@ -11,6 +11,8 @@ use std::{fmt::Debug, ops::RangeInclusive};
 
 use super::{clue_generator_state::ClueGeneratorState, solver::deduce_hidden_sets_in_row};
 
+const MAX_BOOST: usize = 100;
+
 #[derive(Debug, Clone)]
 pub struct WeightedClueType {
     pub weight: usize,
@@ -49,26 +51,6 @@ fn unique_scan<T: Eq>(iter: impl Iterator<Item = T>) -> Vec<T> {
 
     unique_items
 }
-
-fn group_by_scan<T: Eq, U>(
-    iter: impl IntoIterator<Item = U>,
-    key_fn: impl Fn(&U) -> T,
-) -> Vec<(T, Vec<U>)> {
-    let mut grouped: Vec<(T, Vec<U>)> = Vec::new();
-
-    for item in iter {
-        let key = key_fn(&item);
-        if let Some(group) = grouped.iter_mut().find(|(k, _)| k == &key) {
-            group.1.push(item);
-        } else {
-            grouped.push((key, vec![item]));
-        }
-    }
-
-    grouped
-}
-
-const MAX_BOOST: usize = 100;
 
 struct ScoreBoost {
     amount: usize,

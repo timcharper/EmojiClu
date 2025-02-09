@@ -13,13 +13,13 @@ use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use crate::ui::top_level_input_event_monitor::TopLevelInputEventMonitor;
+use crate::ui::NotQuiteRightDialog;
 use gio::{Menu, SimpleAction};
 use glib::timeout_add_local_once;
 use gtk4::gdk::{Display, Monitor};
 use gtk4::{
-    prelude::*, AboutDialog, Application, ApplicationWindow, Button, ButtonsType, CssProvider,
-    DialogFlags, HeaderBar, Label, License, MenuButton, MessageDialog, MessageType, Orientation,
-    STYLE_PROVIDER_PRIORITY_APPLICATION,
+    prelude::*, AboutDialog, Application, ApplicationWindow, Button, CssProvider, HeaderBar, Label,
+    License, MenuButton, Orientation, STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
 use std::cell::RefCell;
 use std::env;
@@ -58,40 +58,20 @@ fn hint_button_handler(
     game_action_emitter: EventEmitter<GameActionEvent>,
     game_state: &Rc<RefCell<GameState>>,
     audio_set: &Rc<AudioSet>,
+    window: &Rc<ApplicationWindow>,
 ) -> impl Fn(&Button) {
     let game_state = Rc::clone(&game_state);
     let audio_set_hint = Rc::clone(&audio_set);
+    let window = Rc::clone(&window);
 
     move |button| {
         let board_is_incorrect = game_state.borrow().current_board.is_incorrect();
         log::trace!(target: "window", "Handling hint button click");
         if board_is_incorrect {
             log::trace!(target: "window", "Board is incorrect, showing rewind dialog");
-            game_action_emitter.emit(GameActionEvent::IncrementHintsUsed);
-            // Play game over sound using a MediaStream
             let media = audio_set_hint.random_lose_sound();
             media.play();
-
-            // show dialog
-            let dialog = MessageDialog::new(
-                button
-                    .root()
-                    .and_then(|r| r.downcast::<gtk4::Window>().ok())
-                    .as_ref(),
-                DialogFlags::MODAL,
-                MessageType::Info,
-                ButtonsType::OkCancel,
-                "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
-            );
-            let game_action_emitter = game_action_emitter.clone();
-            dialog.connect_response(move |dialog, response| {
-                log::trace!(target: "window", "Dialog response: {:?}", response);
-                if response == gtk4::ResponseType::Ok {
-                    game_action_emitter.emit(GameActionEvent::RewindLastGood);
-                }
-                dialog.close();
-            });
-            dialog.show();
+            NotQuiteRightDialog::new(&window, game_action_emitter.clone()).show();
         } else {
             log::trace!(target: "window", "Board is correct, showing hint");
             game_action_emitter.emit(GameActionEvent::ShowHint);
@@ -362,6 +342,7 @@ pub fn build_ui(app: &Application) {
         game_action_emitter.clone(),
         &game_state,
         &audio_set,
+        &window,
     ));
 
     // Add CSS for selected cells

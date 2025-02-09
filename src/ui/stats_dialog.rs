@@ -1,7 +1,8 @@
 use chrono::{Local, TimeZone};
+use glib::Propagation;
 use gtk4::{
-    prelude::*, Align, ApplicationWindow, Box, Dialog, DialogFlags, Grid, Label, Orientation,
-    ResponseType, Separator,
+    gdk, prelude::*, Align, ApplicationWindow, Box, EventControllerKey, Grid, Label, Orientation,
+    Separator,
 };
 use std::time::Duration;
 
@@ -168,20 +169,21 @@ impl StatsDialog {
     ) where
         F: Fn() + 'static,
     {
-        let dialog = Dialog::with_buttons(
-            Some("Game Statistics"),
-            Some(window),
-            DialogFlags::MODAL,
-            &[("Close", ResponseType::Close)],
-        );
-        dialog.set_default_width(400);
-
-        let content_area = dialog.content_area();
-        let vbox = Box::new(Orientation::Vertical, 10);
-        vbox.set_margin_start(20);
-        vbox.set_margin_end(20);
-        vbox.set_margin_top(20);
-        vbox.set_margin_bottom(20);
+        let vbox = Box::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(10)
+            .margin_start(20)
+            .margin_end(20)
+            .margin_top(20)
+            .margin_bottom(20)
+            .build();
+        let modal = gtk4::Window::builder()
+            .title("Game Statistics")
+            .modal(true)
+            .default_width(400)
+            .child(&vbox)
+            .transient_for(window)
+            .build();
 
         // Add title for high scores
         let high_scores_label = Label::new(Some("Best Times"));
@@ -208,17 +210,41 @@ impl StatsDialog {
         let stats_grid = Self::create_global_stats_grid(stats_manager, difficulty);
         vbox.append(&stats_grid);
 
-        content_area.append(&vbox);
+        let button_box = gtk4::Box::builder()
+            .orientation(Orientation::Horizontal)
+            .halign(Align::End)
+            .build();
+        let close_button = gtk4::Button::builder().label("Close").build();
+        button_box.append(&close_button);
 
-        dialog.connect_response(move |dialog, response| {
-            match response {
-                // window actually got closed
-                ResponseType::DeleteEvent => on_close(),
-                // user clicked Close button
-                ResponseType::Close => dialog.close(),
-                _ => panic!("Unexpected response type: {:?}", response),
+        vbox.append(&button_box);
+
+        close_button.connect_clicked({
+            let modal = modal.clone();
+            move |_| {
+                modal.close();
             }
         });
-        dialog.show();
+        let key_controller = EventControllerKey::new();
+        key_controller.connect_key_pressed({
+            let modal = modal.clone();
+            move |_, keyval, _, _| {
+                if keyval == gdk::Key::Escape {
+                    modal.close();
+                    return Propagation::Stop;
+                }
+                Propagation::Proceed
+            }
+        });
+
+        modal.connect_close_request({
+            move |_| {
+                on_close();
+                Propagation::Proceed
+            }
+        });
+        modal.add_controller(key_controller);
+
+        modal.present();
     }
 }

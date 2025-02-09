@@ -662,68 +662,8 @@ fn deduce_one_matches_either(board: &GameBoard, tiles: &[Tile]) -> Vec<Deduction
     synthesize_deductions(board, &possible_columns)
 }
 
-fn group_variants_by_columns<K>(
-    possible_variant_columns: &HashMap<K, HashSet<usize>>,
-) -> Vec<(&HashSet<usize>, Vec<K>)>
-where
-    K: Copy + Eq,
-{
-    let mut grouped_by_columns: Vec<(&HashSet<usize>, Vec<K>)> = Vec::new();
-    for (variant, columns) in possible_variant_columns {
-        // Try to find existing group with matching columns
-        let mut found = false;
-        for (existing_columns, variants) in &mut grouped_by_columns {
-            if **existing_columns == *columns {
-                variants.push(*variant);
-                found = true;
-                break;
-            }
-        }
-
-        // If no matching group found, create new one
-        if !found {
-            grouped_by_columns.push((columns, vec![*variant]));
-        }
-    }
-    grouped_by_columns
-}
-
 pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction> {
     let mut deductions = Vec::new();
-
-    // // Build the map of variant -> possible columns
-    // let mut possible_variant_columns = HashMap::new();
-    // for col in 0..board.solution.n_variants {
-    //     for variant in board.solution.variants.iter() {
-    //         if board.is_candidate_available(row, col, *variant) {
-    //             possible_variant_columns
-    //                 .entry(*variant)
-    //                 .or_insert(HashSet::new())
-    //                 .insert(col);
-    //         }
-    //     }
-    // }
-
-    // // Group variants by their possible columns
-    // let grouped_by_columns = group_variants_by_columns(&possible_variant_columns);
-
-    // // Filter to only consider sets of appropriate size and check for hidden sets
-    // for (columns, variants) in grouped_by_columns {
-    //     if columns.len() <= board.solution.n_variants / 2 && variants.len() == columns.len() {
-    //         // Found a hidden set! Add negative deductions for other variants in these columns
-    //         for col in columns {
-    //             for variant in board.solution.variants.iter() {
-    //                 if !variants.contains(variant) {
-    //                     deductions.push(Deduction {
-    //                         tile: Tile::new(row, *variant),
-    //                         column: *col,
-    //                         is_positive: false,
-    //                     });
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 
     let mut hidden_sets = Vec::new();
     hidden_sets.extend(find_hidden_pairs_in_row(row, board));
@@ -741,7 +681,6 @@ pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction
         hidden_sets
     );
 
-    // find the smallest one
     // find the smallest one
     let smallest_hidden_set = hidden_sets.iter().min_by_key(|set| set.variants.len());
     if let Some(smallest_hidden_set) = smallest_hidden_set {
@@ -790,10 +729,6 @@ pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction
         }
     }
     deductions
-    // deductions
-    //     .into_iter()
-    //     .filter(|deduction| !is_known_deduction(board, deduction))
-    //     .collect()
 }
 
 pub fn deduce_hidden_sets(board: &GameBoard) -> Vec<Deduction> {

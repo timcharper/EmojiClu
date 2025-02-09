@@ -1,9 +1,8 @@
-use gtk4::{prelude::*, Label};
-use gtk4::{
-    ApplicationWindow, Button, ButtonsType, Dialog, DialogFlags, MessageDialog, MessageType,
-    ResponseType,
-};
-use std::cell::RefCell;
+use glib::Propagation;
+use gtk4::gdk::Key;
+use gtk4::{prelude::*, EventControllerKey, Label};
+use gtk4::{ApplicationWindow, Button};
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
@@ -16,6 +15,7 @@ use crate::model::{GameActionEvent, PuzzleCompletionState};
 use crate::ui::stats_dialog::StatsDialog;
 
 use super::audio_set::AudioSet;
+use super::NotQuiteRightDialog;
 
 pub struct SubmitUI {
     subscription_id: Option<Unsubscriber<GameStateEvent>>,
@@ -109,26 +109,11 @@ impl SubmitUI {
                 );
             }
             PuzzleCompletionState::Incorrect => {
-                let dialog = MessageDialog::new(
-                    Some(self.window.as_ref()),
-                    DialogFlags::MODAL,
-                    MessageType::Info,
-                    ButtonsType::OkCancel,
-                    "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
-                );
-
                 // Play game over sound using a MediaStream
                 let media = self.audio_set.random_lose_sound();
                 media.play();
 
-                let game_action_emitter = self.game_action_emitter.clone();
-                dialog.connect_response(move |dialog, response| {
-                    if response == ResponseType::Ok {
-                        game_action_emitter.emit(GameActionEvent::RewindLastGood);
-                    }
-                    dialog.close();
-                });
-                dialog.show();
+                NotQuiteRightDialog::new(&self.window, self.game_action_emitter.clone()).show();
             }
         }
     }
@@ -158,7 +143,6 @@ struct CompletionDialog {
     is_active: bool,
     on_submit: Box<dyn Fn()>,
     on_undo: Box<dyn Fn()>,
-    accepted: bool,
 }
 
 impl CompletionDialog {
@@ -170,7 +154,6 @@ impl CompletionDialog {
         let completion_dialog = Rc::new(RefCell::new(CompletionDialog {
             window: Rc::clone(window),
             is_active: false,
-            accepted: false,
             on_submit,
             on_undo,
         }));
@@ -184,25 +167,35 @@ impl CompletionDialog {
         if completion_dialog.is_active {
             return;
         }
-        completion_dialog.is_active = true;
-        completion_dialog.accepted = false;
-        let dialog = Dialog::builder()
-            .transient_for(completion_dialog.window.as_ref())
-            .modal(true)
+
+        let content_area = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .spacing(20)
+            .margin_bottom(20)
+            .margin_top(20)
+            .margin_start(20)
+            .margin_end(20)
             .build();
 
-        let content_area = dialog.content_area();
-        content_area.set_margin_bottom(20);
-        content_area.set_margin_top(20);
-        content_area.set_margin_start(20);
-        content_area.set_margin_end(20);
-        content_area.set_spacing(20);
+        completion_dialog.is_active = true;
+        let modal = gtk4::Window::builder()
+            .transient_for(completion_dialog.window.as_ref())
+            .modal(true)
+            .child(&content_area)
+            .build();
 
         let label = Label::builder()
             .label("Submit Solution?")
             .css_classes(["completion-label"])
             .build();
         content_area.append(&label);
+
+        let button_box = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .spacing(10)
+            .halign(gtk4::Align::Center)
+            .build();
+        content_area.append(&button_box);
 
         let submit_button = Button::builder()
             .label("Submit")
@@ -222,30 +215,57 @@ impl CompletionDialog {
             .margin_end(10)
             .build();
 
-        dialog.add_action_widget(&undo_button, ResponseType::Cancel);
-        dialog.add_action_widget(&submit_button, ResponseType::Accept);
+        button_box.append(&undo_button);
+        button_box.append(&submit_button);
+
         drop(completion_dialog);
 
-        dialog.connect_response(move |dialog, response| {
-            if let Some(completion_dialog) = completion_dialog_weak.upgrade() {
-                let mut completion_dialog = completion_dialog.borrow_mut();
-                match response {
-                    ResponseType::Accept => {
-                        completion_dialog.accepted = true;
-                        (completion_dialog.on_submit)();
-                    }
-                    ResponseType::Cancel => {}
-                    _ => {
-                        if !completion_dialog.accepted {
-                            (completion_dialog.on_undo)();
-                        }
-                        completion_dialog.is_active = false;
-                    }
-                }
+        let accepted = Rc::new(Cell::new(false));
+        submit_button.connect_clicked({
+            let modal = modal.clone();
+            let accepted = accepted.clone();
+            move |_| {
+                accepted.set(true);
+                modal.close();
             }
-            dialog.close();
         });
 
-        dialog.show();
+        undo_button.connect_clicked({
+            let modal = modal.clone();
+            let accepted = accepted.clone();
+            move |_| {
+                accepted.set(false);
+                modal.close();
+            }
+        });
+
+        let key_controller = EventControllerKey::new();
+        key_controller.connect_key_pressed({
+            let modal = modal.clone();
+            move |_, key, _, _| {
+                if key == Key::Escape {
+                    modal.close();
+                    return Propagation::Stop;
+                }
+                Propagation::Proceed
+            }
+        });
+
+        modal.add_controller(key_controller);
+
+        modal.connect_close_request(move |_| {
+            if let Some(completion_dialog) = completion_dialog_weak.upgrade() {
+                let mut completion_dialog = completion_dialog.borrow_mut();
+                if accepted.get() {
+                    (completion_dialog.on_submit)();
+                } else {
+                    (completion_dialog.on_undo)();
+                }
+                completion_dialog.is_active = false;
+            }
+            Propagation::Proceed
+        });
+
+        modal.present();
     }
 }
