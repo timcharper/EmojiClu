@@ -7,10 +7,10 @@ use mindhunt::ui::build_ui;
 const APP_ID: &str = "org.timcharper.MindHunt";
 
 #[cfg(debug_assertions)]
-const RESOURCES: &[u8] = include_bytes!("../target/debug/resources/compiled.gresource");
+const RESOURCES: &[u8] = include_bytes!("../target/debug/compiled.gresource");
 
 #[cfg(not(debug_assertions))]
-const RESOURCES: &[u8] = include_bytes!("../target/release/resources/compiled.gresource");
+const RESOURCES: &[u8] = include_bytes!("../target/release/compiled.gresource");
 
 fn main() -> ExitCode {
     // Initialize logger
