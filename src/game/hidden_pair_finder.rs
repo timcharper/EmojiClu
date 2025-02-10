@@ -196,8 +196,7 @@ mod tests {
     use test_context::test_context;
 
     use super::*;
-    use crate::game::tests::create_test_solution;
-    use crate::game::tests::UsingLogger;
+    use crate::{game::tests::create_test_solution, tests::UsingLogger};
 
     #[test_context(UsingLogger)]
     #[test]

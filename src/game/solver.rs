@@ -822,8 +822,8 @@ mod tests {
     use super::*;
     use crate::game::tests::create_test_solution;
     use crate::{
-        game::tests::UsingLogger,
         model::{Clue, GameBoard, Tile},
+        tests::UsingLogger,
     };
 
     #[test]

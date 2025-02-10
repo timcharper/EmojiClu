@@ -180,7 +180,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
         }
     }
 
-    // state.quick_prune(&init_board);
+    ClueGeneratorState::merge_adjacent_clues(&mut state.clues);
     state.optimized_prune(&init_board);
     trace!(
         target: "clue_generator",
@@ -206,8 +206,8 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
 #[cfg(test)]
 mod tests {
     use crate::{
-        game::tests::UsingLogger,
         model::{Difficulty, GameBoard, Solution},
+        tests::UsingLogger,
     };
     use test_context::test_context;
 
@@ -220,11 +220,11 @@ mod tests {
 
         let n_iterations = std::env::var("CLUE_GEN_ITERATIONS").unwrap_or("1".to_string());
         let n_iterations = n_iterations.parse::<u64>().unwrap();
-        let start_seed = 979700061949446372;
+        let start_seed = 5505526811833291606;
         for i in 0..n_iterations {
             // we'd test Veteran if we had all day... needs compiler optimizations to run at reasonable speed
-            let solution = Solution::new(Difficulty::Veteran, Some(start_seed + i));
-            // let solution = Solution::new(Difficulty::Hard, Some(start_seed + i));
+            // let solution = Solution::new(Difficulty::Veteran, Some(start_seed + i));
+            let solution = Solution::new(Difficulty::Hard, Some(start_seed + i));
             let init_board = GameBoard::new(solution.into());
             let result = generate_clues(&init_board);
             trace!(

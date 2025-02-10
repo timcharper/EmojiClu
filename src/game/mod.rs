@@ -12,32 +12,8 @@ pub use solver::deduce_clue;
 
 #[cfg(test)]
 mod tests {
-    use std::{rc::Rc, sync::Once};
-    use test_context::TestContext;
-
     use crate::model::{Difficulty, Solution, Tile, MAX_GRID_SIZE};
-
-    static INIT_LOGGER: Once = Once::new();
-
-    pub struct UsingLogger {
-        _value: String,
-    }
-
-    impl TestContext for UsingLogger {
-        fn setup() -> UsingLogger {
-            INIT_LOGGER.call_once(|| {
-                env_logger::init();
-            });
-
-            UsingLogger {
-                _value: "Hello, World!".to_string(),
-            }
-        }
-
-        fn teardown(self) {
-            // Perform any teardown you wish.
-        }
-    }
+    use std::rc::Rc;
 
     pub fn create_test_solution(n_rows: usize, n_variants: usize) -> Rc<Solution> {
         let mut grid = [['0'; MAX_GRID_SIZE]; MAX_GRID_SIZE];

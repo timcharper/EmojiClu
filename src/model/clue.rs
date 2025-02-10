@@ -337,16 +337,23 @@ impl Clue {
         )
     }
 
-    pub fn intersects_positive(&self, other: &Self) -> bool {
+    pub fn intersects_positive(&self, other: &Self) -> Option<Tile> {
+        if self.is_vertical() != other.is_vertical() {
+            return None;
+        }
+
         if self.clue_type == ClueType::Vertical(VerticalClueType::OneMatchesEither)
             || other.clue_type == ClueType::Vertical(VerticalClueType::OneMatchesEither)
         {
-            return false;
+            return None;
         }
 
-        let other_concrete_tiles: Vec<&Tile> = other.concrete_tiles_iter().collect();
-        self.concrete_tiles_iter()
-            .any(|tile| other_concrete_tiles.contains(&tile))
+        for assertion in self.concrete_tiles_iter() {
+            if other.concrete_tiles_iter().any(|a| a == assertion) {
+                return Some(assertion.clone());
+            }
+        }
+        None
     }
 
     pub fn non_singleton_intersects(&self, clue: &Self) -> bool {
@@ -524,14 +531,15 @@ impl Clue {
     }
 
     pub(crate) fn merge(&self, other: &Self) -> Option<Vec<Self>> {
-        // we only merge clues vertical clues
-        if !self.is_vertical() || !other.is_vertical() {
+        if self.is_vertical() != other.is_vertical() {
             return None;
         }
 
-        if !self.intersects_positive(other) {
+        let intersection = self.intersects_positive(other);
+        if intersection.is_none() {
             return None;
         }
+        let intersection = intersection.unwrap();
 
         let mut clues = vec![self, other];
         clues.sort_by(|c, other| c.clue_type.cmp(&other.clue_type));
@@ -633,6 +641,31 @@ impl Clue {
                 ),
                 Clue::two_not_in_same_column(all_assertions[0].tile, negative_assertions_2[0].tile),
             ])
+        } else if clue_types
+            == [
+                ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
+                ClueType::Horizontal(HorizontalClueType::TwoAdjacent),
+            ]
+        {
+            let non_interescting_1 = clues[0]
+                .assertions
+                .iter()
+                .find(|a| a.tile != intersection)
+                .unwrap();
+            let non_intersecting_2 = clues[1]
+                .assertions
+                .iter()
+                .find(|a| a.tile != intersection)
+                .unwrap();
+            if non_interescting_1.tile.row == non_intersecting_2.tile.row {
+                Some(vec![Clue::three_adjacent(
+                    non_interescting_1.tile,
+                    intersection,
+                    non_intersecting_2.tile,
+                )])
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -730,19 +763,21 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_horizontal_clues() {
-        let clue1 = Clue::adjacent(Tile::parse("0a"), Tile::parse("0b"));
-        let clue2 = Clue::adjacent(Tile::parse("0b"), Tile::parse("0c"));
+    fn test_merge_horizontal_clues_should_merge_clues_with_same_row() {
+        // yes
+        let clue1 = Clue::parse("<+0a,+0b>");
+        let clue2 = Clue::parse("<+0b,+0c>");
 
-        let merged = clue1.merge(&clue2);
+        let merged = clue1.merge(&clue2).expect("Clues should have merged");
         // Should not merge since they are horizontal
-        assert!(merged.is_none());
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].to_string(), "<+0a,+0b,+0c>");
     }
 
     #[test]
     fn test_merge_different_lengths() {
-        let clue1 = Clue::two_in_column(Tile::parse("0a"), Tile::parse("1a"));
-        let clue2 = Clue::three_in_column(Tile::parse("0a"), Tile::parse("1a"), Tile::parse("2a"));
+        let clue1 = Clue::parse("|+0a,+1a|");
+        let clue2 = Clue::parse("|+0a,+1a,+2a|");
 
         let merged = clue1.merge(&clue2);
         // Should not merge since they have different lengths
@@ -751,49 +786,24 @@ mod tests {
 
     #[test]
     fn test_merge_not_enough_unique_tiles() {
-        let clue1 = Clue::two_in_column(Tile::parse("0a"), Tile::parse("1a"));
-        let clue2 = Clue::two_in_column(Tile::parse("0a"), Tile::parse("1a"));
+        let clue1 = Clue::parse("|+0a,+1a|");
+        let clue2 = Clue::parse("|+0a,+1a|");
 
-        let merged = clue1.merge(&clue2);
+        let merged = clue1.merge(&clue2).expect("Clues should have merged");
         // Just return the same clue because they are identical
-        assert!(merged.is_some());
-        let merged = merged.unwrap();
         assert_eq!(merged.len(), 1);
-        assert!(matches!(
-            merged[0].clue_type,
-            ClueType::Vertical(VerticalClueType::TwoInColumn)
-        ));
-        assert_eq!(merged[0].assertions.len(), 2);
+        assert_eq!(merged[0].to_string(), "|+0a,+1a|");
     }
 
     #[test]
     fn test_merge_two_in_column_and_two_in_column_without() {
-        let clue1 = Clue::two_in_column(Tile::parse("0a"), Tile::parse("5a"));
-        let clue2 =
-            Clue::two_in_column_without(Tile::parse("0a"), Tile::parse("2a"), Tile::parse("3a"));
+        let clue1 = Clue::parse("|+0a,+5a|");
+        let clue2 = Clue::parse("|+0a,-2a,+3a|");
 
-        let merged = clue1.merge(&clue2);
-        assert!(merged.is_some());
-        let merged = merged.unwrap();
+        let merged = clue1.merge(&clue2).expect("Clues should have merged");
         assert_eq!(merged.len(), 2);
-        assert!(matches!(
-            merged[0].clue_type,
-            ClueType::Vertical(VerticalClueType::ThreeInColumn)
-        ));
-        assert_eq!(merged[0].assertions.len(), 3);
-
-        assert_eq!(
-            merged[1].clue_type,
-            ClueType::Vertical(VerticalClueType::NotInSameColumn)
-        );
-        assert_eq!(merged[1].assertions.len(), 2);
-
-        assert_eq!(merged[0].assertions[0].tile, Tile::parse("0a"));
-        assert_eq!(merged[0].assertions[1].tile, Tile::parse("3a"));
-        assert_eq!(merged[0].assertions[2].tile, Tile::parse("5a"));
-
-        assert_eq!(merged[1].assertions[0].tile, Tile::parse("0a"));
-        assert_eq!(merged[1].assertions[1].tile, Tile::parse("2a"));
+        assert_eq!(merged[0].to_string(), "|+0a,+3a,+5a|");
+        assert_eq!(merged[1].to_string(), "|+0a,-2a|");
     }
 
     #[test]
@@ -931,5 +941,39 @@ mod tests {
             let clue = Clue::parse(clue_str);
             assert_eq!(clue.to_string(), clue_str);
         }
+    }
+
+    #[test]
+    fn test_intersects_positive() {
+        let clue1 = Clue::parse("|+0a,+1b|");
+        let clue2 = Clue::parse("|+0a,+2c|");
+        assert!(clue1.intersects_positive(&clue2).is_some());
+        assert!(clue2.intersects_positive(&clue1).is_some());
+    }
+
+    #[test]
+    fn test_intersects_positive_only_considers_positive() {
+        let clue1 = Clue::parse("|+0a,-1b|");
+        let clue2 = Clue::parse("|+0a,+2c|");
+        assert!(clue1.intersects_positive(&clue2).is_some());
+        assert!(clue2.intersects_positive(&clue1).is_some());
+
+        let clue1 = Clue::parse("|+0a,+1b|");
+        let clue2 = Clue::parse("|+2c,-1b|");
+        assert!(clue1.intersects_positive(&clue2).is_none());
+        assert!(clue2.intersects_positive(&clue1).is_none());
+    }
+
+    #[test]
+    fn test_intersects_does_not_consider_one_matches_either() {
+        let clue1 = Clue::parse("|+0a,?1b,?2b|");
+        let clue2 = Clue::parse("|+0a,+2c|");
+        assert!(clue1.intersects_positive(&clue2).is_none());
+        assert!(clue2.intersects_positive(&clue1).is_none());
+
+        let clue1 = Clue::parse("|+0a,?1b,?2b|");
+        let clue2 = Clue::parse("|+1b,+2c|");
+        assert!(clue1.intersects_positive(&clue2).is_none());
+        assert!(clue2.intersects_positive(&clue1).is_none());
     }
 }

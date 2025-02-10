@@ -106,7 +106,7 @@ fn compute_base_score(
         .filter(|deduction| deduction.is_positive)
         .count();
 
-    let base_score = (n_deductions + (n_tiles_revealed * 6)) * 100;
+    let base_score = (n_deductions + (n_tiles_revealed * 10)) * 100;
 
     let boosts = vec![ScoreBoost {
         amount: n_rows_with_hidden_pair_deductions,

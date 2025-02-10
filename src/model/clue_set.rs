@@ -25,7 +25,9 @@ fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> BTreeMap<Clu
             // For horizontal clues, only group those of the same type
             clue_grouping.insert(clue.clone(), idx);
             for other_clue in clues.iter() {
-                if clue.intersects_positive(other_clue) && clue.clue_type == other_clue.clue_type {
+                if clue.intersects_positive(other_clue).is_some()
+                    && clue.clue_type == other_clue.clue_type
+                {
                     clue_grouping.insert(other_clue.clone(), idx);
                 }
             }
@@ -44,7 +46,8 @@ fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> BTreeMap<Clu
 
             // Initialize with clues that intersect with the first clue
             for other_clue in clues.iter() {
-                if !processed.contains(other_clue) && clue.intersects_positive(other_clue) {
+                if !processed.contains(other_clue) && clue.intersects_positive(other_clue).is_some()
+                {
                     to_process.insert(other_clue);
                 }
             }
@@ -59,7 +62,7 @@ fn assign_clue_grouping(clues: &[Clue], require_same_type: bool) -> BTreeMap<Clu
                 for other_clue in clues.iter() {
                     if !processed.contains(other_clue)
                         && !to_process.contains(other_clue)
-                        && next_clue.intersects_positive(other_clue)
+                        && next_clue.intersects_positive(other_clue).is_some()
                     {
                         to_process.insert(other_clue);
                     }
@@ -155,10 +158,11 @@ fn remove_redundant_clues(clues: &mut Vec<Clue>) {
     }
 }
 
-fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
+fn sort_and_compress_vert_clues(vert_clues: Vec<Clue>) -> Vec<ClueWithAddress> {
+    let mut vert_clues = vert_clues.clone();
     vert_clues.sort_by(|a, b| a.sort_index.cmp(&b.sort_index));
     trace!(target: "clue_set", "before assigning clue grouping: {:?}", vert_clues);
-    let clue_grouping = assign_clue_grouping(vert_clues, false);
+    let clue_grouping = assign_clue_grouping(&vert_clues, false);
 
     trace!(target: "clue_set", "Clue grouping: {:?}", clue_grouping);
 
@@ -198,9 +202,10 @@ fn sort_vert_clues(vert_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
     clue_grouping
 }
 
-fn sort_horiz_clues(horiz_clues: &mut Vec<Clue>) -> Vec<ClueWithAddress> {
+fn sort_horiz_clues(horiz_clues: Vec<Clue>) -> Vec<ClueWithAddress> {
+    let mut horiz_clues = horiz_clues.clone();
     horiz_clues.sort_by(|a, b| a.sort_index.cmp(&b.sort_index));
-    let clue_grouping = assign_clue_grouping(horiz_clues, true);
+    let clue_grouping = assign_clue_grouping(&horiz_clues, true);
     let mut clue_grouping: Vec<ClueWithAddress> = clue_grouping
         .into_iter()
         .map(|(clue, group)| ClueWithAddress::new(clue, group, 0))
@@ -232,8 +237,8 @@ impl ClueSet {
             }
         }
 
-        let horizontal_clues = sort_horiz_clues(&mut ungrouped_horizontal_clues);
-        let vertical_clues = sort_vert_clues(&mut ungrouped_vertical_clues);
+        let horizontal_clues = sort_horiz_clues(ungrouped_horizontal_clues);
+        let vertical_clues = sort_and_compress_vert_clues(ungrouped_vertical_clues);
 
         Self {
             horizontal_clues,
@@ -274,7 +279,10 @@ impl ClueSet {
 
 #[cfg(test)]
 mod tests {
+    use test_context::test_context;
+
     use crate::model::Tile;
+    use crate::tests::UsingLogger;
 
     use super::*;
     #[test]
@@ -329,8 +337,31 @@ mod tests {
         }
     }
 
+    #[test_context(UsingLogger)]
     #[test]
-    fn test_group_clues_expand_grouping() {
+    fn test_sort_vert_clues_only_considered_positive_assertions_as_negative_assertion_redundancy_candidates(
+        _: &mut UsingLogger,
+    ) {
+        let clues = vec![
+            Clue::parse("|+2b,+5c|"),
+            Clue::parse("|+3b,?5e,?0e|"),
+            Clue::parse("|+4b,?0b,?5e|"),
+            Clue::parse("|+0d,-5c|"), // this clue and the next ARE NOT redundant
+            Clue::parse("|+5c,-4b|"),
+        ];
+
+        let sorted_clues = sort_and_compress_vert_clues(clues);
+
+        assert_eq!(sorted_clues.len(), 4);
+        assert_eq!(sorted_clues[0].clue.to_string(), "|+2b,-4b,+5c|");
+        assert_eq!(sorted_clues[1].clue.to_string(), "|+0d,-5c|");
+        assert_eq!(sorted_clues[2].clue.to_string(), "|+3b,?5e,?0e|");
+        assert_eq!(sorted_clues[3].clue.to_string(), "|+4b,?0b,?5e|");
+    }
+
+    #[test_context(UsingLogger)]
+    #[test]
+    fn test_group_clues_expand_grouping(_: &mut UsingLogger) {
         let clues = vec![
             Clue::parse("|+0a,+1b|"),
             Clue::parse("|+2b,+4e|"),

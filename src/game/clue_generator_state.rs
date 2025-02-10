@@ -343,6 +343,18 @@ impl ClueGeneratorState {
                 }
                 board.auto_solve_all();
             }
+            trace!(
+                target: "clue_generator",
+                "Used clues: {:?}; clues: {:?}",
+                used_clues.len(), clues.len()
+            );
+            if used_clues.len() != clues.len() {
+                trace!(
+                    target: "clue_generator",
+                    "Determined {:?} clues are not required",
+                    clues.iter().filter(|clue| !used_clues.contains(clue)).collect::<Vec<_>>()
+                );
+            }
 
             // remove any clues that were not used
             clues.retain(|clue| used_clues.contains(clue));
@@ -616,5 +628,76 @@ impl ClueGeneratorState {
             .choose(&mut self.rng)
             .unwrap()
             .clone()
+    }
+
+    /// Merge adjacent clues if possible. mutates clues in place
+    pub fn merge_adjacent_clues(clues: &mut Vec<Clue>) {
+        // if there are two intersecting clues who's non-interesting tiles are on the same row, join them to a 3-in-a-row clue
+        // otherwise, there's evidence on the board the clue generator isn't aware of and it impacts the consistency of difficulty
+        let mut idx1 = 0;
+        while idx1 < clues.len() {
+            let clue1 = &clues[idx1];
+            if clue1.clue_type != ClueType::Horizontal(HorizontalClueType::TwoAdjacent) {
+                idx1 += 1;
+                continue;
+            }
+
+            let merged_horizontal_clue =
+                clues
+                    .iter()
+                    .enumerate()
+                    .skip(idx1 + 1)
+                    .find_map(|(idx2, clue2)| {
+                        if let Some(merged_clues) = clue1.merge(clue2) {
+                            Some((idx2, merged_clues))
+                        } else {
+                            None
+                        }
+                    });
+
+            if let Some((idx2, merged_clues)) = merged_horizontal_clue {
+                clues.remove(idx2);
+                clues.remove(idx1);
+                let merged_clues_len = merged_clues.len();
+                for clue in merged_clues {
+                    clues.insert(idx1, clue);
+                }
+                idx1 += merged_clues_len - 1;
+            }
+            idx1 += 1;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_merge_adjacent_clues() {
+        let clue1 = Clue::parse("<+0a,+1c>");
+        let clue2 = Clue::parse("<+0b,+1c>");
+
+        let mut clues = vec![clue1, clue2];
+        ClueGeneratorState::merge_adjacent_clues(&mut clues);
+        assert_eq!(clues.len(), 1);
+        assert_eq!(clues[0].to_string(), "<+0a,+1c,+0b>");
+
+        // in reverse
+        let clue1 = Clue::parse("<+1c,+0a>");
+        let clue2 = Clue::parse("<+1c,+0b>");
+
+        let mut clues = vec![clue1, clue2];
+        ClueGeneratorState::merge_adjacent_clues(&mut clues);
+        assert_eq!(clues.len(), 1);
+        assert_eq!(clues[0].to_string(), "<+0a,+1c,+0b>");
+
+        // not matching row
+        let clue1 = Clue::parse("<+1c,+0a>");
+        let clue2 = Clue::parse("<+2c,+0b>");
+
+        let mut clues = vec![clue1, clue2];
+        ClueGeneratorState::merge_adjacent_clues(&mut clues);
+        assert_eq!(clues.len(), 2);
     }
 }

@@ -110,6 +110,8 @@ impl SubmitUI {
             }
             PuzzleCompletionState::Incorrect => {
                 // Play game over sound using a MediaStream
+                self.game_action_emitter
+                    .emit(GameActionEvent::IncrementHintsUsed);
                 let media = self.audio_set.random_lose_sound();
                 media.play();
 
