@@ -784,25 +784,27 @@ pub enum EvaluationStepResult {
     DeductionsFound(Clue),
 }
 
+/// note - does not mutate, does not auto-solve, caller must call auto-solve after applying evaluation
 pub fn perform_evaluation_step(board: &mut GameBoard, clues: &Vec<Clue>) -> EvaluationStepResult {
     // nothing to do
     if board.is_complete() {
         return EvaluationStepResult::Nothing;
     }
 
-    let deductions = deduce_hidden_sets(board);
-    if deductions.len() > 0 {
-        board.apply_deductions(&deductions);
-        return EvaluationStepResult::HiddenSetsFound;
-    }
-
-    // reapply existing clues
+    // apply clues
     for clue in clues.iter() {
         let deductions = deduce_clue(board, clue);
         if deductions.len() > 0 {
             board.apply_deductions(&deductions);
             return EvaluationStepResult::DeductionsFound(clue.clone());
         }
+    }
+
+    // apply hidden sets
+    let deductions = deduce_hidden_sets(board);
+    if deductions.len() > 0 {
+        board.apply_deductions(&deductions);
+        return EvaluationStepResult::HiddenSetsFound;
     }
     trace!(
         target: "solver",

@@ -484,7 +484,7 @@ impl GameState {
         );
 
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
-            if let Some(addressed_clue) = clue {
+            if let Some(addressed_clue) = &clue {
                 self.game_state_emitter
                     .emit(GameStateEvent::ClueSelected(Some(ClueSelection {
                         clue: addressed_clue.clone(),
@@ -505,10 +505,12 @@ impl GameState {
                 }
 
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueHintHighlight(Some(addressed_clue)));
+                    .emit(GameStateEvent::ClueHintHighlight(Some(
+                        addressed_clue.clone(),
+                    )));
             }
 
-            if self.hint_status.hint_level > 0 {
+            if self.hint_status.hint_level > 0 || clue.is_none() {
                 if let Some(first_deduction) = deductions.first() {
                     // highlight cells
 
