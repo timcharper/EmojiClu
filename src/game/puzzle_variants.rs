@@ -91,7 +91,7 @@ fn compute_base_score(
     deducations: &Vec<Deduction>,
 ) -> (usize, Vec<ScoreBoost>) {
     let n_deductions = deducations.len();
-    let deduction_rows = unique_scan(deducations.iter().map(|d| d.tile.row));
+    let deduction_rows = unique_scan(deducations.iter().map(|d| d.tile_assertion.tile.row));
 
     let n_rows_with_hidden_pair_deductions = deduction_rows
         .iter()
@@ -103,7 +103,7 @@ fn compute_base_score(
 
     let n_tiles_revealed = deducations
         .iter()
-        .filter(|deduction| deduction.is_positive)
+        .filter(|deduction| deduction.is_positive())
         .count();
 
     let base_score = (n_deductions + (n_tiles_revealed * 10)) * 100;
@@ -331,7 +331,7 @@ impl PuzzleVariant for StripingPuzzleVariant {
         let (base_score, mut boosts) = compute_base_score(board, clue, deductions);
 
         // if this advances the board state towards striping, boost clue
-        let deduced_tiles = unique_scan(deductions.iter().map(|d| d.tile));
+        let deduced_tiles = unique_scan(deductions.iter().map(|d| d.tile_assertion.tile));
 
         let max_striped_cols = deduced_tiles
             .iter()

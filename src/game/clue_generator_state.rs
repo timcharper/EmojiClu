@@ -269,9 +269,11 @@ impl ClueGeneratorState {
         self.tiles_with_evidence.insert((column, tile));
         self.tiles_without_evidence.remove(&(column, tile));
         self.update_evidence_from_deduction(&Deduction {
-            tile,
+            tile_assertion: TileAssertion {
+                tile,
+                assertion: true,
+            },
             column,
-            is_positive: true,
         });
         self.record_selections(vec![(column, tile)]);
         let (_, selections) = self.board.auto_solve_all();
@@ -300,14 +302,17 @@ impl ClueGeneratorState {
     }
 
     fn update_evidence_from_deduction(&mut self, deduction: &Deduction) {
-        if deduction.is_positive {
+        if deduction.tile_assertion.assertion {
             // all variants get evidence when a positive selection is made
             for variant in self.board.solution.variants_range.clone() {
-                self.add_evidence(Tile::new(deduction.tile.row, variant), deduction.column);
+                self.add_evidence(
+                    Tile::new(deduction.tile_assertion.tile.row, variant),
+                    deduction.column,
+                );
             }
         } else {
             // only the tile that was removed gets evidence
-            self.add_evidence(deduction.tile.clone(), deduction.column);
+            self.add_evidence(deduction.tile_assertion.tile, deduction.column);
         }
     }
 

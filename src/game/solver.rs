@@ -9,12 +9,62 @@ use log::trace;
 use super::hidden_pair_finder::{find_hidden_pairs_in_row, find_naked_pairs_in_row};
 
 fn is_known_deduction(board: &GameBoard, deduction: &Deduction) -> bool {
-    let result = if deduction.is_positive {
-        board.is_selected_in_column(&deduction.tile, deduction.column)
+    let result = if deduction.tile_assertion.assertion {
+        board.is_selected_in_column(&deduction.tile_assertion.tile, deduction.column)
     } else {
-        board.has_negative_deduction(&deduction.tile, deduction.column)
+        board.has_negative_deduction(&deduction.tile_assertion.tile, deduction.column)
     };
     result
+}
+
+pub fn group_assertions_by_coordinates(
+    possible_solutions: &Vec<Vec<(usize, TileAssertion)>>,
+) -> HashMap<Coordinates, CellSolutionAssertion> {
+    // For each coordinate in possible solutions,
+    let mut solutions_by_coordinates: HashMap<Coordinates, CellSolutionAssertion> = HashMap::new();
+    for possible_solution in possible_solutions.iter() {
+        for (column, tile_assertion) in possible_solution {
+            let coord = Coordinates {
+                row: tile_assertion.tile.row,
+                column: *column,
+            };
+
+            let positive_variant_set = if tile_assertion.assertion {
+                HashSet::from([tile_assertion.tile.variant])
+            } else {
+                HashSet::new()
+            };
+
+            let negative_variant_set = if tile_assertion.assertion {
+                HashSet::new()
+            } else {
+                HashSet::from([tile_assertion.tile.variant])
+            };
+
+            let entry = solutions_by_coordinates
+                .entry(coord)
+                .or_insert(CellSolutionAssertion {
+                    positive_variants: positive_variant_set.clone(),
+                    negative_variants: negative_variant_set.clone(),
+                    positive_count: 0,
+                    negative_count: 0,
+                });
+            // union
+            entry.positive_variants.extend(&positive_variant_set);
+            // intersect
+            entry
+                .negative_variants
+                .retain(|v| negative_variant_set.contains(v));
+
+            if tile_assertion.assertion {
+                entry.positive_count += 1;
+            } else {
+                entry.negative_count += 1;
+            }
+        }
+    }
+
+    solutions_by_coordinates
 }
 
 fn is_partial_solution_valid(board: &GameBoard, solution: &PartialSolution) -> bool {
@@ -79,18 +129,22 @@ fn synthesize_deductions(
         if possible.len() == 1 {
             let column = possible.iter().next().unwrap();
             deductions.insert(Deduction {
-                tile: tile.clone(),
+                tile_assertion: TileAssertion {
+                    tile: tile.clone(),
+                    assertion: true,
+                },
                 column: *column,
-                is_positive: true,
             });
         } else {
             // Make negative deductions for impossible columns
             for col in 0..board_width {
                 if !possible.contains(&col) {
                     deductions.insert(Deduction {
-                        tile: tile.clone(),
+                        tile_assertion: TileAssertion {
+                            tile: tile.clone(),
+                            assertion: false,
+                        },
                         column: col,
-                        is_positive: false,
                     });
                 }
             }
@@ -115,16 +169,21 @@ impl std::fmt::Debug for Coordinates {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct CellSolutionAssertion {
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct CellSolutionAssertion {
     pub positive_variants: HashSet<char>,
     pub negative_variants: HashSet<char>,
     pub positive_count: usize,
     pub negative_count: usize,
 }
 
-trait ClueHandler: std::fmt::Debug {
-    fn handle(&self, board: &GameBoard, column: usize) -> Vec<Vec<(usize, TileAssertion)>>;
+pub trait ClueHandler: std::fmt::Debug {
+    /// Returns all potential solutions for a given clue
+    fn potential_solutions(
+        &self,
+        board: &GameBoard,
+        column: usize,
+    ) -> Vec<Vec<(usize, TileAssertion)>>;
 }
 
 #[derive(Clone, Debug)]
@@ -189,7 +248,11 @@ impl LeftOfHandler {
 }
 
 impl ClueHandler for LeftOfHandler {
-    fn handle(&self, board: &GameBoard, column: usize) -> Vec<Vec<(usize, TileAssertion)>> {
+    fn potential_solutions(
+        &self,
+        board: &GameBoard,
+        column: usize,
+    ) -> Vec<Vec<(usize, TileAssertion)>> {
         let max_column = board.solution.n_variants - 1;
         let mut solutions = Vec::new();
 
@@ -230,7 +293,11 @@ impl ClueHandler for LeftOfHandler {
 }
 
 impl ClueHandler for NotAdjacentHandler {
-    fn handle(&self, board: &GameBoard, column: usize) -> Vec<Vec<(usize, TileAssertion)>> {
+    fn potential_solutions(
+        &self,
+        board: &GameBoard,
+        column: usize,
+    ) -> Vec<Vec<(usize, TileAssertion)>> {
         let max_column = board.solution.n_variants - 1;
 
         // can the positive tile go here and the negative assertion work both ways?
@@ -299,7 +366,11 @@ impl ClueHandler for NotAdjacentHandler {
 }
 
 impl ClueHandler for AdjacentHandler {
-    fn handle(&self, board: &GameBoard, column: usize) -> Vec<Vec<(usize, TileAssertion)>> {
+    fn potential_solutions(
+        &self,
+        board: &GameBoard,
+        column: usize,
+    ) -> Vec<Vec<(usize, TileAssertion)>> {
         let max_column = board.solution.n_variants - 1;
         let clue_size = self.clue.assertions.len();
         if (column + clue_size - 1) > max_column {
@@ -354,7 +425,11 @@ impl AllInColumnHandler {
 }
 
 impl ClueHandler for AllInColumnHandler {
-    fn handle(&self, board: &GameBoard, column: usize) -> Vec<Vec<(usize, TileAssertion)>> {
+    fn potential_solutions(
+        &self,
+        board: &GameBoard,
+        column: usize,
+    ) -> Vec<Vec<(usize, TileAssertion)>> {
         let solution = self
             .assertions
             .iter()
@@ -369,7 +444,7 @@ impl ClueHandler for AllInColumnHandler {
     }
 }
 
-fn create_handler(clue: &Clue) -> Box<dyn ClueHandler> {
+pub fn create_handler(clue: &Clue) -> Box<dyn ClueHandler> {
     match &clue.clue_type {
         ClueType::Horizontal(h_type) => match h_type {
             HorizontalClueType::TwoAdjacent => Box::new(AdjacentHandler::new(clue)),
@@ -398,7 +473,7 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
     );
 
     for column in 0..board_width {
-        let solutions = handler.handle(board, column);
+        let solutions = handler.potential_solutions(board, column);
         trace!(
             target: "solver",
             "Found {:?} solutions for column {}",
@@ -417,66 +492,14 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
         // this is the solution
         let solution = &possible_solutions[0];
         for (column, tile_assertion) in solution {
-            if tile_assertion.assertion {
-                deductions.insert(Deduction {
-                    tile: tile_assertion.tile.clone(),
-                    column: *column,
-                    is_positive: true,
-                });
-            } else {
-                deductions.insert(Deduction {
-                    tile: tile_assertion.tile.clone(),
-                    column: *column,
-                    is_positive: false,
-                });
-            }
+            deductions.insert(Deduction {
+                tile_assertion: tile_assertion.clone(),
+                column: *column,
+            });
         }
     } else {
         // For each coordinate in possible solutions,
-        let mut solutions_by_coordinates: HashMap<Coordinates, CellSolutionAssertion> =
-            HashMap::new();
-        for possible_solution in &possible_solutions {
-            for (column, tile_assertion) in possible_solution {
-                let coord = Coordinates {
-                    row: tile_assertion.tile.row,
-                    column: *column,
-                };
-
-                let positive_variant_set = if tile_assertion.assertion {
-                    HashSet::from([tile_assertion.tile.variant])
-                } else {
-                    HashSet::new()
-                };
-
-                let negative_variant_set = if tile_assertion.assertion {
-                    HashSet::new()
-                } else {
-                    HashSet::from([tile_assertion.tile.variant])
-                };
-
-                let entry =
-                    solutions_by_coordinates
-                        .entry(coord)
-                        .or_insert(CellSolutionAssertion {
-                            positive_variants: positive_variant_set.clone(),
-                            negative_variants: negative_variant_set.clone(),
-                            positive_count: 0,
-                            negative_count: 0,
-                        });
-                // union
-                entry.positive_variants.extend(&positive_variant_set);
-                // intersect
-                entry
-                    .negative_variants
-                    .retain(|v| negative_variant_set.contains(v));
-
-                if tile_assertion.assertion {
-                    entry.positive_count += 1;
-                } else {
-                    entry.negative_count += 1;
-                }
-            }
-        }
+        let solutions_by_coordinates = group_assertions_by_coordinates(&possible_solutions);
 
         // solution is considered "anchored" if the number of cells with positive assertions == the number of positive assertions
         let positive_assertion_count = clue.assertions.iter().filter(|ta| ta.assertion).count();
@@ -538,9 +561,11 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                             for variant in board.solution.variants.iter() {
                                 if !cell_solution_assertion.positive_variants.contains(variant) {
                                     deductions.insert(Deduction {
-                                        tile: Tile::new(row, *variant),
+                                        tile_assertion: TileAssertion {
+                                            tile: Tile::new(row, *variant),
+                                            assertion: false,
+                                        },
                                         column: col,
-                                        is_positive: false,
                                     });
                                 }
                             }
@@ -555,9 +580,11 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                         // all negative solutions point to this square, negative variants can't be here.
                         for variant in cell_solution_assertion.negative_variants.iter() {
                             deductions.insert(Deduction {
-                                tile: Tile::new(row, *variant),
+                                tile_assertion: TileAssertion {
+                                    tile: Tile::new(row, *variant),
+                                    assertion: false,
+                                },
                                 column: col,
-                                is_positive: false,
                             });
                         }
                     } else {
@@ -573,9 +600,11 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                                 && row_positive_assertion_varants.contains(variant)
                             {
                                 deductions.insert(Deduction {
-                                    tile: Tile::new(row, *variant),
+                                    tile_assertion: TileAssertion {
+                                        tile: Tile::new(row, *variant),
+                                        assertion: false,
+                                    },
                                     column: col,
-                                    is_positive: false,
                                 });
                             }
                         }
@@ -591,9 +620,11 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                     // deduct all positive assertion from this row, they can't possibly be here
                     row_positive_assertion_varants.iter().for_each(|variant| {
                         deductions.insert(Deduction {
-                            tile: Tile::new(row, *variant),
+                            tile_assertion: TileAssertion {
+                                tile: Tile::new(row, *variant),
+                                assertion: false,
+                            },
                             column: col,
-                            is_positive: false,
                         });
                     });
                 }
@@ -706,9 +737,11 @@ pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction
                 for not_in_set_variant in hidden_set_inverse.iter() {
                     if board.is_candidate_available(row, column, *not_in_set_variant) {
                         deductions.push(Deduction {
-                            tile: Tile::new(row, *not_in_set_variant),
+                            tile_assertion: TileAssertion {
+                                tile: Tile::new(row, *not_in_set_variant),
+                                assertion: false,
+                            },
                             column,
-                            is_positive: false,
                         });
                     }
                 }
@@ -719,9 +752,11 @@ pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction
                     if board.is_candidate_available(row, column, *hidden_set_variant) {
                         // remove it! you don't belong here
                         deductions.push(Deduction {
-                            tile: Tile::new(row, *hidden_set_variant),
+                            tile_assertion: TileAssertion {
+                                tile: Tile::new(row, *hidden_set_variant),
+                                assertion: false,
+                            },
                             column,
-                            is_positive: false,
                         });
                     }
                 }
@@ -850,10 +885,10 @@ mod tests {
 
         // We expect to only deduce the edges as not possible.
         assert_eq!(deductions.len(), 4);
-        assert!(deductions.contains(&Deduction::parse("0b not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0b not col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0d not col 1").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0d not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0b not col 0")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 3")));
+        assert!(deductions.contains(&Deduction::parse("0d not col 1")));
+        assert!(deductions.contains(&Deduction::parse("0d not col 2")));
     }
 
     #[test_context(UsingLogger)]
@@ -883,9 +918,9 @@ mod tests {
             deductions
         );
         assert_eq!(deductions.len(), 3);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a not col 1").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a not col 3").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 1")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 3")));
     }
 
     #[test]
@@ -906,8 +941,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0b is col 1").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a is col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0b is col 1")));
+        assert!(deductions.contains(&Deduction::parse("1a is col 2")));
     }
 
     #[test]
@@ -928,7 +963,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
     }
 
     #[test]
@@ -949,7 +984,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1a is col 1").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1a is col 1")));
     }
 
     #[test]
@@ -992,8 +1027,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a is col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a is col 1").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a is col 3")));
+        assert!(deductions.contains(&Deduction::parse("1a is col 1")));
     }
 
     #[test]
@@ -1015,7 +1050,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1a not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
     }
 
     #[test]
@@ -1033,8 +1068,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1b not col 0").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
+        assert!(deductions.contains(&Deduction::parse("1b not col 0")));
     }
 
     #[test]
@@ -1052,8 +1087,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a not col 1").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 1")));
     }
 
     #[test]
@@ -1071,8 +1106,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a not col 1").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 1")));
     }
 
     #[test]
@@ -1109,16 +1144,16 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
 
         let clue = Clue::not_adjacent(Tile::new(1, 'a'), Tile::new(0, 'a'));
 
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
     }
 
     #[test]
@@ -1137,7 +1172,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("0a is col 3").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a is col 3")));
     }
 
     #[test]
@@ -1178,8 +1213,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1b is col 2").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("2c is col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1b is col 2")));
+        assert!(deductions.contains(&Deduction::parse("2c is col 2")));
     }
 
     #[test]
@@ -1201,10 +1236,10 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 4);
-        assert!(deductions.contains(&Deduction::parse("0a not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1a not col 2").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("2a not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("2a not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("2a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("2a not col 2")));
     }
 
     #[test]
@@ -1247,8 +1282,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a not col 2").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("2c not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("2c not col 2")));
     }
 
     #[test]
@@ -1270,7 +1305,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("2c is col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("2c is col 2")));
     }
 
     #[test]
@@ -1309,7 +1344,7 @@ mod tests {
 
         let deductions = deduce_clue(&board, &clue);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("2c is col 1").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("2c is col 1")));
     }
 
     #[test]
@@ -1330,7 +1365,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("2c not col 1").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("2c not col 1")));
     }
 
     #[test]
@@ -1351,8 +1386,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0a not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 2")));
     }
 
     #[test_context(UsingLogger)]
@@ -1373,10 +1408,10 @@ mod tests {
             println!("Deduction: {:?}", deduction);
         }
         assert_eq!(deductions.len(), 4);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0b not col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0a not col 2").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0b not col 2").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 3")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 2")));
     }
 
     #[test]
@@ -1396,8 +1431,8 @@ mod tests {
 
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1b not col 0").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
+        assert!(deductions.contains(&Deduction::parse("1b not col 0")));
     }
 
     #[test]
@@ -1416,8 +1451,8 @@ mod tests {
 
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1b not col 0").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("1b not col 1").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1b not col 0")));
+        assert!(deductions.contains(&Deduction::parse("1b not col 1")));
     }
 
     #[test]
@@ -1436,7 +1471,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1b is col 3").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("1b is col 3")));
     }
 
     #[test_context(UsingLogger)]
@@ -1456,11 +1491,11 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 6);
-        assert!(deductions.contains(&Deduction::parse("0c not col 1").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0d not col 1").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0a not col 2").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0b not col 2").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0a not col 3").unwrap()));
-        assert!(deductions.contains(&Deduction::parse("0b not col 3").unwrap()));
+        assert!(deductions.contains(&Deduction::parse("0c not col 1")));
+        assert!(deductions.contains(&Deduction::parse("0d not col 1")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 2")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 3")));
     }
 }

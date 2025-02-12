@@ -1,8 +1,8 @@
 Name "Mind Hunt"
 !define APPNAME "mindhunt"
-!define APPVERSION 0.14
+!define APPVERSION 0.15
 !define COMPANY "Tim Harper"
-!define OUTFILE mindhunt-installer-0.14.exe
+!define OUTFILE mindhunt-installer-0.15.exe
 !define EXECUTABLE "bin\mindhunt.exe"
 
 !include "MUI2.nsh"

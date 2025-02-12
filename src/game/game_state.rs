@@ -177,10 +177,10 @@ impl GameState {
                 let mut current_board = self.current_board.as_ref().clone();
                 match candidate.state {
                     CandidateState::Eliminated => {
-                        current_board.show_candidate(row, col, candidate.tile);
+                        current_board.show_candidate(col, candidate.tile);
                     }
                     CandidateState::Available => {
-                        current_board.select_tile_at_position(row, col, candidate.tile);
+                        current_board.select_tile_at_position(col, candidate.tile);
                         current_board.auto_solve_row(row);
                     }
                 }
@@ -391,7 +391,7 @@ impl GameState {
         if let Some(variant) = variant {
             if let Some(candidate) = self.current_board.get_candidate(row, col, variant) {
                 if candidate.state == CandidateState::Available {
-                    current_board.remove_candidate(row, col, candidate.tile);
+                    current_board.remove_candidate(col, candidate.tile);
                     current_board.auto_solve_row(row);
                     self.push_board(current_board);
                 }
@@ -516,8 +516,11 @@ impl GameState {
 
                     self.game_state_emitter
                         .emit(GameStateEvent::CellHintHighlight {
-                            cell: (first_deduction.tile.row, first_deduction.column),
-                            variant: first_deduction.tile.variant,
+                            cell: (
+                                first_deduction.tile_assertion.tile.row,
+                                first_deduction.column,
+                            ),
+                            variant: first_deduction.tile_assertion.tile.variant,
                         });
                 }
             }

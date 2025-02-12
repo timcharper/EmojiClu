@@ -17,7 +17,7 @@ mod layout;
 mod partial_solution;
 mod solution;
 mod tile;
-mod tile_assertion;
+pub mod tile_assertion;
 mod timer_state;
 
 pub use addressed_clue::ClueWithAddress;

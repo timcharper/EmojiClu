@@ -2,6 +2,7 @@ use super::{
     solution::{Solution, MAX_GRID_SIZE},
     ClueAddress, ClueSet,
 };
+use crate::model::tile_assertion::TileAssertion;
 use crate::model::{Candidate, Deduction, PartialSolution, Tile};
 use std::{collections::HashSet, rc::Rc};
 
@@ -91,16 +92,16 @@ impl GameBoard {
         board
     }
 
-    pub fn remove_candidate(&mut self, row: usize, col: usize, tile: Tile) {
+    pub fn remove_candidate(&mut self, col: usize, tile: Tile) {
         let tile_idx = Tile::variant_to_usize(tile.variant);
-        self.candidates[row][col] &= !(1 << tile_idx);
-        self.recompute_resolved_row(row);
+        self.candidates[tile.row][col] &= !(1 << tile_idx);
+        self.recompute_resolved_row(tile.row);
     }
 
-    pub fn show_candidate(&mut self, row: usize, col: usize, tile: Tile) {
+    pub fn show_candidate(&mut self, col: usize, tile: Tile) {
         let tile_idx = Tile::variant_to_usize(tile.variant);
-        self.candidates[row][col] |= 1 << tile_idx;
-        self.recompute_resolved_row(row);
+        self.candidates[tile.row][col] |= 1 << tile_idx;
+        self.recompute_resolved_row(tile.row);
     }
 
     fn recompute_resolved(&mut self) {
@@ -156,9 +157,9 @@ impl GameBoard {
         self.solution.variants.clone()
     }
 
-    pub fn select_tile_at_position(&mut self, row: usize, col: usize, tile: Tile) {
-        self.selected[row][col] = Some(tile.variant);
-        self.recompute_resolved_row(row);
+    pub fn select_tile_at_position(&mut self, col: usize, tile: Tile) {
+        self.selected[tile.row][col] = Some(tile.variant);
+        self.recompute_resolved_row(tile.row);
     }
 
     pub fn select_tile_from_solution(&mut self, tile: Tile) {
@@ -206,7 +207,7 @@ impl GameBoard {
                 if col_candidates.len() == 1 {
                     let col = col_candidates[0];
                     let tile = Tile::new(row, variant);
-                    self.select_tile_at_position(row, col, tile);
+                    self.select_tile_at_position(col, tile);
                     selections.push((col, tile));
                     found_solution = true;
                 }
@@ -230,7 +231,7 @@ impl GameBoard {
                 // If only one candidate remains, select it and continue auto-solving
                 if available_candidates.len() == 1 {
                     let tile = available_candidates[0];
-                    self.select_tile_at_position(row, col, tile);
+                    self.select_tile_at_position(col, tile);
                     selections.push((col, tile));
                     found_solution = true; // indicate that we've found a solution this sweep of the row, so we should keep on solving
                 }
@@ -339,22 +340,26 @@ impl GameBoard {
     pub fn apply_partial_solution(&mut self, solution: &PartialSolution) {
         for (column, tile_assertion) in solution.iter() {
             if tile_assertion.assertion {
-                self.select_tile_at_position(tile_assertion.tile.row, *column, tile_assertion.tile);
+                self.select_tile_at_position(*column, tile_assertion.tile);
             } else {
-                self.remove_candidate(tile_assertion.tile.row, *column, tile_assertion.tile);
+                self.remove_candidate(*column, tile_assertion.tile);
             }
         }
     }
 
     pub fn apply_deduction(&mut self, deduction: &Deduction) {
-        if deduction.is_positive {
-            self.select_tile_at_position(
-                deduction.tile.row,
-                deduction.column,
-                deduction.tile.clone(),
-            );
+        if deduction.tile_assertion.assertion {
+            self.select_tile_at_position(deduction.column, deduction.tile_assertion.tile);
         } else {
-            self.remove_candidate(deduction.tile.row, deduction.column, deduction.tile.clone());
+            self.remove_candidate(deduction.column, deduction.tile_assertion.tile);
+        }
+    }
+
+    pub fn is_known_deduction(&self, column: usize, tile_assertion: TileAssertion) -> bool {
+        if tile_assertion.assertion {
+            self.is_selected_in_column(&tile_assertion.tile, column)
+        } else {
+            self.has_negative_deduction(&tile_assertion.tile, column)
         }
     }
 
