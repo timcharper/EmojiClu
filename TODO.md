@@ -1,5 +1,5 @@
 [x] save puzzle and resume
-[ ] "clue complete" detection
+[x] "clue complete" detection
   - detect whether or not the clue is fully encoded in the board.
 [ ] in-game tutorial
   - spotlight mode on constantly

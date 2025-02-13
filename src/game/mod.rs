@@ -1,4 +1,5 @@
 pub mod clue_completion_evaluator;
+mod clue_constraint;
 pub mod clue_generator;
 pub mod clue_generator_state;
 pub mod game_state;

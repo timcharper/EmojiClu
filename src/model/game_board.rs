@@ -478,6 +478,14 @@ impl GameBoard {
     pub(crate) fn completed_clues(&self) -> &HashSet<ClueAddress> {
         &self.completed_clues
     }
+
+    pub(crate) fn get_possible_cols_for_tile(
+        &self,
+        tile: Tile,
+    ) -> impl Iterator<Item = usize> + '_ {
+        (0..self.solution.n_variants)
+            .filter(move |col| self.is_candidate_available(tile.row, *col, tile.variant))
+    }
 }
 
 #[cfg(test)]
