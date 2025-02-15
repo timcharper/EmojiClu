@@ -10,12 +10,8 @@ use crate::model::{ClueOrientation, TileAssertion};
 use crate::model::{ClueType, HorizontalClueType, LayoutConfiguration, VerticalClueType};
 use crate::ui::clue_tile_ui::ClueTileUI;
 use crate::ui::register_left_click_handler;
+use crate::ui::template::TemplateParser;
 use crate::ui::ImageSet;
-
-#[derive(Debug)]
-struct ClueTooltipData {
-    clue: Clue,
-}
 
 #[derive(Debug)]
 enum TemplateElement {
@@ -24,6 +20,11 @@ enum TemplateElement {
 }
 
 const NEW_GROUP_CSS_CLASS: &str = "new-group";
+
+#[derive(Debug)]
+struct ClueTooltipData {
+    clue: Clue,
+}
 
 pub struct ClueUI {
     pub frame: Frame,
@@ -249,75 +250,9 @@ impl ClueUI {
         }
     }
 
-    fn parse_template_elements(&self, template: &str) -> Vec<TemplateElement> {
-        let mut elements = Vec::new();
-        let mut current_text = String::new();
-        let mut chars = template.chars().peekable();
-
-        while let Some(c) = chars.next() {
-            if c == '{' {
-                // If we have accumulated text, add it as a label
-                if !current_text.is_empty() {
-                    elements.push(TemplateElement::Label(current_text.clone()));
-                    current_text.clear();
-                }
-
-                // Parse the token
-                let mut token = String::new();
-                while let Some(&next_c) = chars.peek() {
-                    chars.next();
-                    if next_c == '}' {
-                        break;
-                    }
-                    token.push(next_c);
-                }
-
-                // Handle tile tokens
-                if let Ok(tile_idx) = token.trim_start_matches('t').parse::<usize>() {
-                    elements.push(TemplateElement::Tile(tile_idx));
-                }
-            } else {
-                current_text.push(c);
-            }
-        }
-
-        // Add any remaining text
-        if !current_text.is_empty() {
-            elements.push(TemplateElement::Label(current_text));
-        }
-
-        elements
-    }
-
-    fn parse_template(&self, template: &str, clue_data: &ClueTooltipData) -> Box {
-        let box_container = Box::new(Orientation::Horizontal, 5);
-
-        // Transform TemplateElements into GTK widgets
-        self.parse_template_elements(template)
-            .into_iter()
-            .flat_map(|element| match element {
-                TemplateElement::Label(text) => {
-                    let label = Label::new(None);
-                    label.set_markup(&text);
-                    label.set_wrap(true);
-                    label.set_max_width_chars(40);
-                    Some(label.upcast::<Widget>())
-                }
-                TemplateElement::Tile(tile_idx) => {
-                    // Get the tile assertion and create an image if it exists
-                    self.clue_tiles
-                        .get(tile_idx)
-                        .and_then(|_| clue_data.clue.assertions.get(tile_idx))
-                        .and_then(|ta| self.resources.get_candidate_icon(&ta.tile))
-                        .map(|paintable| {
-                            let image = gtk4::Image::from_paintable(Some(paintable.as_ref()));
-                            image.upcast::<Widget>()
-                        })
-                }
-            })
-            .for_each(|widget| box_container.append(&widget));
-
-        box_container
+    fn parse_template(&self, template: &str) -> Box {
+        let parser = TemplateParser::new(self.resources.clone());
+        parser.parse_template(template)
     }
 
     fn create_tooltip_widget(&self) -> Box {
@@ -344,44 +279,53 @@ impl ClueUI {
         let desc_box = Box::new(Orientation::Horizontal, 5);
 
         // Create a temporary UI just for parsing templates
-        match &clue_data.clue.clue_type {
+        let template = match &clue_data.clue.clue_type {
             ClueType::Horizontal(horiz) => match horiz {
                 HorizontalClueType::TwoAdjacent | HorizontalClueType::ThreeAdjacent => {
                     // Create template string with tiles and description
                     let mut template = String::new();
-                    for (i, _) in clue_data.clue.assertions.iter().enumerate() {
+                    for (i, assertion) in clue_data.clue.assertions.iter().enumerate() {
                         if i > 0 {
                             template.push(' ');
                         }
-                        template.push_str(&format!("{{t{}}}", i));
+                        template.push_str(&format!("{{{}}}", assertion.tile.to_string()));
                     }
                     template.push_str(" are adjacent (forward, backward).");
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    template
                 }
                 HorizontalClueType::TwoApartNotMiddle => {
-                    let template = "{t0} is two away from {t2}, without {t1} in the middle (forward, backward).";
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    format!("{{{}}} is two away from {{{}}}, without {{{}}} in the middle (forward, backward).",
+                        clue_data.clue.assertions[0].tile.to_string(),
+                        clue_data.clue.assertions[2].tile.to_string(),
+                        clue_data.clue.assertions[1].tile.to_string()
+                    )
                 }
                 HorizontalClueType::LeftOf => {
-                    let template = "{t0} is left of {t1} (any number of tiles in between).";
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    format!(
+                        "{{{}}} is left of {{{}}} (any number of tiles in between).",
+                        clue_data.clue.assertions[0].tile.to_string(),
+                        clue_data.clue.assertions[1].tile.to_string()
+                    )
                 }
                 HorizontalClueType::NotAdjacent => {
-                    let template = "{t0} is not next to {t1} (forward, backward).";
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    format!(
+                        "{{{}}} is not next to {{{}}} (forward, backward).",
+                        clue_data.clue.assertions[0].tile.to_string(),
+                        clue_data.clue.assertions[1].tile.to_string()
+                    )
                 }
             },
             ClueType::Vertical(vert) => match vert {
                 VerticalClueType::ThreeInColumn | VerticalClueType::TwoInColumn => {
                     let mut template = String::new();
-                    for (i, _) in clue_data.clue.assertions.iter().enumerate() {
+                    for (i, assertion) in clue_data.clue.assertions.iter().enumerate() {
                         if i > 0 {
                             template.push(' ');
                         }
-                        template.push_str(&format!("{{t{}}}", i));
+                        template.push_str(&format!("{{{}}}", assertion.tile.to_string()));
                     }
                     template.push_str(" are in the same column.");
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    template
                 }
                 VerticalClueType::TwoInColumnWithout => {
                     let clue_assertions: Vec<(usize, &TileAssertion)> =
@@ -390,39 +334,45 @@ impl ClueUI {
                     let positive_assertion_positions = clue_assertions
                         .iter()
                         .filter(|(_, ta)| ta.assertion)
-                        .map(|(i, _)| format!("t{}", i))
+                        .map(|(_, ta)| ta.tile.to_string())
                         .collect::<Vec<_>>();
 
                     let negative_assertion_positions = clue_assertions
                         .iter()
                         .filter(|(_, ta)| !ta.assertion)
-                        .map(|(i, _)| format!("t{}", i))
+                        .map(|(_, ta)| ta.tile.to_string())
                         .collect::<Vec<_>>();
 
                     assert!(positive_assertion_positions.len() == 2);
                     assert!(negative_assertion_positions.len() == 1);
 
-                    let template = format!(
+                    format!(
                         "{{{}}} and {{{}}} are in the same column, but {{{}}} isn't.",
                         positive_assertion_positions[0],
                         positive_assertion_positions[1],
                         negative_assertion_positions[0],
-                    );
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    )
                 }
 
                 VerticalClueType::NotInSameColumn => {
-                    let template = "{t0} is not in the same column as {t1}";
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    format!(
+                        "{{{}}} is not in the same column as {{{}}}",
+                        clue_data.clue.assertions[0].tile.to_string(),
+                        clue_data.clue.assertions[1].tile.to_string()
+                    )
                 }
                 VerticalClueType::OneMatchesEither => {
-                    let template =
-                        "{t0} is either in the same column as {t1} or {t2}, but not both.";
-                    desc_box.append(&self.parse_template(&template, clue_data));
+                    format!(
+                        "{{{}}} is either in the same column as {{{}}} or {{{}}}, but not both.",
+                        clue_data.clue.assertions[0].tile.to_string(),
+                        clue_data.clue.assertions[1].tile.to_string(),
+                        clue_data.clue.assertions[2].tile.to_string()
+                    )
                 }
             },
-        }
+        };
 
+        desc_box.append(&self.parse_template(&template));
         tooltip_box.append(&desc_box);
 
         tooltip_box

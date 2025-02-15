@@ -17,6 +17,7 @@ mod seed_dialog;
 mod settings_menu_ui;
 mod stats_dialog;
 mod submit_ui;
+mod template;
 mod timer_button_ui;
 mod top_level_input_event_monitor;
 mod window;
