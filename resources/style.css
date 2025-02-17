@@ -201,3 +201,11 @@ image {
     font-size: 18px;
     font-weight: bold;
 }
+
+#tutorial-box {
+    border: 1px solid #777;
+    color: white;
+    background-color: black;
+    padding: 5px;
+    margin: 0px 0;
+}

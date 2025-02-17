@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    game::clue_constraint::{create_clue_constraint, ClueConstraint},
+    game::clue_constraint::create_clue_constraint,
     model::{
-        Clue, ClueType, Deduction, GameBoard, HorizontalClueType, PartialSolution, Tile,
+        Clue, ClueType, Deduction, DeductionKind, GameBoard, HorizontalClueType, Tile,
         TileAssertion, VerticalClueType,
     },
 };
@@ -91,24 +91,24 @@ fn synthesize_deductions(
         // If only one position is possible, make a positive deduction
         if possible.len() == 1 {
             let column = possible.iter().next().unwrap();
-            deductions.insert(Deduction {
-                tile_assertion: TileAssertion {
+            deductions.insert(Deduction::new(
+                *column,
+                TileAssertion {
                     tile: tile.clone(),
                     assertion: true,
                 },
-                column: *column,
-            });
+            ));
         } else {
             // Make negative deductions for impossible columns
             for col in 0..board_width {
                 if !possible.contains(&col) {
-                    deductions.insert(Deduction {
-                        tile_assertion: TileAssertion {
+                    deductions.insert(Deduction::new(
+                        col,
+                        TileAssertion {
                             tile: tile.clone(),
                             assertion: false,
                         },
-                        column: col,
-                    });
+                    ));
                 }
             }
         }
@@ -120,7 +120,7 @@ fn synthesize_deductions(
         .collect()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Coordinates {
     pub row: usize,
     pub column: usize,
@@ -132,6 +132,12 @@ impl std::fmt::Debug for Coordinates {
     }
 }
 
+impl Coordinates {
+    pub fn new(row: usize, column: usize) -> Self {
+        Self { row, column }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct CellSolutionAssertion {
     pub positive_variants: HashSet<char>,
@@ -140,8 +146,8 @@ pub struct CellSolutionAssertion {
     pub negative_count: usize,
 }
 
-fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
-    let handler = create_clue_constraint(clue);
+fn deduce_clue_with_candidate_finder(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
+    let solution_candidate_finder = create_clue_constraint(clue);
     let board_width = board.solution.n_variants;
     let mut deductions = HashSet::new();
     let mut possible_solutions: Vec<Vec<(usize, TileAssertion)>> = Vec::new();
@@ -149,11 +155,11 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
     trace!(
         target: "solver",
         "Deducing clue with handler: {:?}",
-        handler
+        solution_candidate_finder
     );
 
     for column in 0..board_width {
-        let solutions = handler.potential_solutions(board, column);
+        let solutions = solution_candidate_finder.potential_solutions(board, column);
         trace!(
             target: "solver",
             "Found {:?} solutions for column {}",
@@ -172,10 +178,11 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
         // this is the solution
         let solution = &possible_solutions[0];
         for (column, tile_assertion) in solution {
-            deductions.insert(Deduction {
-                tile_assertion: tile_assertion.clone(),
-                column: *column,
-            });
+            deductions.insert(Deduction::new_with_kind(
+                *column,
+                tile_assertion.clone(),
+                DeductionKind::LastRemaining,
+            ));
         }
     } else {
         // For each coordinate in possible solutions,
@@ -240,13 +247,14 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                             // all possible solutions point to this square, all other variants cannot be here
                             for variant in board.solution.variants.iter() {
                                 if !cell_solution_assertion.positive_variants.contains(variant) {
-                                    deductions.insert(Deduction {
-                                        tile_assertion: TileAssertion {
+                                    deductions.insert(Deduction::new_with_kind(
+                                        col,
+                                        TileAssertion {
                                             tile: Tile::new(row, *variant),
                                             assertion: false,
                                         },
-                                        column: col,
-                                    });
+                                        DeductionKind::Converging,
+                                    ));
                                 }
                             }
                         }
@@ -259,13 +267,14 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                         );
                         // all negative solutions point to this square, negative variants can't be here.
                         for variant in cell_solution_assertion.negative_variants.iter() {
-                            deductions.insert(Deduction {
-                                tile_assertion: TileAssertion {
+                            deductions.insert(Deduction::new_with_kind(
+                                col,
+                                TileAssertion {
                                     tile: Tile::new(row, *variant),
                                     assertion: false,
                                 },
-                                column: col,
-                            });
+                                DeductionKind::Converging,
+                            ));
                         }
                     } else {
                         trace!(
@@ -279,13 +288,14 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                             if !cell_solution_assertion.positive_variants.contains(variant)
                                 && row_positive_assertion_varants.contains(variant)
                             {
-                                deductions.insert(Deduction {
-                                    tile_assertion: TileAssertion {
+                                deductions.insert(Deduction::new_with_kind(
+                                    col,
+                                    TileAssertion {
                                         tile: Tile::new(row, *variant),
                                         assertion: false,
                                     },
-                                    column: col,
-                                });
+                                    DeductionKind::Constraint,
+                                ));
                             }
                         }
                         continue;
@@ -299,13 +309,14 @@ fn deduce_clue_with_handler(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
                     );
                     // deduct all positive assertion from this row, they can't possibly be here
                     row_positive_assertion_varants.iter().for_each(|variant| {
-                        deductions.insert(Deduction {
-                            tile_assertion: TileAssertion {
+                        deductions.insert(Deduction::new_with_kind(
+                            col,
+                            TileAssertion {
                                 tile: Tile::new(row, *variant),
                                 assertion: false,
                             },
-                            column: col,
-                        });
+                            DeductionKind::Constraint,
+                        ));
                     });
                 }
             }
@@ -416,13 +427,14 @@ pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction
                 // not in hidden set, but on board? get rid of it.
                 for not_in_set_variant in hidden_set_inverse.iter() {
                     if board.is_candidate_available(row, column, *not_in_set_variant) {
-                        deductions.push(Deduction {
-                            tile_assertion: TileAssertion {
+                        deductions.push(Deduction::new_with_kind(
+                            column,
+                            TileAssertion {
                                 tile: Tile::new(row, *not_in_set_variant),
                                 assertion: false,
                             },
-                            column,
-                        });
+                            DeductionKind::HiddenSet,
+                        ));
                     }
                 }
             } else {
@@ -431,13 +443,13 @@ pub fn deduce_hidden_sets_in_row(board: &GameBoard, row: usize) -> Vec<Deduction
                     // eliminate hidden variants from columns not part of set
                     if board.is_candidate_available(row, column, *hidden_set_variant) {
                         // remove it! you don't belong here
-                        deductions.push(Deduction {
-                            tile_assertion: TileAssertion {
+                        deductions.push(Deduction::new(
+                            column,
+                            TileAssertion {
                                 tile: Tile::new(row, *hidden_set_variant),
                                 assertion: false,
                             },
-                            column,
-                        });
+                        ));
                     }
                 }
             }
@@ -456,26 +468,28 @@ pub fn deduce_clue(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
     let tiles = clue.assertions.iter().map(|a| a.tile).collect::<Vec<_>>();
     match &clue.clue_type {
         ClueType::Horizontal(HorizontalClueType::ThreeAdjacent) => {
-            deduce_clue_with_handler(board, &clue)
+            deduce_clue_with_candidate_finder(board, &clue)
         }
 
         ClueType::Horizontal(HorizontalClueType::TwoAdjacent) => {
-            return deduce_clue_with_handler(board, &clue);
+            return deduce_clue_with_candidate_finder(board, &clue);
         }
 
         ClueType::Horizontal(HorizontalClueType::TwoApartNotMiddle) => {
-            deduce_clue_with_handler(board, &clue)
+            deduce_clue_with_candidate_finder(board, &clue)
         }
 
-        ClueType::Horizontal(HorizontalClueType::LeftOf) => deduce_clue_with_handler(board, &clue),
+        ClueType::Horizontal(HorizontalClueType::LeftOf) => {
+            deduce_clue_with_candidate_finder(board, &clue)
+        }
 
         ClueType::Horizontal(HorizontalClueType::NotAdjacent) => {
-            deduce_clue_with_handler(board, &clue)
+            deduce_clue_with_candidate_finder(board, &clue)
         }
 
         ClueType::Vertical(VerticalClueType::ThreeInColumn)
         | ClueType::Vertical(VerticalClueType::TwoInColumn) => {
-            deduce_clue_with_handler(board, &clue)
+            deduce_clue_with_candidate_finder(board, &clue)
         }
 
         ClueType::Vertical(VerticalClueType::OneMatchesEither) => {
@@ -483,11 +497,11 @@ pub fn deduce_clue(board: &GameBoard, clue: &Clue) -> Vec<Deduction> {
         }
 
         ClueType::Vertical(VerticalClueType::NotInSameColumn) => {
-            deduce_clue_with_handler(board, &clue)
+            deduce_clue_with_candidate_finder(board, &clue)
         }
 
         ClueType::Vertical(VerticalClueType::TwoInColumnWithout) => {
-            deduce_clue_with_handler(board, &clue)
+            deduce_clue_with_candidate_finder(board, &clue)
         }
     }
 }
@@ -562,13 +576,14 @@ mod tests {
             "Deductions: {:?}",
             deductions
         );
+        println!("Deductions: {:?}", deductions);
 
         // We expect to only deduce the edges as not possible.
         assert_eq!(deductions.len(), 4);
-        assert!(deductions.contains(&Deduction::parse("0b not col 0")));
-        assert!(deductions.contains(&Deduction::parse("0b not col 3")));
-        assert!(deductions.contains(&Deduction::parse("0d not col 1")));
-        assert!(deductions.contains(&Deduction::parse("0d not col 2")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 0 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 3 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("0d not col 1 (Converging)")));
+        assert!(deductions.contains(&Deduction::parse("0d not col 2 (Converging)")));
     }
 
     #[test_context(UsingLogger)]
@@ -598,9 +613,9 @@ mod tests {
             deductions
         );
         assert_eq!(deductions.len(), 3);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
-        assert!(deductions.contains(&Deduction::parse("1a not col 1")));
-        assert!(deductions.contains(&Deduction::parse("1a not col 3")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 1 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 3 (Constraint)")));
     }
 
     #[test]
@@ -621,8 +636,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0b is col 1")));
-        assert!(deductions.contains(&Deduction::parse("1a is col 2")));
+        assert!(deductions.contains(&Deduction::parse("0b is col 1 (LastRemaining)")));
+        assert!(deductions.contains(&Deduction::parse("1a is col 2 (LastRemaining)")));
     }
 
     #[test]
@@ -643,7 +658,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0 (Constraint)")));
     }
 
     #[test]
@@ -664,7 +679,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1a is col 1")));
+        assert!(deductions.contains(&Deduction::parse("1a is col 1 (LastRemaining)")));
     }
 
     #[test]
@@ -707,8 +722,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a is col 3")));
-        assert!(deductions.contains(&Deduction::parse("1a is col 1")));
+        assert!(deductions.contains(&Deduction::parse("0a is col 3 (LastRemaining)")));
+        assert!(deductions.contains(&Deduction::parse("1a is col 1 (LastRemaining)")));
     }
 
     #[test]
@@ -730,7 +745,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2 (Constraint)")));
     }
 
     #[test]
@@ -748,8 +763,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
-        assert!(deductions.contains(&Deduction::parse("1b not col 0")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1b not col 0 (Constraint)")));
     }
 
     #[test]
@@ -767,8 +782,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
-        assert!(deductions.contains(&Deduction::parse("1a not col 1")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 1 (Constraint)")));
     }
 
     #[test]
@@ -786,8 +801,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
-        assert!(deductions.contains(&Deduction::parse("1a not col 1")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 1 (Constraint)")));
     }
 
     #[test]
@@ -824,16 +839,16 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
-        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0 (Converging)")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2 (Converging)")));
 
         let clue = Clue::not_adjacent(Tile::new(1, 'a'), Tile::new(0, 'a'));
 
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1a not col 0")));
-        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 0 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2 (Constraint)")));
     }
 
     #[test]
@@ -852,7 +867,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("0a is col 3")));
+        assert!(deductions.contains(&Deduction::parse("0a is col 3 (LastRemaining)")));
     }
 
     #[test]
@@ -893,8 +908,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1b is col 2")));
-        assert!(deductions.contains(&Deduction::parse("2c is col 2")));
+        assert!(deductions.contains(&Deduction::parse("1b is col 2 (LastRemaining)")));
+        assert!(deductions.contains(&Deduction::parse("2c is col 2 (LastRemaining)")));
     }
 
     #[test]
@@ -916,10 +931,10 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 4);
-        assert!(deductions.contains(&Deduction::parse("0a not col 0")));
-        assert!(deductions.contains(&Deduction::parse("1a not col 2")));
-        assert!(deductions.contains(&Deduction::parse("2a not col 0")));
-        assert!(deductions.contains(&Deduction::parse("2a not col 2")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 0 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1a not col 2 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("2a not col 0 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("2a not col 2 (Constraint)")));
     }
 
     #[test]
@@ -962,8 +977,8 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a not col 2")));
-        assert!(deductions.contains(&Deduction::parse("2c not col 2")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 2 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("2c not col 2 (Constraint)")));
     }
 
     #[test]
@@ -985,7 +1000,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("2c is col 2")));
+        assert!(deductions.contains(&Deduction::parse("2c is col 2 (LastRemaining)")));
     }
 
     #[test]
@@ -1023,8 +1038,9 @@ mod tests {
             Clue::one_matches_either(Tile::new(0, 'a'), Tile::new(1, 'b'), Tile::new(2, 'c'));
 
         let deductions = deduce_clue(&board, &clue);
+        println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("2c is col 1")));
+        assert!(deductions.contains(&Deduction::parse("2c is col 1 (LastRemaining)")));
     }
 
     #[test]
@@ -1084,14 +1100,11 @@ mod tests {
 
         let deductions = deduce_hidden_sets(&board);
         println!("Deductions: {:?}", deductions);
-        for deduction in &deductions {
-            println!("Deduction: {:?}", deduction);
-        }
         assert_eq!(deductions.len(), 4);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
-        assert!(deductions.contains(&Deduction::parse("0b not col 3")));
-        assert!(deductions.contains(&Deduction::parse("0a not col 2")));
-        assert!(deductions.contains(&Deduction::parse("0b not col 2")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3 (HiddenSet)")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 3 (HiddenSet)")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 2 (HiddenSet)")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 2 (HiddenSet)")));
     }
 
     #[test]
@@ -1111,8 +1124,8 @@ mod tests {
 
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
-        assert!(deductions.contains(&Deduction::parse("1b not col 0")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1b not col 0 (Constraint)")));
     }
 
     #[test]
@@ -1131,8 +1144,8 @@ mod tests {
 
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 2);
-        assert!(deductions.contains(&Deduction::parse("1b not col 0")));
-        assert!(deductions.contains(&Deduction::parse("1b not col 1")));
+        assert!(deductions.contains(&Deduction::parse("1b not col 0 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("1b not col 1 (Constraint)")));
     }
 
     #[test]
@@ -1151,7 +1164,7 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 1);
-        assert!(deductions.contains(&Deduction::parse("1b is col 3")));
+        assert!(deductions.contains(&Deduction::parse("1b is col 3 (LastRemaining)")));
     }
 
     #[test_context(UsingLogger)]
@@ -1171,11 +1184,12 @@ mod tests {
         let deductions = deduce_clue(&board, &clue);
         println!("Deductions: {:?}", deductions);
         assert_eq!(deductions.len(), 6);
-        assert!(deductions.contains(&Deduction::parse("0c not col 1")));
-        assert!(deductions.contains(&Deduction::parse("0d not col 1")));
-        assert!(deductions.contains(&Deduction::parse("0a not col 2")));
-        assert!(deductions.contains(&Deduction::parse("0b not col 2")));
-        assert!(deductions.contains(&Deduction::parse("0a not col 3")));
-        assert!(deductions.contains(&Deduction::parse("0b not col 3")));
+        assert!(deductions.contains(&Deduction::parse("0c not col 1 (Converging)")));
+        assert!(deductions.contains(&Deduction::parse("0d not col 1 (Converging)")));
+
+        assert!(deductions.contains(&Deduction::parse("0a not col 2 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 2 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("0a not col 3 (Constraint)")));
+        assert!(deductions.contains(&Deduction::parse("0b not col 3 (Constraint)")));
     }
 }

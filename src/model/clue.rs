@@ -232,9 +232,21 @@ impl Clue {
     }
 
     pub fn three_in_column(t1: Tile, t2: Tile, t3: Tile) -> Self {
-        assert_ne!(t1.row, t2.row, "Tiles must be in different rows");
-        assert_ne!(t1.row, t3.row, "Tiles must be in different rows");
-        assert_ne!(t2.row, t3.row, "Tiles must be in different rows");
+        assert_ne!(
+            t1.row, t2.row,
+            "Tiles must be in different rows {} {}",
+            t1, t2
+        );
+        assert_ne!(
+            t1.row, t3.row,
+            "Tiles must be in different rows {} {}",
+            t1, t3
+        );
+        assert_ne!(
+            t2.row, t3.row,
+            "Tiles must be in different rows {} {}",
+            t2, t3
+        );
         let mut assertions = vec![
             TileAssertion {
                 tile: t1,
@@ -690,6 +702,102 @@ impl Clue {
             }
             ClueType::Vertical(VerticalClueType::NotInSameColumn) => None,
             _ => Some(self.clone()),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        // Create a temporary UI just for parsing templates
+        match &self.clue_type {
+            ClueType::Horizontal(horiz) => match horiz {
+                HorizontalClueType::TwoAdjacent | HorizontalClueType::ThreeAdjacent => {
+                    // Create template string with tiles and description
+                    let mut template = String::new();
+                    for (i, assertion) in self.assertions.iter().enumerate() {
+                        if i > 0 {
+                            template.push(' ');
+                        }
+                        template.push_str(&format!("{{tile:{}}}", assertion.tile.to_string()));
+                    }
+                    template.push_str(" are adjacent (forward, backward).");
+                    template
+                }
+                HorizontalClueType::TwoApartNotMiddle => {
+                    format!("{{tile:{}}} is two away from {{tile:{}}}, without {{tile:{}}} in the middle (forward, backward).",
+                        self.assertions[0].tile.to_string(),
+                        self.assertions[2].tile.to_string(),
+                        self.assertions[1].tile.to_string()
+                    )
+                }
+                HorizontalClueType::LeftOf => {
+                    format!(
+                        "{{tile:{}}} is left of {{tile:{}}} (any number of tiles in between).",
+                        self.assertions[0].tile.to_string(),
+                        self.assertions[1].tile.to_string()
+                    )
+                }
+                HorizontalClueType::NotAdjacent => {
+                    format!(
+                        "{{tile:{}}} is not next to {{tile:{}}} (forward, backward).",
+                        self.assertions[0].tile.to_string(),
+                        self.assertions[1].tile.to_string()
+                    )
+                }
+            },
+            ClueType::Vertical(vert) => match vert {
+                VerticalClueType::ThreeInColumn | VerticalClueType::TwoInColumn => {
+                    let mut template = String::new();
+                    for (i, assertion) in self.assertions.iter().enumerate() {
+                        if i > 0 {
+                            template.push(' ');
+                        }
+                        template.push_str(&format!("{{tile:{}}}", assertion.tile.to_string()));
+                    }
+                    template.push_str(" are in the same column.");
+                    template
+                }
+                VerticalClueType::TwoInColumnWithout => {
+                    let clue_assertions: Vec<(usize, &TileAssertion)> =
+                        self.assertions.iter().enumerate().collect();
+
+                    let positive_assertion_positions = clue_assertions
+                        .iter()
+                        .filter(|(_, ta)| ta.assertion)
+                        .map(|(_, ta)| ta.tile.to_string())
+                        .collect::<Vec<_>>();
+
+                    let negative_assertion_positions = clue_assertions
+                        .iter()
+                        .filter(|(_, ta)| !ta.assertion)
+                        .map(|(_, ta)| ta.tile.to_string())
+                        .collect::<Vec<_>>();
+
+                    assert!(positive_assertion_positions.len() == 2);
+                    assert!(negative_assertion_positions.len() == 1);
+
+                    format!(
+                        "{{tile:{}}} and {{tile:{}}} are in the same column, but {{tile:{}}} isn't.",
+                        positive_assertion_positions[0],
+                        positive_assertion_positions[1],
+                        negative_assertion_positions[0],
+                    )
+                }
+
+                VerticalClueType::NotInSameColumn => {
+                    format!(
+                        "{{tile:{}}} is not in the same column as {{tile:{}}}",
+                        self.assertions[0].tile.to_string(),
+                        self.assertions[1].tile.to_string()
+                    )
+                }
+                VerticalClueType::OneMatchesEither => {
+                    format!(
+                        "{{tile:{}}} is either in the same column as {{tile:{}}} or {{tile:{}}}, but not both.",
+                        self.assertions[0].tile.to_string(),
+                        self.assertions[1].tile.to_string(),
+                        self.assertions[2].tile.to_string()
+                    )
+                }
+            },
         }
     }
 }

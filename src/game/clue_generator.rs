@@ -7,7 +7,7 @@ use log::{info, trace, warn};
 use std::{collections::BTreeSet, rc::Rc};
 
 use crate::{
-    game::solver::{perform_evaluation_step, EvaluationStepResult},
+    game::candidate_solver::{perform_evaluation_step, EvaluationStepResult},
     model::{Clue, ClueSet, Difficulty, GameBoard, Tile},
 };
 

@@ -26,7 +26,7 @@ pub use clue::{Clue, ClueType, HorizontalClueType, VerticalClueType};
 pub use clue_address::ClueAddress;
 pub use clue_orientation::ClueOrientation;
 pub use clue_set::ClueSet;
-pub use deduction::Deduction;
+pub use deduction::{Deduction, DeductionKind};
 pub use difficulty::Difficulty;
 pub use game_action_event::GameActionEvent;
 pub use game_board::GameBoard;

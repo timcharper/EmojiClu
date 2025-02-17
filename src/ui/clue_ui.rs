@@ -4,20 +4,14 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
+use crate::model::ClueOrientation;
+use crate::model::LayoutConfiguration;
 use crate::model::{Clickable, ClueWithAddress, InputEvent};
 use crate::model::{Clue, ClueSelection, CluesSizing};
-use crate::model::{ClueOrientation, TileAssertion};
-use crate::model::{ClueType, HorizontalClueType, LayoutConfiguration, VerticalClueType};
 use crate::ui::clue_tile_ui::ClueTileUI;
 use crate::ui::register_left_click_handler;
 use crate::ui::template::TemplateParser;
 use crate::ui::ImageSet;
-
-#[derive(Debug)]
-enum TemplateElement {
-    Label(String),
-    Tile(usize),
-}
 
 const NEW_GROUP_CSS_CLASS: &str = "new-group";
 
@@ -251,8 +245,8 @@ impl ClueUI {
     }
 
     fn parse_template(&self, template: &str) -> Box {
-        let parser = TemplateParser::new(self.resources.clone());
-        parser.parse_template(template)
+        let parser = TemplateParser::new(self.resources.clone(), None);
+        parser.parse_as_box(template)
     }
 
     fn create_tooltip_widget(&self) -> Box {
@@ -277,100 +271,7 @@ impl ClueUI {
 
         // Add description with example
         let desc_box = Box::new(Orientation::Horizontal, 5);
-
-        // Create a temporary UI just for parsing templates
-        let template = match &clue_data.clue.clue_type {
-            ClueType::Horizontal(horiz) => match horiz {
-                HorizontalClueType::TwoAdjacent | HorizontalClueType::ThreeAdjacent => {
-                    // Create template string with tiles and description
-                    let mut template = String::new();
-                    for (i, assertion) in clue_data.clue.assertions.iter().enumerate() {
-                        if i > 0 {
-                            template.push(' ');
-                        }
-                        template.push_str(&format!("{{{}}}", assertion.tile.to_string()));
-                    }
-                    template.push_str(" are adjacent (forward, backward).");
-                    template
-                }
-                HorizontalClueType::TwoApartNotMiddle => {
-                    format!("{{{}}} is two away from {{{}}}, without {{{}}} in the middle (forward, backward).",
-                        clue_data.clue.assertions[0].tile.to_string(),
-                        clue_data.clue.assertions[2].tile.to_string(),
-                        clue_data.clue.assertions[1].tile.to_string()
-                    )
-                }
-                HorizontalClueType::LeftOf => {
-                    format!(
-                        "{{{}}} is left of {{{}}} (any number of tiles in between).",
-                        clue_data.clue.assertions[0].tile.to_string(),
-                        clue_data.clue.assertions[1].tile.to_string()
-                    )
-                }
-                HorizontalClueType::NotAdjacent => {
-                    format!(
-                        "{{{}}} is not next to {{{}}} (forward, backward).",
-                        clue_data.clue.assertions[0].tile.to_string(),
-                        clue_data.clue.assertions[1].tile.to_string()
-                    )
-                }
-            },
-            ClueType::Vertical(vert) => match vert {
-                VerticalClueType::ThreeInColumn | VerticalClueType::TwoInColumn => {
-                    let mut template = String::new();
-                    for (i, assertion) in clue_data.clue.assertions.iter().enumerate() {
-                        if i > 0 {
-                            template.push(' ');
-                        }
-                        template.push_str(&format!("{{{}}}", assertion.tile.to_string()));
-                    }
-                    template.push_str(" are in the same column.");
-                    template
-                }
-                VerticalClueType::TwoInColumnWithout => {
-                    let clue_assertions: Vec<(usize, &TileAssertion)> =
-                        clue_data.clue.assertions.iter().enumerate().collect();
-
-                    let positive_assertion_positions = clue_assertions
-                        .iter()
-                        .filter(|(_, ta)| ta.assertion)
-                        .map(|(_, ta)| ta.tile.to_string())
-                        .collect::<Vec<_>>();
-
-                    let negative_assertion_positions = clue_assertions
-                        .iter()
-                        .filter(|(_, ta)| !ta.assertion)
-                        .map(|(_, ta)| ta.tile.to_string())
-                        .collect::<Vec<_>>();
-
-                    assert!(positive_assertion_positions.len() == 2);
-                    assert!(negative_assertion_positions.len() == 1);
-
-                    format!(
-                        "{{{}}} and {{{}}} are in the same column, but {{{}}} isn't.",
-                        positive_assertion_positions[0],
-                        positive_assertion_positions[1],
-                        negative_assertion_positions[0],
-                    )
-                }
-
-                VerticalClueType::NotInSameColumn => {
-                    format!(
-                        "{{{}}} is not in the same column as {{{}}}",
-                        clue_data.clue.assertions[0].tile.to_string(),
-                        clue_data.clue.assertions[1].tile.to_string()
-                    )
-                }
-                VerticalClueType::OneMatchesEither => {
-                    format!(
-                        "{{{}}} is either in the same column as {{{}}} or {{{}}}, but not both.",
-                        clue_data.clue.assertions[0].tile.to_string(),
-                        clue_data.clue.assertions[1].tile.to_string(),
-                        clue_data.clue.assertions[2].tile.to_string()
-                    )
-                }
-            },
-        };
+        let template = self.clue.clue.description();
 
         desc_box.append(&self.parse_template(&template));
         tooltip_box.append(&desc_box);

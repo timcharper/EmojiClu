@@ -3,9 +3,16 @@ use std::hash::Hash;
 use log::trace;
 
 use crate::model::{
-    Clue, ClueType, GameBoard, HorizontalClueType, PartialSolution, Tile, TileAssertion,
-    VerticalClueType,
+    Clue, ClueType, Difficulty, GameBoard, HorizontalClueType, PartialSolution, Tile,
+    TileAssertion, VerticalClueType,
 };
+
+/// Unary constraint trait: relates one tile.
+pub trait UnaryConstraint: std::fmt::Debug {
+    fn var(&self) -> Tile;
+    fn valid(&self, value: usize) -> bool;
+}
+
 /// Binary constraint trait: relates two tiles.
 pub trait BinaryConstraint: std::fmt::Debug {
     /// Returns the two tiles involved in the constraint.
@@ -35,6 +42,31 @@ impl BinaryConstraint for NotInSameColumnConstraint {
 
     fn valid(&self, col_a: usize, col_b: usize) -> bool {
         col_a != col_b
+    }
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct EdgeConstraint {
+    pub tile: Tile,
+    pub difficulty: Difficulty,
+    pub allow_left: bool,
+    pub allow_right: bool,
+}
+
+impl UnaryConstraint for EdgeConstraint {
+    fn var(&self) -> Tile {
+        self.tile
+    }
+
+    fn valid(&self, value: usize) -> bool {
+        let ncols = self.difficulty.n_cols();
+        if !self.allow_left && value <= 0 {
+            return false;
+        }
+        if !self.allow_right && value >= ncols - 1 {
+            return false;
+        }
+        true
     }
 }
 
@@ -160,8 +192,9 @@ impl TernaryConstraint for OneMatchesEitherConstraint {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ConstraintSet {
+    pub unary_constraints: Vec<Box<dyn UnaryConstraint>>,
     pub binary_constraints: Vec<Box<dyn BinaryConstraint>>,
     pub ternary_constraints: Vec<Box<dyn TernaryConstraint>>,
 }
@@ -174,7 +207,7 @@ pub trait ClueConstraint: std::fmt::Debug {
         column: usize,
     ) -> Vec<Vec<(usize, TileAssertion)>>;
 
-    fn constraints(&self) -> ConstraintSet;
+    fn constraints(&self, difficulty: Difficulty) -> ConstraintSet;
 }
 
 #[derive(Clone, Debug)]
@@ -282,14 +315,28 @@ impl ClueConstraint for LeftOfHandler {
         solutions
     }
 
-    fn constraints(&self) -> ConstraintSet {
-        ConstraintSet {
-            binary_constraints: vec![Box::new(LessThanConstraint {
+    fn constraints(&self, difficulty: Difficulty) -> ConstraintSet {
+        let mut constraints = ConstraintSet::default();
+        constraints.unary_constraints.push(Box::new(EdgeConstraint {
+            tile: self.left_tile,
+            difficulty,
+            allow_left: true,
+            allow_right: false,
+        }));
+        constraints.unary_constraints.push(Box::new(EdgeConstraint {
+            tile: self.right_tile,
+            difficulty,
+            allow_left: false,
+            allow_right: true,
+        }));
+
+        constraints
+            .binary_constraints
+            .push(Box::new(LessThanConstraint {
                 tile_a: self.left_tile,
                 tile_b: self.right_tile,
-            })],
-            ternary_constraints: Vec::new(),
-        }
+            }));
+        constraints
     }
 }
 
@@ -365,14 +412,15 @@ impl ClueConstraint for NotAdjacentHandler {
         }
     }
 
-    fn constraints(&self) -> ConstraintSet {
-        ConstraintSet {
-            binary_constraints: vec![Box::new(NotAdjacentConstraint {
+    fn constraints(&self, _difficulty: Difficulty) -> ConstraintSet {
+        let mut constraints = ConstraintSet::default();
+        constraints
+            .binary_constraints
+            .push(Box::new(NotAdjacentConstraint {
                 tile_a: self.positive_tile,
                 tile_b: self.negative_tile,
-            })],
-            ternary_constraints: Vec::new(),
-        }
+            }));
+        constraints
     }
 }
 
@@ -421,11 +469,12 @@ impl ClueConstraint for AdjacentHandler {
         solutions
     }
 
-    fn constraints(&self) -> ConstraintSet {
+    fn constraints(&self, difficulty: Difficulty) -> ConstraintSet {
         let mut constraints = ConstraintSet::default();
         let assertions = &self.clue.assertions;
 
         if assertions.iter().all(|ta| ta.assertion) {
+            // all positive
             for i in 0..assertions.len() {
                 for j in i + 1..assertions.len() {
                     constraints
@@ -436,6 +485,14 @@ impl ClueConstraint for AdjacentHandler {
                             distance: j - i,
                         }));
                 }
+            }
+            if assertions.len() == 3 {
+                constraints.unary_constraints.push(Box::new(EdgeConstraint {
+                    tile: assertions[1].tile,
+                    difficulty,
+                    allow_left: false,
+                    allow_right: false,
+                }));
             }
         } else if assertions.len() == 3 {
             // two apart, not middle
@@ -486,7 +543,7 @@ impl ClueConstraint for AllInColumnHandler {
         }
     }
 
-    fn constraints(&self) -> ConstraintSet {
+    fn constraints(&self, _difficulty: Difficulty) -> ConstraintSet {
         let mut constraints = ConstraintSet::default();
         for i in 0..self.assertions.len() {
             for j in i + 1..self.assertions.len() {
@@ -560,6 +617,7 @@ fn is_partial_solution_valid(board: &GameBoard, solution: &PartialSolution) -> b
     // now, clone the game board, apply the partial solution, see if it results in a valid state
     let mut board_clone = board.clone();
     board_clone.apply_partial_solution(solution);
+    // TODO - would be nice to tag filtered potential solution sets that were reduced due to some of them creating invalid possibilities, as this is a bit of an advanced deduction mechanism.
     let is_valid = board_clone.is_valid_possibility();
     trace!(
         target: "solver",
@@ -593,7 +651,7 @@ impl ClueConstraint for OneMatchesEitherHandler {
         todo!()
     }
 
-    fn constraints(&self) -> ConstraintSet {
+    fn constraints(&self, _difficulty: Difficulty) -> ConstraintSet {
         let mut constraints = ConstraintSet::default();
         constraints
             .ternary_constraints

@@ -148,13 +148,19 @@ impl GameBoard {
         ));
     }
 
+    pub fn get_available_candidates_at_cell(&self, row: usize, col: usize) -> Vec<char> {
+        let mut variants = Vec::new();
+        for variant in self.solution.variants.iter() {
+            if self.is_candidate_available(row, col, *variant) {
+                variants.push(*variant);
+            }
+        }
+        variants
+    }
+
     pub fn is_candidate_available(&self, row: usize, col: usize, variant: char) -> bool {
         let variant_idx = Tile::variant_to_usize(variant);
         (self.resolved_candidates[row][col] & (1 << variant_idx)) != 0
-    }
-
-    pub fn get_variants(&self) -> Vec<char> {
-        self.solution.variants.clone()
     }
 
     pub fn select_tile_at_position(&mut self, col: usize, tile: Tile) {

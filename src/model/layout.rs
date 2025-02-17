@@ -68,5 +68,6 @@ pub struct CluesSizing {
 pub struct LayoutConfiguration {
     pub grid: GridSizing,
     pub clues: CluesSizing,
+    pub tutorial: Dimensions,
     pub scale_factor: I8F8,
 }

@@ -1,268 +1,18 @@
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use log::trace;
 
-use crate::model::{Clue, GameBoard, Tile};
-
-use super::clue_constraint::{
-    create_clue_constraint, BinaryConstraint, NotInSameColumnConstraint, TernaryConstraint,
+use crate::{
+    game::solver_helpers::get_domains_and_constraints,
+    model::{Clue, GameBoard, Tile},
 };
 
-/// A simple Tile type.
-// #[derive(Debug)]
-// /// A work item that the solver must process.
-// enum WorkItem {
-//     Binary {
-//         constraint: Rc<dyn BinaryConstraint>,
-//         x: Tile,
-//         y: Tile,
-//     },
-//     Ternary(Rc<dyn TernaryConstraint>),
-// }
-
-// /// The solver state.
-// /// - `domains` maps each tile to its set of possible column values.
-// /// - `binary_constraints` and `ternary_constraints` store our constraints.
-// struct Solver {
-//     domains: HashMap<Tile, HashSet<usize>>,
-//     binary_constraints: Vec<Rc<dyn BinaryConstraint>>,
-//     ternary_constraints: Vec<Rc<dyn TernaryConstraint>>,
-//     worklist: Vec<WorkItem>,
-// }
-
-// impl Solver {
-//     pub fn new(
-//         domains: HashMap<Tile, HashSet<usize>>,
-//         binary_constraints: Vec<Rc<dyn BinaryConstraint>>,
-//         ternary_constraints: Vec<Rc<dyn TernaryConstraint>>,
-//     ) -> Self {
-//         let mut solver = Self {
-//             domains,
-//             binary_constraints,
-//             ternary_constraints,
-//             worklist: Vec::new(),
-//         };
-//         solver.worklist = solver.initialize_worklist();
-//         solver
-//     }
-
-//     /// Performs a single iteration of constraint propagation.
-//     /// Returns Some((tile, removed_value)) if a reduction was made;
-//     /// otherwise, returns None.
-//     pub fn ac3_iteration(&mut self) -> Option<Deduction> {
-//         while let Some(item) = self.worklist.pop() {
-//             match item {
-//                 WorkItem::Binary { constraint, x, y } => {
-//                     if let Some((tile, col)) = self.process_binary_item(constraint.as_ref(), x, y) {
-//                         return Some(Deduction {
-//                             column: col,
-//                             tile_assertion: TileAssertion {
-//                                 tile,
-//                                 assertion: false,
-//                             },
-//                         });
-//                     }
-//                 }
-//                 WorkItem::Ternary(constraint) => {
-//                     if let Some((tile, col)) = self.process_ternary_item(constraint.as_ref()) {
-//                         return Some(Deduction {
-//                             column: col,
-//                             tile_assertion: TileAssertion {
-//                                 tile,
-//                                 assertion: false,
-//                             },
-//                         });
-//                     }
-//                 }
-//             }
-//         }
-//         None
-//     }
-
-//     /// Builds the initial worklist with all binary (both directions) and ternary constraints.
-//     fn initialize_worklist(&self) -> Vec<WorkItem> {
-//         let mut worklist = Vec::new();
-//         for constraint in &self.binary_constraints {
-//             let (x, y) = constraint.vars();
-//             worklist.push(WorkItem::Binary {
-//                 constraint: Rc::clone(constraint),
-//                 x,
-//                 y,
-//             });
-//             worklist.push(WorkItem::Binary {
-//                 constraint: Rc::clone(constraint),
-//                 x: y,
-//                 y: x,
-//             });
-//         }
-//         for constraint in &self.ternary_constraints {
-//             worklist.push(WorkItem::Ternary(Rc::clone(constraint)));
-//         }
-//         worklist
-//     }
-
-//     /// Processes a single binary work item.
-//     /// For each value in x’s domain, checks for support in y’s domain.
-//     /// If a value is unsupported, it is removed and a reduction is returned.
-//     fn process_binary_item<'a>(
-//         &mut self,
-//         constraint: &dyn BinaryConstraint,
-//         x: Tile,
-//         y: Tile,
-//     ) -> Option<(Tile, usize)> {
-//         let domain_x = self.domains.get(&x).cloned().unwrap_or_default();
-//         for &vx in &domain_x {
-//             let domain_y = self.domains.get(&y).unwrap();
-//             let has_support = domain_y.iter().any(|&vy| constraint.valid(vx, vy));
-//             if !has_support {
-//                 self.domains.get_mut(&x).unwrap().remove(&vx);
-//                 self.enqueue_related_constraints(x);
-//                 return Some((x, vx));
-//             }
-//         }
-//         None
-//     }
-
-//     /// Processes a single ternary work item.
-//     /// For each variable involved in the ternary constraint, and for each of its values,
-//     /// checks whether there exists a valid complete assignment.
-//     /// If not, the value is removed and a reduction is returned.
-//     fn process_ternary_item(
-//         &mut self,
-//         constraint: &dyn TernaryConstraint,
-//     ) -> Option<(Tile, usize)> {
-//         let vars = constraint.vars();
-//         if vars.len() != 3 {
-//             return None;
-//         }
-//         for (i, &tile) in vars.iter().enumerate() {
-//             let domain_tile = self.domains.get(&tile).cloned().unwrap_or_default();
-//             for &val in &domain_tile {
-//                 if !self.has_valid_assignment(constraint, i, val, &vars) {
-//                     self.domains.get_mut(&tile).unwrap().remove(&val);
-//                     self.enqueue_related_constraints(tile);
-//                     return Some((tile, val));
-//                 }
-//             }
-//         }
-//         None
-//     }
-
-//     /// Checks whether, for a ternary constraint, a fixed value for one variable
-//     /// can be extended to a full valid assignment for all three variables.
-//     /// `fixed_index` is the position of the variable in the constraint's variable list,
-//     /// and `fixed_val` is the candidate value.
-//     fn has_valid_assignment(
-//         &self,
-//         constraint: &dyn TernaryConstraint,
-//         fixed_index: usize,
-//         fixed_val: usize,
-//         vars: &Vec<Tile>,
-//     ) -> bool {
-//         // For a ternary constraint, assume exactly 3 variables.
-//         let mut assignment = vec![0; 3];
-//         assignment[fixed_index] = fixed_val;
-//         // Identify the other two variables.
-//         let other_indices: Vec<usize> = (0..3).filter(|&i| i != fixed_index).collect();
-//         let domain0 = self.domains.get(&vars[other_indices[0]]).unwrap();
-//         let domain1 = self.domains.get(&vars[other_indices[1]]).unwrap();
-//         // Iterate over the Cartesian product of the other two domains.
-//         for &val0 in domain0 {
-//             for &val1 in domain1 {
-//                 if fixed_index == 0 {
-//                     assignment[1] = val0;
-//                     assignment[2] = val1;
-//                 } else if fixed_index == 1 {
-//                     assignment[0] = val0;
-//                     assignment[2] = val1;
-//                 } else {
-//                     assignment[0] = val0;
-//                     assignment[1] = val1;
-//                 }
-//                 if constraint.valid(&assignment) {
-//                     return true;
-//                 }
-//             }
-//         }
-//         false
-//     }
-
-//     /// Enqueues all binary and ternary constraints that involve the given tile.
-//     fn enqueue_related_constraints(&mut self, tile: Tile) {
-//         for constraint in &self.binary_constraints {
-//             let (a, b) = constraint.vars();
-//             if a == tile || b == tile {
-//                 self.worklist.push(WorkItem::Binary {
-//                     constraint: Rc::clone(constraint),
-//                     x: a,
-//                     y: b,
-//                 });
-//                 self.worklist.push(WorkItem::Binary {
-//                     constraint: Rc::clone(constraint),
-//                     x: b,
-//                     y: a,
-//                 });
-//             }
-//         }
-//         for constraint in &self.ternary_constraints {
-//             if constraint.vars().contains(&tile) {
-//                 self.worklist.push(WorkItem::Ternary(Rc::clone(constraint)));
-//             }
-//         }
-//     }
-// }
-
-fn get_domains_and_constraints(
-    clue: &Clue,
-    board: &GameBoard,
-) -> (
-    HashMap<Tile, HashSet<usize>>,
-    Vec<Rc<dyn BinaryConstraint>>,
-    Vec<Rc<dyn TernaryConstraint>>,
-) {
-    let mut domains: HashMap<Tile, HashSet<usize>> = HashMap::new();
-    for assertion in clue.assertions.iter() {
-        let possible_cols: HashSet<usize> =
-            board.get_possible_cols_for_tile(assertion.tile).collect();
-        domains.insert(assertion.tile, possible_cols);
-    }
-    let mut binary_constraints: Vec<Rc<dyn BinaryConstraint>> = Vec::new();
-    let mut ternary_constraints: Vec<Rc<dyn TernaryConstraint>> = Vec::new();
-
-    let mut tiles: Vec<Tile> = domains.keys().cloned().collect();
-    tiles.sort_by_key(|tile| domains[tile].len());
-
-    // add binary constraints for board (tiles cannot occupy the same column)
-    for i in 0..tiles.len() {
-        for j in i + 1..tiles.len() {
-            if tiles[i].row == tiles[j].row {
-                binary_constraints.push(Rc::new(NotInSameColumnConstraint {
-                    tile_a: tiles[i],
-                    tile_b: tiles[j],
-                }));
-            }
-        }
-    }
-
-    let clue_constraint_set = create_clue_constraint(clue).constraints();
-    for binary_constraint in clue_constraint_set.binary_constraints {
-        binary_constraints.push(binary_constraint.into());
-    }
-    for ternary_constraint in clue_constraint_set.ternary_constraints {
-        ternary_constraints.push(ternary_constraint.into());
-    }
-
-    (domains, binary_constraints, ternary_constraints)
-}
+use super::clue_constraint::ConstraintSet;
 
 fn possible_violations_for_domain(
-    prior_domains: &HashMap<Tile, usize>,
-    domains: &HashMap<Tile, HashSet<usize>>,
-    binary_constraints: &Vec<Rc<dyn BinaryConstraint>>,
-    ternary_constraints: &Vec<Rc<dyn TernaryConstraint>>,
+    prior_domains: &BTreeMap<Tile, usize>,
+    domains: &BTreeMap<Tile, BTreeSet<usize>>,
+    constraint_set: &ConstraintSet,
     variables: &Vec<Tile>,
 ) -> bool {
     // are we at a leaf?
@@ -273,7 +23,15 @@ fn possible_violations_for_domain(
             prior_domains
         );
         // check all constraints for prior_domains
-        for constraint in binary_constraints {
+        for constraint in constraint_set.unary_constraints.iter() {
+            let variable = constraint.var();
+            let domain = prior_domains[&variable];
+            if !constraint.valid(domain) {
+                return true;
+            }
+        }
+
+        for constraint in constraint_set.binary_constraints.iter() {
             let (a, b) = constraint.vars();
             if prior_domains.contains_key(&a) && prior_domains.contains_key(&b) {
                 let a_domain = prior_domains[&a];
@@ -285,7 +43,7 @@ fn possible_violations_for_domain(
             }
         }
         // check ternary constraints
-        for constraint in ternary_constraints {
+        for constraint in constraint_set.ternary_constraints.iter() {
             let vars = constraint.vars();
             let values: Vec<usize> = vars
                 .iter()
@@ -326,13 +84,7 @@ fn possible_violations_for_domain(
                 continue;
             }
 
-            if possible_violations_for_domain(
-                &new_domains,
-                domains,
-                binary_constraints,
-                ternary_constraints,
-                &rest,
-            ) {
+            if possible_violations_for_domain(&new_domains, domains, constraint_set, &rest) {
                 return true;
             }
         }
@@ -340,9 +92,8 @@ fn possible_violations_for_domain(
     false
 }
 
-pub fn is_clue_completed(clue: &Clue, board: &GameBoard) -> bool {
-    let (domains, binary_constraints, ternary_constraints) =
-        get_domains_and_constraints(clue, board);
+pub fn is_clue_fully_completed(clue: &Clue, board: &GameBoard) -> bool {
+    let (domains, constraint_set) = get_domains_and_constraints(clue, board);
 
     trace!(
         target: "clue_completion_evaluator",
@@ -352,25 +103,15 @@ pub fn is_clue_completed(clue: &Clue, board: &GameBoard) -> bool {
 
     trace!(
         target: "clue_completion_evaluator",
-        "Binary constraints: {:?}",
-        binary_constraints
-    );
-    trace!(
-        target: "clue_completion_evaluator",
-        "Ternary constraints: {:?}",
-        ternary_constraints
+        "constraints: {:?}",
+        constraint_set
     );
 
     let mut variables: Vec<Tile> = domains.keys().cloned().collect();
     variables.sort_by_key(|tile| domains[tile].len());
 
-    let clue_has_violation = possible_violations_for_domain(
-        &HashMap::new(),
-        &domains,
-        &binary_constraints,
-        &ternary_constraints,
-        &variables,
-    );
+    let clue_has_violation =
+        possible_violations_for_domain(&BTreeMap::new(), &domains, &constraint_set, &variables);
 
     !clue_has_violation
 }
@@ -580,14 +321,14 @@ mod tests {
 
         let clue = Clue::parse("<+0a,+0b>");
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
         board.apply_deduction(&Deduction::parse("0a not col 3"));
         println!("Board after deduction: {:?}", board);
         assert!(
-            is_clue_completed(&clue, &board),
+            is_clue_fully_completed(&clue, &board),
             "Clue should be completed now that 0a is not in col 3"
         );
     }
@@ -605,19 +346,19 @@ mod tests {
 
         let clue = Clue::parse("<+0b,-0a>");
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
         board.apply_deduction(&Deduction::parse("0a not col 0"));
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed now that 0a is not in col 0"
         );
 
         board.apply_deduction(&Deduction::parse("0a not col 2"));
         assert!(
-            is_clue_completed(&clue, &board),
+            is_clue_fully_completed(&clue, &board),
             "Clue should be completed now that 0a is not in col 0 and 0b is not in col 2"
         );
     }
@@ -635,13 +376,16 @@ mod tests {
         let mut board = GameBoard::parse(input, create_test_solution(2, 4));
 
         let clue = Clue::parse("<+1a,+0b,+1c>");
-        assert!(is_clue_completed(&clue, &board), "Clue should be completed");
+        assert!(
+            is_clue_fully_completed(&clue, &board),
+            "Clue should be completed"
+        );
 
         board.show_candidate(3, Tile::new(1, 'c'));
 
         println!("Board after showing 1c in col 3: {:?}", board);
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed now that 1c is in col 3"
         );
     }
@@ -657,10 +401,10 @@ mod tests {
 ----------------------
 ";
 
-        let mut board = GameBoard::parse(input, create_test_solution(2, 4));
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
@@ -672,8 +416,11 @@ mod tests {
 ----------------------
 ";
 
-        let mut board = GameBoard::parse(input, create_test_solution(2, 4));
-        assert!(is_clue_completed(&clue, &board), "Clue should be completed");
+        let board = GameBoard::parse(input, create_test_solution(2, 4));
+        assert!(
+            is_clue_fully_completed(&clue, &board),
+            "Clue should be completed"
+        );
     }
 
     #[test_context(UsingLogger)]
@@ -690,7 +437,7 @@ mod tests {
         let board = GameBoard::parse(input, create_test_solution(2, 4));
 
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
@@ -704,13 +451,16 @@ mod tests {
 
         let mut board = GameBoard::parse(input, create_test_solution(2, 4));
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
         // punch out middle
         board.apply_deduction(&Deduction::parse("1b not col 1"));
-        assert!(is_clue_completed(&clue, &board), "Clue should be completed");
+        assert!(
+            is_clue_fully_completed(&clue, &board),
+            "Clue should be completed"
+        );
     }
 
     #[test_context(UsingLogger)]
@@ -729,14 +479,17 @@ mod tests {
         let mut board = GameBoard::parse(input, create_test_solution(3, 4));
 
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
         // complete that last square
 
         board.apply_deduction(&Deduction::parse("2a not col 1"));
-        assert!(is_clue_completed(&clue, &board), "Clue should be completed");
+        assert!(
+            is_clue_fully_completed(&clue, &board),
+            "Clue should be completed"
+        );
     }
 
     #[test_context(UsingLogger)]
@@ -755,14 +508,17 @@ mod tests {
         let mut board = GameBoard::parse(input, create_test_solution(3, 4));
 
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
         // complete that last square
 
         board.apply_deduction(&Deduction::parse("2a not col 0"));
-        assert!(is_clue_completed(&clue, &board), "Clue should be completed");
+        assert!(
+            is_clue_fully_completed(&clue, &board),
+            "Clue should be completed"
+        );
     }
 
     #[test_context(UsingLogger)]
@@ -781,7 +537,7 @@ mod tests {
         let mut board = GameBoard::parse(input, create_test_solution(3, 4));
 
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
@@ -792,7 +548,10 @@ mod tests {
 
         println!("Board after deductions: {:?}", board);
 
-        assert!(is_clue_completed(&clue, &board), "Clue should be completed");
+        assert!(
+            is_clue_fully_completed(&clue, &board),
+            "Clue should be completed"
+        );
     }
 
     #[test_context(UsingLogger)]
@@ -811,7 +570,7 @@ mod tests {
         let mut board = GameBoard::parse(input, create_test_solution(3, 4));
 
         assert!(
-            !is_clue_completed(&clue, &board),
+            !is_clue_fully_completed(&clue, &board),
             "Clue should not be completed"
         );
 
@@ -821,6 +580,9 @@ mod tests {
 
         println!("Board after deductions: {:?}", board);
 
-        assert!(is_clue_completed(&clue, &board), "Clue should be completed");
+        assert!(
+            is_clue_fully_completed(&clue, &board),
+            "Clue should be completed"
+        );
     }
 }

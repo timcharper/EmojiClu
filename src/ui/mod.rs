@@ -20,6 +20,7 @@ mod submit_ui;
 mod template;
 mod timer_button_ui;
 mod top_level_input_event_monitor;
+pub mod tutorial_ui;
 mod window;
 
 pub use clue_panels_ui::CluePanelsUI;

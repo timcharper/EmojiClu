@@ -9,7 +9,9 @@ use log::{info, trace};
 use rand::{seq::IndexedRandom, Rng, RngCore};
 use std::{fmt::Debug, ops::RangeInclusive};
 
-use super::{clue_generator_state::ClueGeneratorState, solver::deduce_hidden_sets_in_row};
+use super::{
+    candidate_solver::deduce_hidden_sets_in_row, clue_generator_state::ClueGeneratorState,
+};
 
 const MAX_BOOST: usize = 100;
 
@@ -261,7 +263,7 @@ impl PuzzleVariant for NarrowingPuzzleVariant {
     fn score_clue(&self, board: &GameBoard, clue: &Clue, deducations: &Vec<Deduction>) -> usize {
         let (base_score, mut boosts) = compute_base_score(board, clue, deducations);
 
-        let middle_col = self.difficulty.grid_size() as f32 / 2.0;
+        let middle_col = self.difficulty.n_cols() as f32 / 2.0;
         // take the average distance of deductions from the center
         // and use that to boost the score
         let avg_distance_from_center = deducations

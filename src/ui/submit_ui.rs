@@ -131,7 +131,7 @@ impl SubmitUI {
                     CompletionDialog::show(submit_ui_moved.borrow().submit_dialog.clone());
                 }
             }
-            GameStateEvent::PuzzleSuccessfullyCompleted(state) => {
+            GameStateEvent::PuzzleCompleted(state) => {
                 submit_ui_moved.borrow().handle_game_completion(state);
             }
             _ => (),

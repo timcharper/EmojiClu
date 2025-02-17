@@ -192,7 +192,7 @@ impl CluePanelsUI {
     }
 
     fn allocate_clue_uis(&mut self, difficulty: Difficulty, clue_set: &ClueSet) {
-        let n_rows = difficulty.grid_size();
+        let n_rows = difficulty.n_rows();
         let clues_per_column = n_rows * 2;
 
         // horizontal clues
@@ -383,7 +383,7 @@ impl CluePanelsUI {
     }
 
     pub fn calc_clues_per_column(difficulty: Difficulty) -> usize {
-        let n_rows = difficulty.grid_size();
+        let n_rows = difficulty.n_rows();
         n_rows * 2
     }
 

@@ -1,6 +1,5 @@
 use fixed::types::I8F8;
 use gdk_pixbuf::{InterpType, Pixbuf};
-use gtk4::gdk::Paintable;
 use gtk4::gdk::Texture;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -21,11 +20,11 @@ pub struct OriginalIcons {
 }
 
 pub struct ScaledIcons {
-    solution_scale_icons: HashMap<(i32, i32), Rc<Paintable>>,
-    candidate_scale_icons: HashMap<(i32, i32), Rc<Paintable>>,
-    scaled_negative_assertion: Rc<Paintable>,
-    scaled_left_of: Rc<Paintable>,
-    scaled_maybe_assertion: Rc<Paintable>,
+    solution_scale_icons: HashMap<(i32, i32), Rc<Texture>>,
+    candidate_scale_icons: HashMap<(i32, i32), Rc<Texture>>,
+    scaled_negative_assertion: Rc<Texture>,
+    scaled_left_of: Rc<Texture>,
+    scaled_maybe_assertion: Rc<Texture>,
 }
 
 pub struct ImageSet {
@@ -88,8 +87,8 @@ impl ImageSet {
         unscaled_solution_tile_size: i32,
         scale_factor: I8F8,
     ) -> ScaledIcons {
-        let mut solution_scale_icons: HashMap<(i32, i32), Rc<Paintable>> = HashMap::new();
-        let mut candidate_scale_icons: HashMap<(i32, i32), Rc<Paintable>> = HashMap::new();
+        let mut solution_scale_icons: HashMap<(i32, i32), Rc<Texture>> = HashMap::new();
+        let mut candidate_scale_icons: HashMap<(i32, i32), Rc<Texture>> = HashMap::new();
 
         let scaled_candidate_tile_size =
             (unscaled_candidate_tile_size as f32 * scale_factor.to_num::<f32>()) as i32;
@@ -160,36 +159,36 @@ impl ImageSet {
         image_set
     }
 
-    fn rescale_icon_from_pixbuf(pixbuf: &Pixbuf, size: u32) -> Paintable {
+    fn rescale_icon_from_pixbuf(pixbuf: &Pixbuf, size: u32) -> Texture {
         let scaled_image = pixbuf
             .scale_simple(size as i32, size as i32, InterpType::Bilinear)
             .expect("Failed to scale icon");
         Texture::for_pixbuf(&scaled_image).into()
     }
 
-    pub fn get_candidate_icon(&self, tile: &Tile) -> Option<Rc<Paintable>> {
+    pub fn get_candidate_icon(&self, tile: &Tile) -> Option<Rc<Texture>> {
         self.scaled_icons
             .candidate_scale_icons
             .get(&(tile.row as i32, tile.variant as i32 - 'a' as i32))
             .cloned()
     }
 
-    pub fn get_solution_icon(&self, tile: &Tile) -> Option<Rc<Paintable>> {
+    pub fn get_solution_icon(&self, tile: &Tile) -> Option<Rc<Texture>> {
         self.scaled_icons
             .solution_scale_icons
             .get(&(tile.row as i32, tile.variant as i32 - 'a' as i32))
             .cloned()
     }
 
-    pub fn get_negative_assertion(&self) -> Rc<Paintable> {
+    pub fn get_negative_assertion(&self) -> Rc<Texture> {
         Rc::clone(&self.scaled_icons.scaled_negative_assertion)
     }
 
-    pub fn get_left_of(&self) -> Rc<Paintable> {
+    pub fn get_left_of(&self) -> Rc<Texture> {
         Rc::clone(&self.scaled_icons.scaled_left_of)
     }
 
-    pub fn get_maybe_assertion(&self) -> Rc<Paintable> {
+    pub fn get_maybe_assertion(&self) -> Rc<Texture> {
         Rc::clone(&self.scaled_icons.scaled_maybe_assertion)
     }
 }

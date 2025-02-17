@@ -3,9 +3,9 @@ use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+use super::candidate_solver::{deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult};
 use super::deduce_clue;
 use super::settings::Settings;
-use super::solver::{deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult};
 use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::model::game_state_snapshot::GameStateSnapshot;
@@ -36,6 +36,15 @@ impl std::fmt::Debug for DeductionResult {
 struct HintStatus {
     history_index: usize,
     hint_level: u8,
+}
+
+impl Default for HintStatus {
+    fn default() -> Self {
+        Self {
+            history_index: usize::MAX,
+            hint_level: 0,
+        }
+    }
 }
 
 pub struct GameState {
@@ -86,10 +95,7 @@ impl GameState {
             debug_mode: Settings::is_debug_mode(),
             history_index: 0,
             hints_used: 0,
-            hint_status: HintStatus {
-                history_index: 0,
-                hint_level: 0,
-            },
+            hint_status: HintStatus::default(),
             current_playthrough_id: Uuid::new_v4(),
             is_paused: false,
             timer_state: TimerState::default(),
@@ -149,6 +155,7 @@ impl GameState {
         self.timer_state = game_state_snapshot.timer_state.resumed();
         self.current_selected_clue = None;
         self.clue_focused = false;
+        self.hint_status = HintStatus::default();
         self.sync_board_display();
         self.game_state_emitter
             .emit(GameStateEvent::HintUsageChanged(self.hints_used));
@@ -244,10 +251,13 @@ impl GameState {
         ));
         // Emit completion state event
         let all_cells_filled = self.current_board.is_complete();
-        self.game_state_emitter
-            .emit(GameStateEvent::PuzzleSubmissionReadyChanged(
-                all_cells_filled,
-            ));
+        if self.get_difficulty() != Difficulty::Tutorial {
+            // we don't want to show submission screen for tutorial
+            self.game_state_emitter
+                .emit(GameStateEvent::PuzzleSubmissionReadyChanged(
+                    all_cells_filled,
+                ));
+        }
         if all_cells_filled {
             self.clue_focused = false;
             self.sync_clue_selection();
@@ -356,12 +366,12 @@ impl GameState {
         if self.current_board.is_complete() {
             if self.current_board.is_incorrect() {
                 self.game_state_emitter
-                    .emit(GameStateEvent::PuzzleSuccessfullyCompleted(
+                    .emit(GameStateEvent::PuzzleCompleted(
                         PuzzleCompletionState::Incorrect,
                     ));
             } else {
                 self.game_state_emitter
-                    .emit(GameStateEvent::PuzzleSuccessfullyCompleted(
+                    .emit(GameStateEvent::PuzzleCompleted(
                         PuzzleCompletionState::Correct(self.get_game_stats()),
                     ));
 
@@ -371,7 +381,7 @@ impl GameState {
             }
         } else {
             self.game_state_emitter
-                .emit(GameStateEvent::PuzzleSuccessfullyCompleted(
+                .emit(GameStateEvent::PuzzleCompleted(
                     PuzzleCompletionState::Incomplete,
                 ));
         }
@@ -515,13 +525,7 @@ impl GameState {
                     // highlight cells
 
                     self.game_state_emitter
-                        .emit(GameStateEvent::CellHintHighlight {
-                            cell: (
-                                first_deduction.tile_assertion.tile.row,
-                                first_deduction.column,
-                            ),
-                            variant: first_deduction.tile_assertion.tile.variant,
-                        });
+                        .emit(GameStateEvent::CellHintHighlight(first_deduction.clone()));
                 }
             }
             return true;

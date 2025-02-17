@@ -1,4 +1,4 @@
-use super::{ClueSet, ClueWithAddress, Difficulty, TimerState};
+use super::{ClueSet, ClueWithAddress, Deduction, Difficulty, TimerState};
 use crate::model::{GameBoard, GameStats};
 use std::rc::Rc;
 
@@ -26,14 +26,11 @@ pub enum GameStateEvent {
         horizontal_hidden_tiles: Vec<usize>,
         vertical_hidden_tiles: Vec<usize>,
     },
-    CellHintHighlight {
-        cell: (usize, usize),
-        variant: char,
-    },
+    CellHintHighlight(Deduction),
     HintUsageChanged(u32),
     TimerStateChanged(TimerState),
     PuzzleSubmissionReadyChanged(bool),
-    PuzzleSuccessfullyCompleted(PuzzleCompletionState),
+    PuzzleCompleted(PuzzleCompletionState),
     ClueHintHighlight(Option<ClueWithAddress>),
     ClueSetUpdate(Rc<ClueSet>, Difficulty),
     ClueSelected(Option<ClueSelection>),

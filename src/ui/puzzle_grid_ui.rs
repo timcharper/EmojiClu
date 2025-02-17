@@ -10,7 +10,7 @@ use crate::{
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
     model::{
-        ClueAddress, ClueWithAddress, GameStateEvent, GlobalEvent, InputEvent,
+        ClueAddress, ClueWithAddress, Difficulty, GameStateEvent, GlobalEvent, InputEvent,
         LayoutConfiguration, Solution,
     },
 };
@@ -31,6 +31,8 @@ pub struct PuzzleGridUI {
     current_focused_clue: Option<ClueWithAddress>,
     completed_clues: HashSet<ClueAddress>,
     current_clue_hint: Option<ClueWithAddress>,
+    current_difficulty: Difficulty,
+    settings: Settings,
 }
 
 impl Destroyable for PuzzleGridUI {
@@ -72,6 +74,8 @@ impl PuzzleGridUI {
             current_focused_clue: None,
             completed_clues: HashSet::new(),
             current_clue_hint: None,
+            current_difficulty: settings.difficulty,
+            settings: settings.clone(),
         }));
 
         // Subscribe to layout changes
@@ -144,9 +148,8 @@ impl PuzzleGridUI {
                 }
             }
             GlobalEvent::SettingsChanged(settings) => {
-                if settings.clue_spotlight_enabled != self.current_spotlight_enabled {
-                    self.set_clue_spotlight_enabled(settings.clue_spotlight_enabled);
-                }
+                self.settings = settings.clone();
+                self.sync_clue_spotlight_enabled();
             }
             _ => (),
         }
@@ -155,6 +158,7 @@ impl PuzzleGridUI {
     fn handle_game_state_event(&mut self, event: &GameStateEvent) {
         match event {
             GameStateEvent::GridUpdate(board) => {
+                self.current_difficulty = board.solution.difficulty;
                 self.set_grid_size(board.solution.n_rows, board.solution.n_variants);
                 for row in 0..board.solution.n_rows {
                     for col in 0..board.solution.n_variants {
@@ -168,7 +172,8 @@ impl PuzzleGridUI {
                                 cell.set_solution(None);
                                 cell.set_candidates(
                                     board
-                                        .get_variants()
+                                        .solution
+                                        .variants
                                         .iter()
                                         .map(|v| board.get_candidate(row, col, *v))
                                         .collect::<Vec<_>>(),
@@ -178,9 +183,14 @@ impl PuzzleGridUI {
                     }
                 }
                 self.completed_clues = board.completed_clues().clone();
+                self.sync_clue_spotlight_enabled();
             }
-            GameStateEvent::CellHintHighlight { cell, variant } => {
-                self.highlight_candidate(cell.0, cell.1, *variant);
+            GameStateEvent::CellHintHighlight(deduction) => {
+                self.highlight_candidate(
+                    deduction.tile_assertion.tile.row,
+                    deduction.column,
+                    deduction.tile_assertion.tile.variant,
+                );
             }
             GameStateEvent::ClueSelected(clue_selection) => {
                 if let Some(clue_selection) = clue_selection {
@@ -234,8 +244,9 @@ impl PuzzleGridUI {
         }
     }
 
-    fn set_clue_spotlight_enabled(&mut self, enabled: bool) {
-        self.current_spotlight_enabled = enabled;
+    fn sync_clue_spotlight_enabled(&mut self) {
+        self.current_spotlight_enabled =
+            self.current_difficulty == Difficulty::Tutorial || self.settings.clue_spotlight_enabled;
         self.sync_spotlight();
     }
 

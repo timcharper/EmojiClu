@@ -36,6 +36,8 @@ const SPACING_LARGE: i32 = 10;
 const SOLUTION_IMG_SIZE: i32 = 128;
 const CANDIDATE_IMG_SIZE: i32 = SOLUTION_IMG_SIZE / 2;
 
+const TUTORIAL_HEIGHT: i32 = 200;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ClueStats {
     pub n_vertical_clues: usize,
@@ -284,8 +286,8 @@ impl LayoutManager {
         difficulty: Difficulty,
         clue_stats: Option<ClueStats>,
     ) -> LayoutConfiguration {
-        let n_variants = difficulty.grid_size();
-        let n_rows = difficulty.grid_size();
+        let n_variants = difficulty.n_cols();
+        let n_rows = difficulty.n_rows();
         let n_horizontal_clues = clue_stats.unwrap_or_default().n_horizontal_clues;
 
         let solution_image = Dimensions {
@@ -305,18 +307,33 @@ impl LayoutManager {
 
         let clue_padding = SPACING_MEDIUM;
 
+        let grid_sizing = LayoutManager::calc_grid_sizing(GridSizingInputs {
+            solution_image: solution_image,
+            candidate_image: candidate_image,
+            n_variants: n_variants as i32,
+            n_rows: n_rows as i32,
+            candidate_spacing: SPACING_SMALL,
+            grid_column_spacing: SPACING_LARGE,
+            grid_row_spacing: SPACING_LARGE,
+            grid_outer_padding: SPACING_MEDIUM,
+        });
+
+        let tutorial = if difficulty == Difficulty::Tutorial {
+            Dimensions {
+                width: grid_sizing.total_dimensions.width,
+                height: TUTORIAL_HEIGHT,
+            }
+        } else {
+            Dimensions {
+                width: 0,
+                height: 0,
+            }
+        };
+
         LayoutConfiguration {
             scale_factor: I8F8::from_num(1),
-            grid: LayoutManager::calc_grid_sizing(GridSizingInputs {
-                solution_image: solution_image,
-                candidate_image: candidate_image,
-                n_variants: n_variants as i32,
-                n_rows: n_rows as i32,
-                candidate_spacing: SPACING_SMALL,
-                grid_column_spacing: SPACING_LARGE,
-                grid_row_spacing: SPACING_LARGE,
-                grid_outer_padding: SPACING_MEDIUM,
-            }),
+            grid: grid_sizing,
+            tutorial,
             clues: CluesSizing {
                 clue_tile_size: Dimensions {
                     width: CANDIDATE_IMG_SIZE,
@@ -362,8 +379,8 @@ impl LayoutManager {
         }
 
         let surface = self.container_dimensions.as_ref().unwrap();
-        let n_variants = self.current_difficulty.grid_size();
-        let n_rows = self.current_difficulty.grid_size();
+        let n_variants = self.current_difficulty.n_cols();
+        let n_rows = self.current_difficulty.n_rows();
 
         // Calculate total required dimensions
         let total_grid_width = base_layout.grid.cell.dimensions.width * n_variants as i32
@@ -395,7 +412,7 @@ impl LayoutManager {
 
         // Calculate scaling factors based on window dimensions
         let available_width = surface.width;
-        let available_height = surface.height;
+        let available_height = surface.height - base_layout.tutorial.height; // don't scale the tutorial height
 
         // Calculate scale factors for both dimensions
         let width_scale = available_width as f32 / total_required_width as f32;
@@ -440,6 +457,21 @@ impl LayoutManager {
             clue_annotation_size: layout.clues.clue_annotation_size.scale_by(scale),
             clue_padding: clue_padding,
         };
+        let grid = LayoutManager::calc_grid_sizing(GridSizingInputs {
+            solution_image: solution_image,
+            candidate_image: candidate_image,
+            n_variants: layout.grid.n_variants,
+            n_rows: layout.grid.n_rows,
+            candidate_spacing: (layout.grid.cell.candidate_spacing as f32 * scale) as i32,
+            grid_column_spacing: (layout.grid.column_spacing as f32 * scale) as i32,
+            grid_row_spacing: (layout.grid.row_spacing as f32 * scale) as i32,
+            grid_outer_padding: (layout.grid.outer_margin as f32 * scale) as i32,
+        });
+
+        let tutorial = Dimensions {
+            width: grid.total_dimensions.width,
+            height: layout.tutorial.height, // we don't resize the height of this box
+        };
 
         LayoutConfiguration {
             scale_factor: self.scale_factor,
@@ -454,6 +486,7 @@ impl LayoutManager {
                 grid_outer_padding: (layout.grid.outer_margin as f32 * scale) as i32,
             }),
             clues: scaled_clues,
+            tutorial,
         }
     }
 

@@ -33,6 +33,7 @@ use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
 use super::puzzle_grid_ui::PuzzleGridUI;
 use super::resource_manager::ResourceManager;
+use super::tutorial_ui::TutorialUI;
 
 const APP_VERSION: &str = env!("APP_VERSION");
 
@@ -197,35 +198,31 @@ pub fn build_ui(app: &Application) {
     let difficulty_label = gtk4::Label::new(Some("Difficulty:"));
     difficulty_box.append(&difficulty_label);
 
-    let difficulty_selector = gtk4::DropDown::from_strings(&[
-        &Difficulty::Easy.to_string(),
-        &Difficulty::Moderate.to_string(),
-        &Difficulty::Hard.to_string(),
-        &Difficulty::Veteran.to_string(),
-    ]);
+    let all_difficulties = Difficulty::all()
+        .iter()
+        .map(|d| d.to_string())
+        .collect::<Vec<String>>();
+
+    let difficulty_selector = gtk4::DropDown::from_strings(
+        all_difficulties
+            .iter()
+            .map(|d| d.as_str())
+            .collect::<Vec<&str>>()
+            .as_slice(),
+    );
+
     difficulty_selector.set_tooltip_text(Some("Select Difficulty"));
     difficulty_box.append(&difficulty_selector);
 
     // Set initial selection based on current settings
     let current_difficulty = settings.borrow().difficulty;
-    difficulty_selector.set_selected(match current_difficulty {
-        Difficulty::Easy => 0,
-        Difficulty::Moderate => 1,
-        Difficulty::Hard => 2,
-        Difficulty::Veteran => 3,
-    });
+    difficulty_selector.set_selected(current_difficulty.index() as u32);
 
     // Handle difficulty changes
     let settings_ref = Rc::clone(&settings);
     let game_action_emitter_new_game = game_action_emitter.clone();
     difficulty_selector.connect_selected_notify(move |selector| {
-        let new_difficulty = match selector.selected() {
-            0 => Difficulty::Easy,
-            1 => Difficulty::Moderate,
-            2 => Difficulty::Hard,
-            3 => Difficulty::Veteran,
-            _ => return,
-        };
+        let new_difficulty = Difficulty::from_index(selector.selected() as usize);
         settings_ref.borrow_mut().difficulty = new_difficulty;
         let _ = settings_ref.borrow().save();
         game_action_emitter_new_game.emit(GameActionEvent::NewGame(new_difficulty, None));
@@ -337,7 +334,6 @@ pub fn build_ui(app: &Application) {
     let puzzle_vertical_box = gtk4::Box::builder()
         .name("puzzle-vertical-box")
         .orientation(Orientation::Vertical)
-        .spacing(10)
         .build();
 
     let game_action_emitter_solve = game_action_emitter.clone();
@@ -368,8 +364,22 @@ pub fn build_ui(app: &Application) {
         .css_classes(["puzzle-mat-board"])
         .child(&puzzle_grid_ui.borrow().grid)
         .build();
+
+    // Instantiate TutorialUI
+    let tutorial_ui = TutorialUI::new(
+        game_state_observer.clone(),
+        game_action_observer.clone(),
+        global_event_observer.clone(),
+        game_action_emitter.clone(),
+        &window,
+        &image_set,
+        &settings.borrow(),
+        &default_layout,
+    );
+
     // Assemble the UI
     puzzle_vertical_box.append(&puzzle_background);
+    puzzle_vertical_box.append(&tutorial_ui.borrow().scrolled_window);
     puzzle_vertical_box.append(&clue_set_ui.borrow().vertical_grid);
     puzzle_vertical_box.set_hexpand(false);
 

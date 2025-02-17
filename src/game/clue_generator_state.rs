@@ -7,7 +7,7 @@ use rand::{
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    game::solver::{perform_evaluation_step, EvaluationStepResult},
+    game::candidate_solver::{perform_evaluation_step, EvaluationStepResult},
     model::{
         Clue, ClueOrientation, ClueType, Deduction, GameBoard, HorizontalClueType, Tile,
         TileAssertion, VerticalClueType,
@@ -268,13 +268,13 @@ impl ClueGeneratorState {
         self.revealed_tiles.insert(tile);
         self.tiles_with_evidence.insert((column, tile));
         self.tiles_without_evidence.remove(&(column, tile));
-        self.update_evidence_from_deduction(&Deduction {
-            tile_assertion: TileAssertion {
+        self.update_evidence_from_deduction(&Deduction::new(
+            column,
+            TileAssertion {
                 tile,
                 assertion: true,
             },
-            column,
-        });
+        ));
         self.record_selections(vec![(column, tile)]);
         let (_, selections) = self.board.auto_solve_all();
         self.record_selections(selections);

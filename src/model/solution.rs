@@ -41,7 +41,7 @@ impl Solution {
     }
 
     pub fn new(difficulty: Difficulty, seed: Option<u64>) -> Self {
-        let n_rows = difficulty.grid_size();
+        let n_rows = difficulty.n_rows();
         let n_variants = n_rows;
 
         if n_rows == 0 || n_variants == 0 {
