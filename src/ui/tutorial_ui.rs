@@ -7,11 +7,19 @@ use gtk4::{
 use log::info;
 
 use crate::{
-    destroyable::Destroyable, events::{EventEmitter, EventObserver, Unsubscriber}, game::{
-        clue_completion_evaluator::is_clue_fully_completed, deduce_clue, settings::Settings, simplify_deductions, ConstraintSolver
-    }, helpers::Capitalize, model::{
-        ClueWithAddress, Deduction, DeductionKind, Difficulty, Dimensions, GameActionEvent, GameBoard, GameStateEvent, GlobalEvent, LayoutConfiguration
-    }, ui::ImageSet
+    destroyable::Destroyable,
+    events::{EventEmitter, EventObserver, Unsubscriber},
+    game::settings::Settings,
+    helpers::Capitalize,
+    model::{
+        ClueWithAddress, Deduction, DeductionKind, Difficulty, Dimensions, GameActionEvent,
+        GameBoard, GameStateEvent, GlobalEvent, LayoutConfiguration,
+    },
+    solver::{
+        clue_completion_evaluator::is_clue_fully_completed, deduce_clue, simplify_deductions,
+        ConstraintSolver,
+    },
+    ui::ImageSet,
 };
 
 use super::template::TemplateParser;
@@ -57,7 +65,7 @@ pub struct TutorialUI {
     settings: Settings,
     current_board: Option<GameBoard>,
     current_clue: Option<ClueWithAddress>,
-    layout: Dimensions
+    layout: Dimensions,
 }
 
 impl Destroyable for TutorialUI {
@@ -241,22 +249,20 @@ impl TutorialUI {
                     _ => {}
                 }
             }
-            GameStateEvent::HistoryChanged { history_index, .. } => {
-                match &self.current_step {
-                    TutorialStep::HintUsagePhase3Oops(cwa, deduction) if *history_index == 0 => {
-                        self.current_step =
-                            TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
-                        self.sync_tutorial_text();
-                    }
-                    TutorialStep::Undo if *history_index == 0 => {
-                        self.game_action_emitter
-                            .emit(GameActionEvent::ClueFocus(None));
-                        self.current_step = TutorialStep::SelectAClue;
-                        self.sync_tutorial_text();
-                    }
-                    _ => {}
+            GameStateEvent::HistoryChanged { history_index, .. } => match &self.current_step {
+                TutorialStep::HintUsagePhase3Oops(cwa, deduction) if *history_index == 0 => {
+                    self.current_step =
+                        TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
+                    self.sync_tutorial_text();
                 }
-            }
+                TutorialStep::Undo if *history_index == 0 => {
+                    self.game_action_emitter
+                        .emit(GameActionEvent::ClueFocus(None));
+                    self.current_step = TutorialStep::SelectAClue;
+                    self.sync_tutorial_text();
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -301,10 +307,8 @@ impl TutorialUI {
             self.scrolled_window.set_visible(false);
         }
         self.tutorial_text.set_width_request(self.layout.width);
-        self.scrolled_window
-            .set_height_request(self.layout.height);
-        self.scrolled_window
-            .set_width_request(self.layout.width);
+        self.scrolled_window.set_height_request(self.layout.height);
+        self.scrolled_window.set_width_request(self.layout.width);
     }
 
     fn reset_tutorial(&mut self) {

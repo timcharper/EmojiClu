@@ -6,8 +6,8 @@ use std::{
 use log::{trace, warn};
 
 use crate::{
-    game::candidate_solver::Coordinates,
     model::{Clue, Deduction, DeductionKind, GameBoard, Tile, TileAssertion},
+    solver::candidate_solver::Coordinates,
 };
 
 use super::{

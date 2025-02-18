@@ -7,8 +7,8 @@ use log::{info, trace, warn};
 use std::{collections::BTreeSet, rc::Rc};
 
 use crate::{
-    game::candidate_solver::{perform_evaluation_step, EvaluationStepResult},
     model::{Clue, ClueSet, Difficulty, GameBoard, Tile},
+    solver::candidate_solver::{perform_evaluation_step, EvaluationStepResult},
 };
 
 use super::deduce_clue;

@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use log::trace;
 
 use crate::{
-    game::solver_helpers::get_domains_and_constraints,
     model::{Clue, GameBoard, Tile},
+    solver::solver_helpers::get_domains_and_constraints,
 };
 
 use super::clue_constraint::ConstraintSet;

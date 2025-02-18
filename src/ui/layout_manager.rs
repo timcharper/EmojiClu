@@ -17,12 +17,12 @@ use log::trace;
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
-    game::clue_generator_state::MAX_HORIZ_CLUES,
     model::{
         ClueSet, CluesSizing, Difficulty, Dimensions, GameActionEvent, GameStateEvent, GlobalEvent,
         GridCellSizing, GridSizing, HorizontalCluePanelSizing, LayoutConfiguration,
         VerticalCluePanelSizing, MAX_GRID_SIZE,
     },
+    solver::clue_generator_state::MAX_HORIZ_CLUES,
 };
 
 use super::clue_panels_ui::CluePanelsUI;

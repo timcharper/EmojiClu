@@ -1,23 +1,9 @@
-pub mod candidate_solver;
-pub mod clue_completion_evaluator;
-mod clue_constraint;
-pub mod clue_generator;
-pub mod clue_generator_state;
-pub mod constraint_solver;
 pub mod game_state;
-pub mod hidden_pair_finder;
-mod puzzle_variants;
 pub mod settings;
 pub mod stats_manager;
-pub use candidate_solver::deduce_clue;
-pub use clue_generator::generate_clues;
-mod solver_helpers;
-
-pub use constraint_solver::ConstraintSolver;
-pub use solver_helpers::simplify_deductions;
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use crate::model::{Difficulty, Solution, Tile, MAX_GRID_SIZE};
     use std::rc::Rc;
 

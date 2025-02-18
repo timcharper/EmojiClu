@@ -15,8 +15,8 @@ use crate::{
     model::{ClueOrientation, ClueSet, GameStateEvent, GlobalEvent, InputEvent},
 };
 use crate::{
-    game::clue_generator_state::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
     model::ClueWithAddress,
+    solver::clue_generator_state::{MAX_HORIZ_CLUES, MAX_VERT_CLUES},
 };
 use crate::{model::Difficulty, ui::ImageSet};
 use crate::{model::LayoutConfiguration, ui::clue_ui::ClueUI};

@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    game::clue_constraint::create_clue_constraint,
     model::{
         Clue, ClueType, Deduction, DeductionKind, GameBoard, HorizontalClueType, Tile,
         TileAssertion, VerticalClueType,
     },
+    solver::clue_constraint::create_clue_constraint,
 };
 use log::trace;
 

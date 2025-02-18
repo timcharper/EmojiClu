@@ -3,8 +3,6 @@ use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use super::candidate_solver::{deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult};
-use super::deduce_clue;
 use super::settings::Settings;
 use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
@@ -14,6 +12,10 @@ use crate::model::{
     GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent, PuzzleCompletionState,
     Solution, TimerState,
 };
+use crate::solver::candidate_solver::{
+    deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult,
+};
+use crate::solver::deduce_clue;
 use std::rc::Rc;
 
 const HINT_LEVEL_MAX: u8 = 1;

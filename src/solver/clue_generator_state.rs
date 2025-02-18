@@ -7,11 +7,11 @@ use rand::{
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    game::candidate_solver::{perform_evaluation_step, EvaluationStepResult},
     model::{
         Clue, ClueOrientation, ClueType, Deduction, GameBoard, HorizontalClueType, Tile,
         TileAssertion, VerticalClueType,
     },
+    solver::candidate_solver::{perform_evaluation_step, EvaluationStepResult},
 };
 
 use super::puzzle_variants::WeightedClueType;

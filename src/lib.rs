@@ -3,6 +3,7 @@ pub mod events;
 pub mod game;
 pub mod helpers;
 pub mod model;
+pub mod solver;
 pub mod ui;
 
 #[cfg(test)]

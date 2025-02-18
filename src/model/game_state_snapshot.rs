@@ -1,8 +1,8 @@
 use log::trace;
 
-use crate::game::clue_generator::ClueGeneratorResult;
-use crate::game::generate_clues;
 use crate::model::{GameBoard, Solution};
+use crate::solver::clue_generator::ClueGeneratorResult;
+use crate::solver::generate_clues;
 use std::path::PathBuf;
 use std::time::SystemTime;
 use std::{fs, rc::Rc};

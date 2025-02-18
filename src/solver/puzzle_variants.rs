@@ -1,9 +1,9 @@
 use crate::{
-    game::deduce_clue,
     model::{
         Clue, ClueType, Deduction, Difficulty, GameBoard, HorizontalClueType, Tile,
         VerticalClueType,
     },
+    solver::candidate_solver::deduce_clue,
 };
 use log::{info, trace};
 use rand::{seq::IndexedRandom, Rng, RngCore};
