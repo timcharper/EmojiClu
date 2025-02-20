@@ -3,7 +3,7 @@ set -x
 BASEPATH="$(realpath $(dirname $0))"
 
 VULKAN_SDK_PATH=${HOME}/.wine-affinity/drive_c/VulkanSDK/1.4.304.0
-GTK_LIB_PATH=${BASEPATH}/bundle/gtk/lib
+GTK_LIB_PATH=${BASEPATH}/packaging/gtk/lib
 TARGET_PATH=${GTK_LIB_PATH}/usr/lib/x86_64-linux-gnu
 mkdir -p ${GTK_LIB_PATH}/usr/lib
 
@@ -11,7 +11,7 @@ ln -sf ${GTK_LIB_PATH} ${GTK_LIB_PATH}/usr/lib/x86_64-linux-gnu
 
 GOBJECT_PKG_CONF=$GTK_LIB_PATH/pkgconfig/gobject-2.0.pc
 
-# Update line prefix=... to prefix=./bundle/gtk
+# Update line prefix=... to prefix=./packaging/gtk
 sed -i "s|^prefix=.*|prefix=${GTK_LIB_PATH}|" $GOBJECT_PKG_CONF
 
 # symlink in the vulkan deps

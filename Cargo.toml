@@ -30,4 +30,4 @@ glib-build-tools = "^0.20.0"
 
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"
-rustflags = ["-L./bundle/gtk/lib", "-L./bundle/gtk/bin"]
+rustflags = ["-L./packaging/gtk/lib", "-L./packaging/gtk/bin"]

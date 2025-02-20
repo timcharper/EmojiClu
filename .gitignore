@@ -26,22 +26,22 @@ compiled.gresource
 # OS specific files
 .DS_Store
 Thumbs.db
-/bundle/gtk
-/bundle/vulkan
-/bundle/mindhunt
-/bundle/*.zip
+/packaging/gtk
+/packaging/vulkan
+/packaging/mindhunt
+/packaging/*.zip
 *.local.*
 *.local
 ./app.res
-/bundle/*.exe
+/packaging/*.exe
 *.tar.xz
 
 
 profile.json.gz
-.flatpak-builder/
 *.deb
-bundle/mindhunt-deb/usr/bin/
-bundle/mindhunt-deb/usr/share/icons/
-bundle/flatpak-repo/
+packaging/mindhunt-deb/usr/bin/
+packaging/mindhunt-deb/usr/share/icons/
+packaging/flatpak/repo/
+packaging/flatpak/builder/
 *.flatpak
-
+.flatpak-builder/
