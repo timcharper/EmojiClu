@@ -455,12 +455,16 @@ Or, press <tt>Ctrl+N</tt> to restart this tutorial."
                     .to_string();
             } else if let Some(selection) = &self.current_clue {
                 let selected_clue_marked_completed = board.is_clue_completed(&selection.address());
-                let simple_deductions = ConstraintSolver::deduce_clue(board, &selection.clue);
+                let deductions = simplify_deductions(
+                    board,
+                    ConstraintSolver::deduce_clue(board, &selection.clue),
+                    &selection.clue,
+                );
 
-                let deductions = if simple_deductions.is_empty() {
-                    simplify_deductions(board, deduce_clue(board, &selection.clue))
+                let deductions = if deductions.is_empty() {
+                    simplify_deductions(board, deduce_clue(board, &selection.clue), &selection.clue)
                 } else {
-                    simple_deductions
+                    deductions
                 };
 
                 if deductions.is_empty() {

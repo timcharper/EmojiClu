@@ -8,7 +8,11 @@ use super::{
 };
 
 // When a set of negative deductions eliminate all but one remaining candidate, convert it to a positive deduction
-pub fn simplify_deductions(board: &GameBoard, deductions: Vec<Deduction>) -> Vec<Deduction> {
+pub fn simplify_deductions(
+    board: &GameBoard,
+    deductions: Vec<Deduction>,
+    clue: &Clue,
+) -> Vec<Deduction> {
     let mut deductions_by_row_and_col: HashMap<Coordinates, Vec<Deduction>> = HashMap::new();
     for deduction in deductions {
         deductions_by_row_and_col
@@ -48,6 +52,25 @@ pub fn simplify_deductions(board: &GameBoard, deductions: Vec<Deduction>) -> Vec
         }
     }
 
+    let clue_tiles: BTreeSet<Tile> = clue
+        .assertions
+        .iter()
+        .map(|assertion| assertion.tile)
+        .collect();
+
+    // prefer tiles in the clue first;
+    new_deductions.sort_by_key(|deduction| {
+        if clue_tiles.contains(&deduction.tile_assertion.tile) {
+            if deduction.is_positive() {
+                // prioritize negative deductions at the front as these are easier to progressively understand
+                1
+            } else {
+                0
+            }
+        } else {
+            10
+        }
+    });
     new_deductions
 }
 
@@ -140,7 +163,8 @@ mod tests {
                 },
             ),
         ];
-        let simplified = simplify_deductions(&board, deductions);
+        let clue = Clue::parse("|+0a,+1a|");
+        let simplified = simplify_deductions(&board, deductions, &clue);
         assert_eq!(simplified.len(), 1);
         assert_eq!(simplified[0].tile_assertion.tile, Tile::new(0, 'd'));
         assert!(simplified[0].is_positive());

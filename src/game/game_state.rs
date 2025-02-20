@@ -1,4 +1,4 @@
-use log::trace;
+use log::{error, trace};
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -15,7 +15,7 @@ use crate::model::{
 use crate::solver::candidate_solver::{
     deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult,
 };
-use crate::solver::deduce_clue;
+use crate::solver::{deduce_clue, simplify_deductions, ConstraintSolver};
 use std::rc::Rc;
 
 const HINT_LEVEL_MAX: u8 = 1;
@@ -448,11 +448,32 @@ impl GameState {
     }
 
     fn find_deductions(&self) -> Option<DeductionResult> {
+        // First, look for obvious deductions using the simpler solver
+        for clue_grouping in self.clue_set.all_clues() {
+            let simple_deductions =
+                ConstraintSolver::deduce_clue(&self.current_board, &clue_grouping.clue);
+            if !simple_deductions.is_empty() {
+                return Some(DeductionResult {
+                    deductions: simplify_deductions(
+                        &self.current_board,
+                        simple_deductions,
+                        &clue_grouping.clue,
+                    ),
+                    clue: Some(clue_grouping.clone()),
+                });
+            }
+        }
+
+        // Scan again using the advanced solver (which emits admittedly less obvious hints)
         for clue_grouping in self.clue_set.all_clues() {
             let deductions = deduce_clue(&self.current_board, &clue_grouping.clue);
             if !deductions.is_empty() {
                 return Some(DeductionResult {
-                    deductions,
+                    deductions: simplify_deductions(
+                        &self.current_board,
+                        deductions,
+                        &clue_grouping.clue,
+                    ),
                     clue: Some(clue_grouping.clone()),
                 });
             }
@@ -466,6 +487,12 @@ impl GameState {
                 clue: None,
             });
         }
+        // Nothing found! Oof.
+        error!(
+            target: "game_state",
+            "No deductions found; seed: {:?}",
+            self.current_board.solution.seed
+        );
         None
     }
 
