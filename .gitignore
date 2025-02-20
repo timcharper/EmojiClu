@@ -39,9 +39,14 @@ Thumbs.db
 
 profile.json.gz
 *.deb
+*.exe
 packaging/mindhunt-deb/usr/bin/
 packaging/mindhunt-deb/usr/share/icons/
 packaging/flatpak/repo/
 packaging/flatpak/builder/
 *.flatpak
 .flatpak-builder/
+packaging/windows/mindhunt/
+packaging/windows/gtk/
+packaging/windows/vulkan/
+packaging/windows/*.zip

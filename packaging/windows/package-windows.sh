@@ -1,8 +1,8 @@
 #!/bin/bash
 set -x
-BASEPATH="$(realpath $(dirname $0))"
-PACKAGE_PATH=${BASEPATH}/packaging
-GTK_PATH=${BASEPATH}/packaging/gtk
+BASEPATH="$(realpath $(dirname $0)/../../)"
+PACKAGE_PATH=${BASEPATH}/packaging/windows
+GTK_PATH=${PACKAGE_PATH}/gtk
 GTK_LIB_PATH=${GTK_PATH}/lib
 
 # rm -rf ${BASEPATH}/bundle/mindhunt

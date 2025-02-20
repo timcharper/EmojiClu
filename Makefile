@@ -10,7 +10,9 @@ VERSION := $(shell cat version.txt)
 clean-packaging:
 	rm -f packaging/*.deb packaging/*.exe packaging/*.tar.xz packaging/*.flatpak
 	rm -f packaging/mindhunt-deb/usr/bin/mindhunt
-	rm -f packaging/mindhunt/bin/mindhunt.exe
+	rm -f packaging/windows/mindhunt/bin/mindhunt.exe
+	rm -rf packaging/flatpak/repo
+	rm -rf packaging/flatpak/builder
 	rm -rf packaging/mindhunt-deb/usr/share/icons/hicolor
 
 clean: clean-packaging
@@ -26,12 +28,12 @@ flatpak: target/release/mindhunt
 
 windows: packaging/mindhunt-installer-$(VERSION).exe
 
-packaging/installer.nsi: version.txt
-	sed -i 's/!define APPVERSION .*/!define APPVERSION $(VERSION)/' packaging/installer.nsi
-	sed -i 's/!define OUTFILE .*/!define OUTFILE mindhunt-installer-$(VERSION).exe/' packaging/installer.nsi
+packaging/windows/installer.nsi: version.txt
+	sed -i 's/!define APPVERSION .*/!define APPVERSION $(VERSION)/' $@
+	sed -i 's/!define OUTFILE .*/!define OUTFILE mindhunt-installer-$(VERSION).exe/' $@
 
 packaging/mindhunt-deb/DEBIAN/control: version.txt
-	sed -i 's/Version: .*/Version: $(shell cat version.txt)/' packaging/mindhunt-deb/DEBIAN/control
+	sed -i 's/Version: .*/Version: $(shell cat version.txt)/' $@
 
 deb: target/release/mindhunt packaging/mindhunt-deb/DEBIAN/control
 	# Copy the executable
@@ -62,14 +64,15 @@ packaging/mindhunt-linux-$(VERSION)-x86_64.tar.xz: target/release/mindhunt
 	cd target/release && tar c mindhunt | xz -7 -T 0 | pv  > ../../$@
 
 target/x86_64-pc-windows-gnu/release/mindhunt.exe: $(RUST_SOURCES) $(RESOURCE_FILES) resources/mindhunt-icon.ico
-	./build-windows.sh
+	./packaging/windows/build-windows.sh
 
-packaging/mindhunt/bin/mindhunt.exe: target/x86_64-pc-windows-gnu/release/mindhunt.exe
-	./package-windows.sh
+packaging/windows/mindhunt/bin/mindhunt.exe: target/x86_64-pc-windows-gnu/release/mindhunt.exe
+	./packaging/windows/package-windows.sh
 
-packaging/mindhunt-installer-$(VERSION).exe: packaging/mindhunt/bin/mindhunt.exe resources/mindhunt-icon.ico packaging/installer.nsi
-	cp resources/mindhunt-icon.ico packaging/mindhunt/icon.ico
-	makensis ./packaging/installer.nsi
+packaging/mindhunt-installer-$(VERSION).exe: packaging/windows/mindhunt/bin/mindhunt.exe resources/mindhunt-icon.ico packaging/windows/installer.nsi
+	cp resources/mindhunt-icon.ico packaging/windows/mindhunt/icon.ico
+	makensis ./packaging/windows/installer.nsi
+	mv packaging/windows/mindhunt-installer-$(VERSION).exe $@
 
 resources/mindhunt-icon.ico: resources/mindhunt-icon.png
 	convert $< -define icon:auto-resize=64,48,32,16 $@
