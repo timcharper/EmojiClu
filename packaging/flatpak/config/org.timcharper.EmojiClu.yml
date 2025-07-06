@@ -5,7 +5,7 @@ runtime-version: "47"
 sdk: org.gnome.Sdk
 command: emojiclu
 tags:
-  - "$(cat version.txt)"
+  - "$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
 finish-args:
   # Allow access to the user's configuration directory
   - --filesystem=xdg-config/emojiclu:create
@@ -16,11 +16,16 @@ finish-args:
 
 modules:
   - name: emojiclu
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      build-args:
+        - --share=network
     sources:
       - type: dir
         path: ../../../
-    buildsystem: simple
     build-commands:
+      - cargo build --release
       - install -D target/release/emojiclu /app/bin/emojiclu
       - install -D target/release/resources/icons/hicolor/16x16/apps/org.timcharper.EmojiClu.png /app/share/icons/hicolor/16x16/apps/org.timcharper.EmojiClu.png
       - install -D target/release/resources/icons/hicolor/24x24/apps/org.timcharper.EmojiClu.png /app/share/icons/hicolor/24x24/apps/org.timcharper.EmojiClu.png
@@ -31,3 +36,6 @@ modules:
       - install -D target/release/resources/icons/hicolor/256x256/apps/org.timcharper.EmojiClu.png /app/share/icons/hicolor/256x256/apps/org.timcharper.EmojiClu.png
       - install -D target/release/resources/icons/hicolor/512x512/apps/org.timcharper.EmojiClu.png /app/share/icons/hicolor/512x512/apps/org.timcharper.EmojiClu.png
       - install -D packaging/flatpak/config/org.timcharper.EmojiClu.desktop /app/share/applications/org.timcharper.EmojiClu.desktop
+    builddeps:
+      - imagemagick
+      - rust-stable

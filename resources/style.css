@@ -209,3 +209,7 @@ image {
     padding: 5px;
     margin: 0px 0;
 }
+
+.tutorial-text {
+    color: #fefefe /* work around strange bug when packaging flathub... specifying white causes initial display to be default */;
+}

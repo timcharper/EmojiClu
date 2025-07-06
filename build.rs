@@ -41,11 +41,7 @@ fn generate_app_icons(source: &Path, target_dir: &Path) {
 }
 
 fn main() {
-    let version_path = Path::new("version.txt");
-    let version = fs::read_to_string(version_path)
-        .unwrap_or_else(|_| "unknown".to_string()) // Fallback if file is missing
-        .trim()
-        .to_string(); // Trim to remove newline
+    let version = env!("CARGO_PKG_VERSION").to_string();
 
     println!("cargo:rustc-env=APP_VERSION={}", version);
 

@@ -3,7 +3,7 @@ SHELL := /bin/bash
 RUST_SOURCES := $(shell find src -name "*.rs")
 RESOURCE_FILES := $(shell find resources -type f)
 
-VERSION := $(shell cat version.txt)
+VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
 
 .PHONY: linux windows deb flatpak clean clean-packaging
 
@@ -22,7 +22,8 @@ linux: artifacts/${VERSION}/emojiclu-linux-$(VERSION)-x86_64.tar.xz
 
 flatpak: artifacts/${VERSION}/emojiclu-$(VERSION).flatpak
 
-artifacts/${VERSION}/emojiclu-$(VERSION).flatpak: target/release/emojiclu
+# we build emojiclu inside of flatpak; the dependency here on target/release/emojiclu is just to save us the effort of building the flatpak if there's a build error.
+artifacts/${VERSION}/emojiclu-$(VERSION).flatpak: target/release/emojiclu packaging/flatpak/config/org.timcharper.EmojiClu.yml
 	mkdir -p artifacts/${VERSION}
 	flatpak-builder --user --install --user --force-clean packaging/flatpak/builder packaging/flatpak/config/org.timcharper.EmojiClu.yml
 	flatpak build-export packaging/flatpak/repo packaging/flatpak/builder master
@@ -31,12 +32,12 @@ artifacts/${VERSION}/emojiclu-$(VERSION).flatpak: target/release/emojiclu
 
 windows: artifacts/${VERSION}/emojiclu-installer-$(VERSION).exe
 
-packaging/windows/installer.nsi: version.txt
+packaging/windows/installer.nsi: Cargo.toml
 	sed -i 's/!define APPVERSION .*/!define APPVERSION $(VERSION)/' $@
 	sed -i 's/!define OUTFILE .*/!define OUTFILE emojiclu-installer-$(VERSION).exe/' $@
 
-packaging/emojiclu-deb/DEBIAN/control: version.txt
-	sed -i 's/Version: .*/Version: $(shell cat version.txt)/' $@
+packaging/emojiclu-deb/DEBIAN/control: Cargo.toml
+	sed -i 's/Version: .*/Version: $(VERSION)/' $@
 
 deb: artifacts/${VERSION}/emojiclu_${VERSION}_amd64.deb
 
