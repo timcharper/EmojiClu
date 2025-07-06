@@ -18,7 +18,7 @@ pub struct GameStateSnapshot {
 
 fn game_state_path() -> PathBuf {
     let data_dir = glib::user_data_dir();
-    let mut path = data_dir.join("mindhunt");
+    let mut path = data_dir.join("emojiclu");
     path.push("game_state.json");
     path
 }

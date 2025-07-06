@@ -1,6 +1,6 @@
-# Mind Hunt
+# EmojiClu
 
-Mind Hunt is a graphical implementation of the [Zebra Puzzle](https://en.wikipedia.org/wiki/Zebra_Puzzle), built with GTK. It runs on Linux and Windows.
+EmojiClu is a graphical implementation of the [Zebra Puzzle](https://en.wikipedia.org/wiki/Zebra_Puzzle), built with GTK. It runs on Linux and Windows.
 
 # How to Play
 
@@ -14,9 +14,9 @@ https://github.com/user-attachments/assets/61fe3d10-efc5-4cf0-80ea-c69454759b0e
 
 ## Text Tutorial
 
-![Mind Hunt Hard Puzzle](docs/6x6-screeen.png)
+![EmojiClu Hard Puzzle](docs/6x6-screeen.png)
 
-Mind Hunt is a logical deduction style puzzle, similar to Suduko. Your goal is to find out the correct location of tiles in the puzzle grid, using deductions derived from the provided clues.
+EmojiClu is a logical deduction style puzzle, similar to Suduko. Your goal is to find out the correct location of tiles in the puzzle grid, using deductions derived from the provided clues.
 
 The game board is shown above as the 6x6 grid, with each cell containing six candidate tiles. The letter "O" appears bigger because it is selected; the O's are dimmed in the other cells because they've been eliminated as possibilities from other cells.
 
@@ -39,7 +39,7 @@ In harder difficulties, you'll encounter more advanced / difficult to spot deduc
 
 # Backgound
 
-Mind Hunt takes pretty heavy inspiration by [Everett Kaser's Sherlock](https://www.kaser.com/home.html). The creator of this game has played 1,000s of hours of Everett's game over the decades. My grandparents played Kaser's game, my parents still play it, and so do I.
+EmojiClu takes pretty heavy inspiration by [Everett Kaser's Sherlock](https://www.kaser.com/home.html). The creator of this game has played 1,000s of hours of Everett's game over the decades. My grandparents played Kaser's game, my parents still play it, and so do I.
 
 Current differences:
 
@@ -58,7 +58,7 @@ Planned differences:
 
 If you enjoy this game, please buy Everett's mobile version for your phone / iPad. He's a smart guy and it's worth your money. Also, check out his other puzzle games.
 
-There are no plans to make a mobile version of Mind Hunt.
+There are no plans to make a mobile version of EmojiClu.
 
 # Credits Etc
 
@@ -69,7 +69,7 @@ There are no plans to make a mobile version of Mind Hunt.
 
 # Building
 
-Mind Hunt is built with Rust and GTK4+. You should install a modern version of Rust using `rustup`.
+EmojiClu is built with Rust and GTK4+. You should install a modern version of Rust using `rustup`.
 
 ## Notes on windows build
 

@@ -1,9 +1,9 @@
-Name "Mind Hunt"
-!define APPNAME "mindhunt"
-!define APPVERSION 0.16
+Name "EmojiClu"
+!define APPNAME "emojiclu"
+!define APPVERSION 1.0
 !define COMPANY "Tim Harper"
-!define OUTFILE mindhunt-installer-0.16.exe
-!define EXECUTABLE "bin\mindhunt.exe"
+!define OUTFILE emojiclu-installer-1.0.exe
+!define EXECUTABLE "bin\emojiclu.exe"
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
@@ -11,11 +11,11 @@ Name "Mind Hunt"
 RequestExecutionLevel highest
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "mindhunt\icon.ico"
-!define MUI_UNICON "mindhunt\icon.ico"
+!define MUI_ICON "emojiclu\icon.ico"
+!define MUI_UNICON "emojiclu\icon.ico"
 
 Outfile ${OUTFILE}
-Icon "mindhunt\icon.ico"
+Icon "emojiclu\icon.ico"
 
 Var INSTALL_TYPE
 
@@ -63,10 +63,10 @@ Function InstallTypePageLeave
     ${EndIf}
 FunctionEnd
 
-Section "Install Mind Hunt" SecCore
+Section "Install EmojiClu" SecCore
     SectionIn RO
     SetOutPath $INSTDIR
-    File /r "mindhunt\*.*"
+    File /r "emojiclu\*.*"
     WriteUninstaller $INSTDIR\uninstall.exe
     
     ${If} $INSTALL_TYPE == ${BST_CHECKED}

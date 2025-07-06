@@ -68,7 +68,7 @@ impl Settings {
 
     fn settings_path() -> PathBuf {
         let data_dir = glib::user_data_dir();
-        let mut path = data_dir.join("mindhunt");
+        let mut path = data_dir.join("emojiclu");
         path.push("settings.json");
         path
     }

@@ -26,7 +26,7 @@ fn generate_app_icons(source: &Path, target_dir: &Path) {
         let size_dir = target_dir.join(format!("{}x{}", size, size)).join("apps");
         fs::create_dir_all(&size_dir).unwrap();
 
-        let target_icon = size_dir.join("org.timcharper.MindHunt.png");
+        let target_icon = size_dir.join("org.timcharper.EmojiClu.png");
         if should_update(source, &target_icon) {
             // Use convert to resize the icon
             Command::new("convert")
@@ -75,7 +75,7 @@ fn main() {
     fs::create_dir_all(&icon_theme_dir).unwrap();
 
     // Generate icons from the source icon
-    generate_app_icons(Path::new("resources/mindhunt-icon.png"), &icon_theme_dir);
+    generate_app_icons(Path::new("resources/emojiclu-icon.png"), &icon_theme_dir);
 
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
         let res_output = resources_dir.join("app.res");

@@ -28,7 +28,7 @@ compiled.gresource
 Thumbs.db
 /packaging/gtk
 /packaging/vulkan
-/packaging/mindhunt
+/packaging/emojiclu
 /packaging/*.zip
 *.local.*
 *.local
@@ -40,13 +40,13 @@ Thumbs.db
 profile.json.gz
 *.deb
 *.exe
-packaging/mindhunt-deb/usr/bin/
-packaging/mindhunt-deb/usr/share/icons/
+packaging/emojiclu-deb/usr/bin/
+packaging/emojiclu-deb/usr/share/icons/
 packaging/flatpak/repo/
 packaging/flatpak/builder/
 *.flatpak
 .flatpak-builder/
-packaging/windows/mindhunt/
+packaging/windows/emojiclu/
 packaging/windows/gtk/
 packaging/windows/vulkan/
 packaging/windows/*.zip

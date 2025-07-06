@@ -1,10 +1,10 @@
+use emojiclu::ui::build_ui;
 use gio::prelude::*;
 use gio::ApplicationFlags;
 use glib::{Bytes, ExitCode};
 use gtk4::Application;
-use mindhunt::ui::build_ui;
 
-const APP_ID: &str = "org.timcharper.MindHunt";
+const APP_ID: &str = "org.timcharper.EmojiClu";
 
 #[cfg(debug_assertions)]
 const RESOURCES: &[u8] = include_bytes!("../target/debug/compiled.gresource");

@@ -251,6 +251,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
+name = "emojiclu"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "env_logger",
+ "fixed",
+ "gdk-pixbuf",
+ "gio",
+ "glib",
+ "glib-build-tools",
+ "gtk4",
+ "itertools",
+ "log",
+ "rand",
+ "readonly",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serial_test",
+ "test-context",
+ "uuid",
+]
+
+[[package]]
 name = "env_filter"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -822,30 +846,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "mindhunt"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "env_logger",
- "fixed",
- "gdk-pixbuf",
- "gio",
- "glib",
- "glib-build-tools",
- "gtk4",
- "itertools",
- "log",
- "rand",
- "readonly",
- "serde",
- "serde_json",
- "serde_with",
- "serial_test",
- "test-context",
- "uuid",
 ]
 
 [[package]]

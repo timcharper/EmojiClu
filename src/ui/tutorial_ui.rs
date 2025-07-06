@@ -335,7 +335,7 @@ impl TutorialUI {
     fn get_tutorial_text(&self) -> Option<String> {
         match &self.current_step {
             TutorialStep::HintUsagePhase1 =>
-                 Some("<b>Welcome to MindHunt</b>, a logical deduction puzzle game.
+                 Some("<b>Welcome to EmojiClu</b>, a logical deduction puzzle game.
 
 Above this text is the puzzle grid, to the right and bottom are clues. Your goal \
 is to figure out the location of various tiles making deductions with the clues.

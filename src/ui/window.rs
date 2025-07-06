@@ -123,8 +123,8 @@ pub fn build_ui(app: &Application) {
     let window = Rc::new(
         ApplicationWindow::builder()
             .application(app)
-            .title("Mind Hunt")
-            .icon_name("org.timcharper.MindHunt")
+            .title("EmojiClu")
+            .icon_name("org.timcharper.EmojiClu")
             .resizable(true)
             .decorated(true)
             .default_height(desired_height as i32)
@@ -351,7 +351,7 @@ pub fn build_ui(app: &Application) {
 
     // Add CSS for selected cells
     let provider = CssProvider::new();
-    provider.load_from_resource("/org/mindhunt/style.css");
+    provider.load_from_resource("/org/emojiclu/style.css");
 
     gtk4::style_context_add_provider_for_display(
         &display,
@@ -455,10 +455,10 @@ pub fn build_ui(app: &Application) {
     let action_about = SimpleAction::new("about", None);
     action_about.connect_activate(move |_, _| {
         let dialog = AboutDialog::builder()
-            .program_name("Mind Hunt")
+            .program_name("EmojiClu")
             .version(APP_VERSION)
             .authors(vec!["Tim Harper"])
-            .website("https://github.com/timcharper/mindhunt")
+            .website("https://github.com/timcharper/emojiclu")
             .website_label("GitHub Repository")
             .license_type(License::MitX11)
             .build();

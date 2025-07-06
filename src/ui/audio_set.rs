@@ -13,14 +13,14 @@ impl AudioSet {
     pub fn new() -> Self {
         let mut lose_sounds = Vec::new();
         for n in 1..=2 {
-            let resource_path = format!("/org/mindhunt/assets/sounds/lose-{}.mp3", n);
+            let resource_path = format!("/org/emojiclu/assets/sounds/lose-{}.mp3", n);
             let media = MediaFile::for_resource(&resource_path);
             lose_sounds.push(Rc::new(media));
         }
 
         let mut win_sounds = Vec::new();
         for n in 1..=3 {
-            let resource_path = format!("/org/mindhunt/assets/sounds/win-{}.mp3", n);
+            let resource_path = format!("/org/emojiclu/assets/sounds/win-{}.mp3", n);
             let media = MediaFile::for_resource(&resource_path);
             win_sounds.push(Rc::new(media));
         }

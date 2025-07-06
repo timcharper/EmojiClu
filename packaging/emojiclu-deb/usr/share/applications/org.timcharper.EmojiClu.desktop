@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=EmojiClu
+Exec=/usr/bin/emojiclu
+Icon=org.timcharper.EmojiClu
+Type=Application
+Categories=Game;LogicGame;

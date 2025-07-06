@@ -39,7 +39,7 @@ impl ImageSet {
         // Load all icon variants (8x8 grid of icons)
         for row in 0..8 {
             for col in 0..8 {
-                let resource_path = format!("/org/mindhunt/assets/icons/{}/{}.png", row, col);
+                let resource_path = format!("/org/emojiclu/assets/icons/{}/{}.png", row, col);
                 let original_image = Pixbuf::from_resource(&resource_path)
                     .expect(&format!("Failed to load icon {} {}", row, col));
                 original_icons.insert((row, col), Rc::new(original_image));
@@ -48,16 +48,16 @@ impl ImageSet {
 
         // Load special icons
         let negative_assertion =
-            Pixbuf::from_resource("/org/mindhunt/assets/icons/negative-assertion.png")
+            Pixbuf::from_resource("/org/emojiclu/assets/icons/negative-assertion.png")
                 .expect("Failed to load negative assertion icon");
         let negative_assertion = Rc::new(negative_assertion);
 
-        let left_of = Pixbuf::from_resource("/org/mindhunt/assets/icons/left-of.png")
+        let left_of = Pixbuf::from_resource("/org/emojiclu/assets/icons/left-of.png")
             .expect("Failed to load left-of icon");
         let left_of = Rc::new(left_of);
 
         let maybe_assertion =
-            Pixbuf::from_resource("/org/mindhunt/assets/icons/maybe-assertion.png")
+            Pixbuf::from_resource("/org/emojiclu/assets/icons/maybe-assertion.png")
                 .expect("Failed to load maybe assertion icon");
         let maybe_assertion = Rc::new(maybe_assertion);
 
