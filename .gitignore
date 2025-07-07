@@ -51,3 +51,4 @@ packaging/windows/gtk/
 packaging/windows/vulkan/
 packaging/windows/*.zip
 artifacts/
+repo

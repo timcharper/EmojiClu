@@ -4,7 +4,7 @@ use gio::ApplicationFlags;
 use glib::{Bytes, ExitCode};
 use gtk4::Application;
 
-const APP_ID: &str = "org.timcharper.EmojiClu";
+const APP_ID: &str = "io.github.timcharper.EmojiClu";
 
 #[cfg(debug_assertions)]
 const RESOURCES: &[u8] = include_bytes!("../target/debug/compiled.gresource");

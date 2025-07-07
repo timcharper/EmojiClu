@@ -14,10 +14,13 @@ tag: packaging/windows/installer.nsi packaging/emojiclu-deb/DEBIAN/control
 	git push origin v$(VERSION)
 
 bump-flatpak:
-	TAG="v$(VERSION)" COMMIT="$(shell git rev-parse v$(VERSION))" yq -i '.modules[0].sources[] |= (select(.type == "git") | .tag = strenv(TAG) | .commit = strenv(COMMIT))' org.timcharper.EmojiClu.yml
+	TAG="v$(VERSION)" COMMIT="$(shell git rev-parse v$(VERSION))" yq -i '.modules[0].sources[] |= (select(.type == "git") | .tag = strenv(TAG) | .commit = strenv(COMMIT))' io.github.timcharper.EmojiClu.yml
+	# update appdata.xml
+	date=$$(date +%Y-%m-%d); \
+	sed -i 's|<release version="[^"]*" date="[^"]*"|<release version="$(VERSION)" date="'"$$date"'"|' packaging/flatpak/metainfo/io.github.timcharper.EmojiClu.appdata.xml
 	flatpak-cargo-generator Cargo.lock -o cargo-sources.json
 	# run a test build
-	flatpak-builder --user --install --user --force-clean packaging/flatpak/builder ./org.timcharper.EmojiClu.yml
+	flatpak-builder --user --install --user --force-clean packaging/flatpak/builder ./io.github.timcharper.EmojiClu.yml
 
 clean-packaging:
 	rm -rf artifacts/
@@ -54,13 +57,13 @@ artifacts/${VERSION}/emojiclu_${VERSION}_amd64.deb: target/release/emojiclu pack
 	cp target/release/emojiclu ./packaging/emojiclu-deb/usr/bin/emojiclu
 
 	# Copy icons
-	cp target/release/resources/icons/hicolor/24x24/apps/org.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/24x24/apps/
-	cp target/release/resources/icons/hicolor/32x32/apps/org.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/32x32/apps/
-	cp target/release/resources/icons/hicolor/48x48/apps/org.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/48x48/apps/
-	cp target/release/resources/icons/hicolor/64x64/apps/org.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/64x64/apps/
-	cp target/release/resources/icons/hicolor/128x128/apps/org.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/128x128/apps/
-	cp target/release/resources/icons/hicolor/256x256/apps/org.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/256x256/apps/
-	cp target/release/resources/icons/hicolor/512x512/apps/org.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/512x512/apps/
+	cp target/release/resources/icons/hicolor/24x24/apps/io.github.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/24x24/apps/
+	cp target/release/resources/icons/hicolor/32x32/apps/io.github.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/32x32/apps/
+	cp target/release/resources/icons/hicolor/48x48/apps/io.github.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/48x48/apps/
+	cp target/release/resources/icons/hicolor/64x64/apps/io.github.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/64x64/apps/
+	cp target/release/resources/icons/hicolor/128x128/apps/io.github.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/128x128/apps/
+	cp target/release/resources/icons/hicolor/256x256/apps/io.github.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/256x256/apps/
+	cp target/release/resources/icons/hicolor/512x512/apps/io.github.timcharper.EmojiClu.png ./packaging/emojiclu-deb/usr/share/icons/hicolor/512x512/apps/
 
 	fakeroot dpkg-deb --build ./packaging/emojiclu-deb $@
 

@@ -124,7 +124,7 @@ pub fn build_ui(app: &Application) {
         ApplicationWindow::builder()
             .application(app)
             .title("EmojiClu")
-            .icon_name("org.timcharper.EmojiClu")
+            .icon_name("io.github.timcharper.EmojiClu")
             .resizable(true)
             .decorated(true)
             .default_height(desired_height as i32)

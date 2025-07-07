@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=EmojiClu
 Exec=emojiclu
-Icon=org.timcharper.EmojiClu
+Icon=io.github.timcharper.EmojiClu
 Type=Application
 Categories=Game

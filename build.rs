@@ -28,7 +28,7 @@ fn generate_app_icons(source: &Path, target_dir: &Path) {
         let size_dir = target_dir.join(format!("{size}x{size}")).join("apps");
         fs::create_dir_all(&size_dir).unwrap();
 
-        let target_icon = size_dir.join("org.timcharper.EmojiClu.png");
+        let target_icon = size_dir.join("io.github.timcharper.EmojiClu.png");
         if should_update(source, &target_icon) {
             let resized = image::imageops::resize(&source_img, size, size, FilterType::Lanczos3);
             resized.save(target_icon).unwrap();
