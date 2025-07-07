@@ -15,7 +15,6 @@ finish-args:
   - --socket=wayland
   - --socket=pulseaudio
   - --device=dri
-
 modules:
   - name: emojiclu
     buildsystem: simple
@@ -29,8 +28,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/timcharper/EmojiClu.git
-        tag: 1.0.0
-        commit: 6bc40bc769d823be8981e0efcc5ac015c73c68a7
+        tag: v1.0.1
+        commit: cddaf8e59fbd24c7f13217fcc441cf565bb7b5be
       - cargo-sources.json
     build-commands:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
