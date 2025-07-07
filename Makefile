@@ -5,7 +5,13 @@ RESOURCE_FILES := $(shell find resources -type f)
 
 VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
 
-.PHONY: linux windows deb flatpak clean clean-packaging
+.PHONY: linux windows deb flatpak clean clean-packaging tag
+
+tag: packaging/windows/installer.nsi packaging/emojiclu-deb/DEBIAN/control
+	cargo test
+	git commit -a -m "Bump version to $(VERSION)"
+	git tag -a v$(VERSION) -m "Release $(VERSION)"
+	git push origin v$(VERSION)
 
 clean-packaging:
 	rm -rf artifacts/
