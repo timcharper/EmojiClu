@@ -3,36 +3,36 @@
   <id>io.github.timcharper.EmojiClu</id>
   <name>EmojiClu</name>
   <summary>Deductive Zebra Puzzle Logic Game</summary>
-  <developer_name>Tim Charper</developer_name>
+  <developer id="io.github.timcharper">
+    <name>Tim Harper</name>
+  </developer>
   <project_license>MIT</project_license>
   <metadata_license>CC0-1.0</metadata_license>
+  <launchable type="desktop-id">io.github.timcharper.EmojiClu.desktop</launchable>
+  <content_rating type="oars-1.1" />
 
   <description>
     <p>
-      EmojiClu is a graphical implementation of the <a href="https://en.wikipedia.org/wiki/Zebra_Puzzle">Zebra Puzzle</a>, built with GTK.
-    </p>
-    <p>
-      EmojiClu takes pretty heavy inspiration by <a
-      href="https://www.kaser.com/home.html">Everett Kaser's Sherlock</a>. The
-      creator of this game has played 1,000s of hours of Everett's game over the
-      decades. My grandparents played Kaser's game, my parents still play it,
-      and so do I. Puzzle generator aims to be more difficult than Kaser's game.
+      EmojiClu is a graphical implementation of the Zebra Puzzle, built with
+      GTK.  Use clues to deduce the correct location of each emoji.  Heavily
+      inspired by Everett Kaser's Sherlock.
     </p>
   </description>
 
   <categories>
     <category>Game</category>
-    <category>PuzzleGame</category>
+    <category>LogicGame</category>
   </categories>
 
   <screenshots>
     <screenshot type="default">
-      <image>io.github.timcharper.EmojiClu/screenshot-1.png</image>
+      <image>https://raw.githubusercontent.com/timcharper/EmojiClu/main/packaging/flatpak/screenshots/screenshot-1.png</image>
+      <caption>Gameplay showing a difficult puzzle</caption>
     </screenshot>
   </screenshots>
 
   <releases>
-    <release version="1.0.1" date="2025-07-06"/>
+    <release version="1.0.1" date="2025-07-11"/>
   </releases>
 
   <provides>

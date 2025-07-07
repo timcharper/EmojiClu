@@ -1,12 +1,10 @@
 app-id: io.github.timcharper.EmojiClu
 runtime: org.gnome.Platform
-runtime-version: "47"
+runtime-version: "48"
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: emojiclu
-tags:
-  - "$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
 finish-args:
   - --socket=fallback-x11
   - --share=ipc
@@ -18,8 +16,6 @@ modules:
     buildsystem: simple
     build-options:
       append-path: /usr/lib/sdk/rust-stable/bin
-      build-args:
-        - --share=network
       env:
         CARGO_HOME: /run/build/emojiclu/cargo
         CARGO_NET_OFFLINE: 'true'
@@ -27,18 +23,10 @@ modules:
       - type: git
         url: https://github.com/timcharper/EmojiClu.git
         tag: v1.0.1
-        commit: cddaf8e59fbd24c7f13217fcc441cf565bb7b5be
+        commit: 4cd2843c57c19eff9fd8e4579b04318031f799cf
       - cargo-sources.json
     build-commands:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
-      - cargo build --offline --release --all-features
-      - install -D target/release/emojiclu /app/bin/emojiclu
-      - install -D target/release/resources/icons/hicolor/16x16/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/16x16/apps/io.github.timcharper.EmojiClu.png
-      - install -D target/release/resources/icons/hicolor/24x24/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/24x24/apps/io.github.timcharper.EmojiClu.png
-      - install -D target/release/resources/icons/hicolor/32x32/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/32x32/apps/io.github.timcharper.EmojiClu.png
-      - install -D target/release/resources/icons/hicolor/48x48/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/48x48/apps/io.github.timcharper.EmojiClu.png
-      - install -D target/release/resources/icons/hicolor/64x64/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/64x64/apps/io.github.timcharper.EmojiClu.png
-      - install -D target/release/resources/icons/hicolor/128x128/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/128x128/apps/io.github.timcharper.EmojiClu.png
-      - install -D target/release/resources/icons/hicolor/256x256/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/256x256/apps/io.github.timcharper.EmojiClu.png
-      - install -D target/release/resources/icons/hicolor/512x512/apps/io.github.timcharper.EmojiClu.png /app/share/icons/hicolor/512x512/apps/io.github.timcharper.EmojiClu.png
-      - install -D packaging/flatpak/config/io.github.timcharper.EmojiClu.desktop /app/share/applications/io.github.timcharper.EmojiClu.desktop
+      - CARGO_OFFLINE=1 make packaging/dist
+      - cp -r packaging/dist/* /app/
+      - install -D packaging/flatpak/metainfo/io.github.timcharper.EmojiClu.appdata.xml /app/share/metainfo/io.github.timcharper.EmojiClu.appdata.xml

@@ -3,4 +3,4 @@ Name=EmojiClu
 Exec=emojiclu
 Icon=io.github.timcharper.EmojiClu
 Type=Application
-Categories=Game
+Categories=Game;LogicGame

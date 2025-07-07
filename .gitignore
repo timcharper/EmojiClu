@@ -40,8 +40,7 @@ Thumbs.db
 profile.json.gz
 *.deb
 *.exe
-packaging/emojiclu-deb/usr/bin/
-packaging/emojiclu-deb/usr/share/icons/
+packaging/emojiclu-deb/usr
 packaging/flatpak/repo/
 packaging/flatpak/builder/
 *.flatpak
@@ -52,3 +51,4 @@ packaging/windows/vulkan/
 packaging/windows/*.zip
 artifacts/
 repo
+packaging/dist/
