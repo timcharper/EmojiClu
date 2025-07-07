@@ -1,7 +1,8 @@
 use glib_build_tools::compile_resources;
+use image::imageops::FilterType;
+use image::ImageReader;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 fn should_update(source: &Path, target: &Path) -> bool {
     if !target.exists() {
@@ -21,21 +22,16 @@ fn should_update(source: &Path, target: &Path) -> bool {
 fn generate_app_icons(source: &Path, target_dir: &Path) {
     // Icon sizes commonly used by Linux desktop environments
     let sizes = [16, 24, 32, 48, 64, 128, 256, 512];
+    let source_img = ImageReader::open(source).unwrap().decode().unwrap();
 
     for size in sizes {
-        let size_dir = target_dir.join(format!("{}x{}", size, size)).join("apps");
+        let size_dir = target_dir.join(format!("{size}x{size}")).join("apps");
         fs::create_dir_all(&size_dir).unwrap();
 
         let target_icon = size_dir.join("org.timcharper.EmojiClu.png");
         if should_update(source, &target_icon) {
-            // Use convert to resize the icon
-            Command::new("convert")
-                .arg(source)
-                .arg("-resize")
-                .arg(format!("{}x{}", size, size))
-                .arg(&target_icon)
-                .status()
-                .expect("Failed to generate icon");
+            let resized = image::imageops::resize(&source_img, size, size, FilterType::Lanczos3);
+            resized.save(target_icon).unwrap();
         }
     }
 }

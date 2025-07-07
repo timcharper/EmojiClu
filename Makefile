@@ -22,10 +22,13 @@ linux: artifacts/${VERSION}/emojiclu-linux-$(VERSION)-x86_64.tar.xz
 
 flatpak: artifacts/${VERSION}/emojiclu-$(VERSION).flatpak
 
+cargo-sources.json: Cargo.lock
+	flatpak-cargo-generator Cargo.lock -o $@
+
 # we build emojiclu inside of flatpak; the dependency here on target/release/emojiclu is just to save us the effort of building the flatpak if there's a build error.
-artifacts/${VERSION}/emojiclu-$(VERSION).flatpak: target/release/emojiclu packaging/flatpak/config/org.timcharper.EmojiClu.yml
+artifacts/${VERSION}/emojiclu-$(VERSION).flatpak: target/release/emojiclu ./org.timcharper.EmojiClu.yml cargo-sources.json
 	mkdir -p artifacts/${VERSION}
-	flatpak-builder --user --install --user --force-clean packaging/flatpak/builder packaging/flatpak/config/org.timcharper.EmojiClu.yml
+	flatpak-builder --user --install --user --force-clean packaging/flatpak/builder ./org.timcharper.EmojiClu.yml
 	flatpak build-export packaging/flatpak/repo packaging/flatpak/builder master
 	flatpak remote-add --if-not-exists --user emojiclu-local packaging/flatpak/repo --no-gpg-verify
 	flatpak build-bundle packaging/flatpak/repo $@ org.timcharper.EmojiClu master

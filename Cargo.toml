@@ -27,6 +27,7 @@ test-context = "^0.3.0"
 
 [build-dependencies]
 glib-build-tools = "^0.20.0"
+image = "^0.25.6"
 
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"
