@@ -13,6 +13,7 @@ use crate::game::stats_manager::StatsManager;
 use crate::model::GameStateEvent;
 use crate::model::{GameActionEvent, PuzzleCompletionState};
 use crate::ui::stats_dialog::StatsDialog;
+use fluent_i18n::t;
 
 use super::audio_set::AudioSet;
 use super::NotQuiteRightDialog;
@@ -43,8 +44,8 @@ impl SubmitUI {
         window: &Rc<ApplicationWindow>,
     ) -> Rc<RefCell<Self>> {
         // Create submit button
-        let submit_button = Rc::new(Button::with_label("Submit"));
-        submit_button.set_tooltip_text(Some("Submit puzzle solution"));
+        let submit_button = Rc::new(Button::with_label(&t!("submit")));
+        submit_button.set_tooltip_text(Some(&t!("submit-puzzle-solution")));
         submit_button.set_action_name(Some("win.submit"));
 
         let submit_dialog: Rc<RefCell<CompletionDialog>>;
@@ -187,7 +188,7 @@ impl CompletionDialog {
             .build();
 
         let label = Label::builder()
-            .label("Submit Solution?")
+            .label(&t!("submit-solution"))
             .css_classes(["completion-label"])
             .build();
         content_area.append(&label);
@@ -200,7 +201,7 @@ impl CompletionDialog {
         content_area.append(&button_box);
 
         let submit_button = Button::builder()
-            .label("Submit")
+            .label(&t!("submit"))
             .css_classes(["completion-submit-button"])
             .margin_top(10)
             .margin_bottom(10)
@@ -209,7 +210,7 @@ impl CompletionDialog {
             .build();
 
         let undo_button = Button::builder()
-            .label("Go Back")
+            .label(&t!("go-back"))
             .css_classes(["completion-undo-button"])
             .margin_top(10)
             .margin_bottom(10)

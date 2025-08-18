@@ -13,6 +13,7 @@ use crate::{
     game::settings::Settings,
     model::{GameStateEvent, GlobalEvent},
 };
+use fluent_i18n::t;
 
 pub struct SettingsMenuUI {
     window: Rc<ApplicationWindow>,
@@ -47,9 +48,12 @@ impl SettingsMenuUI {
         settings_ref: Rc<RefCell<Settings>>,
     ) -> Rc<RefCell<Self>> {
         let settings_menu = Menu::new();
-        settings_menu.append(Some("Show Clue Tooltips"), Some("win.toggle-tooltips"));
         settings_menu.append(
-            Some("Touch Screen Controls"),
+            Some(&t!("settings-show-clue-tooltips")),
+            Some("win.toggle-tooltips"),
+        );
+        settings_menu.append(
+            Some(&t!("settings-touch-screen-controls")),
             Some("win.toggle-touch-controls"),
         );
 

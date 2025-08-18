@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use crate::game::stats_manager::StatsManager;
 use crate::model::{Difficulty, GameStats};
+use fluent_i18n::t;
 
 pub struct StatsDialog;
 
@@ -36,7 +37,14 @@ impl StatsDialog {
         scores_grid.set_margin_start(10);
 
         // Add headers
-        let headers = ["Rank", "Time", "Hints", "Grid Size", "Difficulty", "Date"];
+        let headers = [
+            &t!("stats-rank"),
+            &t!("stats-time"),
+            &t!("stats-hints"),
+            &t!("stats-grid-size"),
+            &t!("stats-difficulty"),
+            &t!("stats-date"),
+        ];
         for (i, header) in headers.iter().enumerate() {
             let label = Label::new(Some(header));
             label.set_markup(&format!("<b>{}</b>", header));
@@ -103,7 +111,7 @@ impl StatsDialog {
                 .timestamp_opt(score.timestamp, 0)
                 .single()
                 .map(|dt| dt.format("%Y-%m-%d").to_string())
-                .unwrap_or_else(|| "Unknown".to_string());
+                .unwrap_or_else(|| t!("stats-unknown").to_string());
             let date_label = Label::new(Some(&date));
             date_label.set_halign(Align::Start);
             if is_current_playthrough {
@@ -178,7 +186,7 @@ impl StatsDialog {
             .margin_bottom(20)
             .build();
         let modal = gtk4::Window::builder()
-            .title("Game Statistics")
+            .title(&t!("game-statistics"))
             .modal(true)
             .default_width(400)
             .child(&vbox)
@@ -186,8 +194,8 @@ impl StatsDialog {
             .build();
 
         // Add title for high scores
-        let high_scores_label = Label::new(Some("Best Times"));
-        high_scores_label.set_markup("<b>Best Times</b>");
+        let high_scores_label = Label::new(Some(&t!("best-times")));
+        high_scores_label.set_markup(&format!("<b>{}</b>", t!("best-times")));
         high_scores_label.set_margin_bottom(10);
         vbox.append(&high_scores_label);
 
@@ -202,8 +210,8 @@ impl StatsDialog {
         vbox.append(&separator);
 
         // Add global stats
-        let global_stats_label = Label::new(Some("Global Statistics"));
-        global_stats_label.set_markup("<b>Global Statistics</b>");
+        let global_stats_label = Label::new(Some(&t!("global-statistics")));
+        global_stats_label.set_markup(&format!("<b>{}</b>", t!("global-statistics")));
         global_stats_label.set_margin_bottom(10);
         vbox.append(&global_stats_label);
 
@@ -214,7 +222,7 @@ impl StatsDialog {
             .orientation(Orientation::Horizontal)
             .halign(Align::End)
             .build();
-        let close_button = gtk4::Button::builder().label("Close").build();
+        let close_button = gtk4::Button::builder().label(&t!("close")).build();
         button_box.append(&close_button);
 
         vbox.append(&button_box);

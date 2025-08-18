@@ -23,6 +23,7 @@ use crate::{
 };
 
 use super::template::TemplateParser;
+use fluent_i18n::t;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TutorialStep {
@@ -318,107 +319,70 @@ impl TutorialUI {
 
     fn control_text_main(&self) -> String {
         if self.settings.touch_screen_controls {
-            "long press".to_string()
+            t!("control-long-press")
         } else {
-            "left click".to_string()
+            t!("control-left-click")
         }
     }
 
     fn control_text_alt(&self) -> String {
         if self.settings.touch_screen_controls {
-            "tap".to_string()
+            t!("control-tap")
         } else {
-            "right click".to_string()
+            t!("control-right-click")
         }
     }
 
     fn get_tutorial_text(&self) -> Option<String> {
         match &self.current_step {
-            TutorialStep::HintUsagePhase1 =>
-                 Some("<b>Welcome to EmojiClu</b>, a logical deduction puzzle game.
+            TutorialStep::HintUsagePhase1 => Some(t!("tutorial-welcome")),
 
-Above this text is the puzzle grid, to the right and bottom are clues. Your goal \
-is to figure out the location of various tiles making deductions with the clues.
-
-First, let's start off using the hint system. Press the {icon:view-reveal-symbolic} button (in the top-right corner) now.".to_string()),
-
-
-            TutorialStep::HintUsagePhase2(_) =>
-                Some("Great! The game selected and highlighted a clue you should look at.
-
-<b>Hover over the selected clue</b> to see a tooltip explaining what the clue means.
-
-Pressing {icon:view-reveal-symbolic} a second time gives you additional help.
-
-Press the {icon:view-reveal-symbolic} button a second time, now.".to_string()),
+            TutorialStep::HintUsagePhase2(_) => Some(t!("tutorial-phase2")),
 
             TutorialStep::HintUsagePhase3(_, deduction) => {
-                let prefix = format!(
-                    "The second time we pressed the hint button, the game highlighted a tile that is one of the deductions you can make from the clue.
+                let action = if deduction.tile_assertion.is_positive() {
+                    t!("action-selected")
+                } else {
+                    t!("action-eliminated")
+                };
 
-We can deduce here from the clue that tile {{tile:{}}} in column {} should be {}.\n\n",
-                    deduction.tile_assertion.tile.to_string(),
-                    deduction.column + 1,
-                    if deduction.tile_assertion.is_positive() {
-                        "selected"
-                    } else {
-                        "eliminated"
-                    }
-                );
+                let control_text = if deduction.tile_assertion.is_positive() {
+                    self.control_text_main().capitalize()
+                } else {
+                    self.control_text_alt().capitalize()
+                };
 
-                let template2 = format!(
-                    "{} the tile {{tile:{}}} in column {} now.",
-                    if deduction.tile_assertion.is_positive() {
-                        self.control_text_main().capitalize()
-                    } else {
-                        self.control_text_alt().capitalize()
-                    },
-                    deduction.tile_assertion.tile.to_string(),
-                    deduction.column + 1
-                );
-                Some(format!("{} {}", prefix, template2))
+                let prefix = t!("tutorial-phase3-prefix", {
+                    "tile" => deduction.tile_assertion.tile.to_string(),
+                    "column" => (deduction.column + 1).to_string(),
+                    "action" => action.clone()
+                });
+
+                let action_text = t!("tutorial-phase3-action", {
+                    "control_text" => control_text,
+                    "tile" => deduction.tile_assertion.tile.to_string(),
+                    "column" => (deduction.column + 1).to_string()
+                });
+
+                Some(format!("{}\n\n{}", prefix, action_text))
             }
             TutorialStep::HintUsagePhase3Oops(_, deduction) => {
-                let template = format!(
-                    "Oops! That wasn't quite right. Tile {{tile:{}}} in column {} is not {}.",
-                    deduction.tile_assertion.tile.to_string(),
-                    deduction.column + 1,
-                    if deduction.tile_assertion.is_positive() {
-                        "selected"
-                    } else {
-                        "eliminated"
-                    }
-                );
+                let action = if deduction.tile_assertion.is_positive() {
+                    t!("action-selected")
+                } else {
+                    t!("action-eliminated")
+                };
 
-                let template2 = format!(
-                    "Press the {{icon:edit-undo-symbolic}} button repeatedly until no further undos are possible.",
-                );
-                Some(format!("{}{}", template, template2))
+                Some(t!("tutorial-phase3-oops", {
+                    "tile" => deduction.tile_assertion.tile.to_string(),
+                    "column" => (deduction.column + 1).to_string(),
+                    "action" => action
+                }))
             }
-            TutorialStep::Undo => {
-                Some(format!(
-                    "Great!
-                    
-Now, at any time, you can undo any moves you make with the undo button, or by pressing <tt>Ctrl+Z</tt>.
-
-Let's get the game back to the start. Press the {{icon:edit-undo-symbolic}} button repeatedly until no further undos are possible.",
-                ))
-            }
-            TutorialStep::SelectAClue => {
-                Some(format!(
-                    "Great! Now, let's use the clue selection system.
-                    
-Selecting a clue helps you track what you're currently working on. You can select a clue either by clicking on it, or navigating to it using the keys <tt>A</tt> or <tt>D</tt>.
-
-Let's select a clue now.",
-                ))
-            }
-            TutorialStep::PlayToEnd => {
-                Some(self.play_to_end_template())
-            }
-            TutorialStep::Disabled => {
-                None
-            }
+            TutorialStep::Undo => Some(t!("tutorial-undo")),
+            TutorialStep::SelectAClue => Some(t!("tutorial-select-clue")),
+            TutorialStep::PlayToEnd => Some(self.play_to_end_template()),
+            TutorialStep::Disabled => None,
         }
     }
 
@@ -441,18 +405,9 @@ Let's select a clue now.",
     fn play_to_end_template(&self) -> String {
         if let Some(board) = &self.current_board {
             if board.is_incorrect() {
-                return format!(
-                    "<b>Oops!</b> You've made a mistake. Let's try again.
-
-Press the {{icon:edit-undo-symbolic}} button.",
-                );
+                return t!("tutorial-mistake");
             } else if board.is_complete() {
-                return "<b>Congratulations!</b>
-
-You've completed the tutorial! You can try an easy puzzle by selecting <tt>'Easy'</tt> from the top-left difficulty selector.
-
-Or, press <tt>Ctrl+N</tt> to restart this tutorial."
-                    .to_string();
+                return t!("tutorial-congratulations");
             } else if let Some(selection) = &self.current_clue {
                 let selected_clue_marked_completed = board.is_clue_completed(&selection.address());
                 let deductions = simplify_deductions(
@@ -470,43 +425,46 @@ Or, press <tt>Ctrl+N</tt> to restart this tutorial."
                 if deductions.is_empty() {
                     if is_clue_fully_completed(&selection.clue, board) {
                         if selected_clue_marked_completed {
-                            return "Let's move on to the next clue.".to_string();
+                            return t!("tutorial-next-clue");
                         } else {
-                            return format!(
-                                "<b>Clue complete!</b>
-                    
-This clue is fully encoded in the board. Mark it as completed by pressing <tt>'C'</tt>, or by {}ing the clue.",
-                                self.control_text_alt()
-                            );
+                            return t!("tutorial-clue-complete", {
+                                "action" => self.control_text_alt()
+                            });
                         }
                     }
-                    return format!("We can't deduce anything more from this clue at this time, <i>but it is not complete</i>. Move on to next clue.");
+                    return t!("tutorial-no-deduction");
                 }
 
                 let first_deduction = deductions.first().unwrap();
-                let template = format!(
-                    "<big>{}</big>:\n\n{}\n\nSo, {{tile:{}}} <b>{}</b> in column <big><tt>{}</tt></big>{}.\n\n",
-                    selection.clue.clue_type.get_title(),
-                    selection.clue.description(),
-                    first_deduction.tile_assertion.tile.to_string(),
-                    if first_deduction.tile_assertion.is_positive() {
-                        "must be"
-                    } else {
-                        "cannot be"
-                    },
-                    first_deduction.column + 1,
-                    if first_deduction.deduction_kind.as_ref().is_some_and(|deduction_kind| deduction_kind == &DeductionKind::Converging) {
-                        " (<i>all possible solutions for this clue overlap this cell, so it can only be one of the clue values</i>)"
-                    } else {
-                        ""
-                    }
-                );
-                return template;
+                let must_be = if first_deduction.tile_assertion.is_positive() {
+                    t!("action-must-be")
+                } else {
+                    t!("action-cannot-be")
+                };
+
+                let converging_note = if first_deduction
+                    .deduction_kind
+                    .as_ref()
+                    .is_some_and(|deduction_kind| deduction_kind == &DeductionKind::Converging)
+                {
+                    t!("converging-note")
+                } else {
+                    String::new()
+                };
+
+                return t!("tutorial-clue-analysis", {
+                    "clue_title" => selection.clue.clue_type.get_title(),
+                    "clue_description" => selection.clue.description(),
+                    "tile" => first_deduction.tile_assertion.tile.to_string(),
+                    "must_be" => must_be,
+                    "column" => (first_deduction.column + 1).to_string(),
+                    "converging_note" => converging_note
+                });
             } else {
-                return "Let's keep going. Select a clue.".to_string();
+                return t!("tutorial-keep-going");
             }
         } else {
-            return "Weird".to_string();
+            return t!("weird");
         }
     }
 }

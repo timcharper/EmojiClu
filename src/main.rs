@@ -1,4 +1,5 @@
 use emojiclu::ui::build_ui;
+use fluent_i18n::set_locale;
 use gio::prelude::*;
 use gio::ApplicationFlags;
 use glib::{Bytes, ExitCode};
@@ -15,6 +16,15 @@ const RESOURCES: &[u8] = include_bytes!("../target/release/compiled.gresource");
 fn main() -> ExitCode {
     // Initialize logger
     env_logger::init();
+
+    // Set locale from environment variable if provided
+    if let Ok(locale) = std::env::var("LOCALE") {
+        if let Err(e) = set_locale(Some(&locale)) {
+            eprintln!("Warning: Failed to set locale '{}': {}", locale, e);
+        } else {
+            println!("Locale set to: {}", locale);
+        }
+    }
 
     #[cfg(target_os = "windows")]
     {

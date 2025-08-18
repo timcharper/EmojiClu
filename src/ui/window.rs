@@ -14,6 +14,7 @@ use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use crate::ui::top_level_input_event_monitor::TopLevelInputEventMonitor;
 use crate::ui::NotQuiteRightDialog;
+use fluent_i18n::t;
 use gio::{Menu, SimpleAction};
 use glib::timeout_add_local_once;
 use gtk4::gdk::{Display, Monitor};
@@ -40,7 +41,7 @@ const APP_VERSION: &str = env!("APP_VERSION");
 fn pause_screen() -> Rc<gtk4::Box> {
     let pause_label = Label::builder()
         .name("pause-label")
-        .label("PAUSED")
+        .label(&t!("paused"))
         .css_classes(["pause-label"])
         .visible(true)
         .hexpand(true)
@@ -123,7 +124,7 @@ pub fn build_ui(app: &Application) {
     let window = Rc::new(
         ApplicationWindow::builder()
             .application(app)
-            .title("EmojiClu")
+            .title(&t!("app-title"))
             .icon_name("io.github.timcharper.EmojiClu")
             .resizable(true)
             .decorated(true)
@@ -178,12 +179,12 @@ pub fn build_ui(app: &Application) {
     );
 
     // Add all menu items
-    menu.append(Some("New Game"), Some("win.new-game"));
-    menu.append(Some("Restart"), Some("win.restart"));
-    menu.append(Some("Statistics"), Some("win.statistics"));
-    menu.append(Some("Seed"), Some("win.seed"));
+    menu.append(Some(&t!("menu-new-game")), Some("win.new-game"));
+    menu.append(Some(&t!("menu-restart")), Some("win.restart"));
+    menu.append(Some(&t!("menu-statistics")), Some("win.statistics"));
+    menu.append(Some(&t!("menu-seed")), Some("win.seed"));
     menu.append_submenu(Some("Settings"), settings_menu_ui.borrow().get_menu());
-    menu.append(Some("About"), Some("win.about"));
+    menu.append(Some(&t!("menu-about")), Some("win.about"));
 
     // Add menu button to header bar
     let header_bar = HeaderBar::new();
@@ -211,7 +212,7 @@ pub fn build_ui(app: &Application) {
             .as_slice(),
     );
 
-    difficulty_selector.set_tooltip_text(Some("Select Difficulty"));
+    difficulty_selector.set_tooltip_text(Some(&t!("select-difficulty")));
     difficulty_box.append(&difficulty_selector);
 
     // Set initial selection based on current settings
@@ -238,11 +239,11 @@ pub fn build_ui(app: &Application) {
         pause_screen.clone(),
     );
 
-    let solve_button = Button::with_label("Solve");
+    let solve_button = Button::with_label(&t!("solve-button"));
     let hint_button = Button::from_icon_name("view-reveal-symbolic");
 
     // Add tooltips
-    hint_button.set_tooltip_text(Some("Show Hint"));
+    hint_button.set_tooltip_text(Some(&t!("show-hint")));
 
     let default_layout =
         LayoutManager::calculate_layout(settings.borrow().difficulty, Some(ClueStats::default()));
@@ -296,7 +297,7 @@ pub fn build_ui(app: &Application) {
     let timer_button = TimerButtonUI::new(&window, game_action_emitter.clone());
     left_box.append(&timer_button.borrow().button);
     left_box.append(&game_info_ui.borrow().timer_label);
-    let hints_label = Label::new(Some("Hints: "));
+    let hints_label = Label::new(Some(&t!("hints-label")));
     hints_label.set_css_classes(&["hints-label"]);
     left_box.append(&hints_label);
     left_box.append(&game_info_ui.borrow().hints_label);
@@ -455,11 +456,11 @@ pub fn build_ui(app: &Application) {
     let action_about = SimpleAction::new("about", None);
     action_about.connect_activate(move |_, _| {
         let dialog = AboutDialog::builder()
-            .program_name("EmojiClu")
+            .program_name(&t!("app-title"))
             .version(APP_VERSION)
-            .authors(vec!["Tim Harper"])
-            .website("https://github.com/timcharper/emojiclu")
-            .website_label("GitHub Repository")
+            .authors(vec![t!("about-author").as_str()])
+            .website(&t!("about-website"))
+            .website_label(&t!("about-website-label"))
             .license_type(License::MitX11)
             .build();
         dialog.present();
@@ -520,7 +521,7 @@ pub fn build_ui(app: &Application) {
     );
 
     window.connect_close_request(move |_| {
-        println!("Destroying window");
+        log::info!(target: "window", "{}", t!("destroying-window"));
         if !game_state.borrow_mut().get_game_save_state().save() {
             log::error!(target: "window", "Failed to save game state");
         }
