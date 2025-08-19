@@ -69,14 +69,13 @@ image {
 }
 
 .maybe-assertion-frame {
-    border: 5px solid #f6d32d;  /* Yellow border */
     background: transparent;
     margin: 0;  /* Ensure border aligns with tile edges */
 }
 
 .maybe-assertion-mark {
-    margin: 4px;  /* Space from top-left corner */
-    opacity: 0.8;
+    margin: 0px;
+    opacity: 1.0;
 }
 
 .puzzle-mat-board {

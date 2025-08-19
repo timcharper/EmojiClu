@@ -16,7 +16,8 @@ pub struct OriginalIcons {
     icons: HashMap<(i32, i32), Rc<Pixbuf>>,
     negative_assertion: Rc<Pixbuf>,
     left_of: Rc<Pixbuf>,
-    maybe_assertion: Rc<Pixbuf>,
+    maybe_assertion_top: Rc<Pixbuf>,
+    maybe_assertion_bottom: Rc<Pixbuf>,
 }
 
 pub struct ScaledIcons {
@@ -24,7 +25,8 @@ pub struct ScaledIcons {
     candidate_scale_icons: HashMap<(i32, i32), Rc<Texture>>,
     scaled_negative_assertion: Rc<Texture>,
     scaled_left_of: Rc<Texture>,
-    scaled_maybe_assertion: Rc<Texture>,
+    scaled_maybe_assertion_top: Rc<Texture>,
+    scaled_maybe_assertion_bottom: Rc<Texture>,
 }
 
 pub struct ImageSet {
@@ -47,25 +49,32 @@ impl ImageSet {
         }
 
         // Load special icons
-        let negative_assertion =
+        let negative_assertion = Rc::new(
             Pixbuf::from_resource("/org/emojiclu/assets/icons/negative-assertion.png")
-                .expect("Failed to load negative assertion icon");
-        let negative_assertion = Rc::new(negative_assertion);
+                .expect("Failed to load negative assertion icon"),
+        );
 
-        let left_of = Pixbuf::from_resource("/org/emojiclu/assets/icons/left-of.png")
-            .expect("Failed to load left-of icon");
-        let left_of = Rc::new(left_of);
+        let left_of = Rc::new(
+            Pixbuf::from_resource("/org/emojiclu/assets/icons/left-of.png")
+                .expect("Failed to load left-of icon"),
+        );
 
-        let maybe_assertion =
-            Pixbuf::from_resource("/org/emojiclu/assets/icons/maybe-assertion.png")
-                .expect("Failed to load maybe assertion icon");
-        let maybe_assertion = Rc::new(maybe_assertion);
+        let maybe_assertion_top = Rc::new(
+            Pixbuf::from_resource("/org/emojiclu/assets/icons/maybe-assertion-top.png")
+                .expect("Failed to load maybe assertion top icon"),
+        );
+
+        let maybe_assertion_bottom = Rc::new(
+            Pixbuf::from_resource("/org/emojiclu/assets/icons/maybe-assertion-bottom.png")
+                .expect("Failed to load maybe assertion bottom icon"),
+        );
 
         let original_icons = OriginalIcons {
             icons: original_icons,
             negative_assertion,
             left_of,
-            maybe_assertion,
+            maybe_assertion_top,
+            maybe_assertion_bottom,
         };
 
         let scaled_icons = ImageSet::rescale_icons(
@@ -123,9 +132,14 @@ impl ImageSet {
             scaled_candidate_tile_size as u32,
         );
 
-        let scaled_maybe_assertion = ImageSet::rescale_icon_from_pixbuf(
-            &original_icons.maybe_assertion,
-            scaled_candidate_tile_size as u32,
+        let scaled_maybe_assertion_top = ImageSet::rescale_icon_from_pixbuf(
+            &original_icons.maybe_assertion_top,
+            scaled_solution_tile_size as u32,
+        );
+
+        let scaled_maybe_assertion_bottom = ImageSet::rescale_icon_from_pixbuf(
+            &original_icons.maybe_assertion_bottom,
+            scaled_solution_tile_size as u32,
         );
 
         let scaled_icons = ScaledIcons {
@@ -133,7 +147,8 @@ impl ImageSet {
             candidate_scale_icons,
             scaled_negative_assertion: Rc::new(scaled_negative_assertion),
             scaled_left_of: Rc::new(scaled_left_of),
-            scaled_maybe_assertion: Rc::new(scaled_maybe_assertion),
+            scaled_maybe_assertion_top: Rc::new(scaled_maybe_assertion_top),
+            scaled_maybe_assertion_bottom: Rc::new(scaled_maybe_assertion_bottom),
         };
 
         scaled_icons
@@ -188,8 +203,11 @@ impl ImageSet {
         Rc::clone(&self.scaled_icons.scaled_left_of)
     }
 
-    pub fn get_maybe_assertion(&self) -> Rc<Texture> {
-        Rc::clone(&self.scaled_icons.scaled_maybe_assertion)
+    pub fn get_maybe_assertion_top(&self) -> Rc<Texture> {
+        Rc::clone(&self.scaled_icons.scaled_maybe_assertion_top)
+    }
+    pub fn get_maybe_assertion_bottom(&self) -> Rc<Texture> {
+        Rc::clone(&self.scaled_icons.scaled_maybe_assertion_bottom)
     }
 }
 

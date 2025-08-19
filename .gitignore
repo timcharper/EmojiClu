@@ -52,3 +52,4 @@ packaging/windows/*.zip
 artifacts/
 repo
 packaging/dist/
+*~lock~*

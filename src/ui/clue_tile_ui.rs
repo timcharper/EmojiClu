@@ -33,7 +33,7 @@ pub struct ClueTileUI {
     resources: Rc<ImageSet>,
     highlight_timeout: Rc<RefCell<Option<SourceId>>>, // Track active highlight timeout
     clue: Option<Clue>,
-    idx: usize,
+    idx: usize, // 0..2, index of the clue cell, not the clueset
 }
 
 impl ClueTileUI {
@@ -110,8 +110,7 @@ impl ClueTileUI {
         self.x_image
             .set_pixel_size(layout.clue_annotation_size.width);
 
-        self.maybe_image
-            .set_pixel_size(layout.clue_annotation_size.width);
+        self.maybe_image.set_pixel_size(layout.clue_tile_size.width);
     }
 
     pub fn set_clue(&mut self, clue: Option<&Clue>) {
@@ -138,7 +137,11 @@ impl ClueTileUI {
     }
 
     fn set_maybe(&self) {
-        let paintable = self.resources.get_maybe_assertion();
+        let paintable = if self.idx == 1 {
+            self.resources.get_maybe_assertion_top()
+        } else {
+            self.resources.get_maybe_assertion_bottom()
+        };
         self.maybe_image.set_paintable(Some(paintable.as_ref()));
         self.maybe_image.set_visible(true);
         self.x_image.set_visible(false);
