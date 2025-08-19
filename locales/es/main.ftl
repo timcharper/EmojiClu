@@ -132,6 +132,29 @@ action-cannot-be = no puede estar
 # Converging deduction note
 converging-note = (<i>todas las soluciones posibles para esta pista se superponen en esta celda, por lo que solo puede ser uno de los valores de la pista</i>)
 
+# Clue type titles
+clue-title-three-adjacent = Tres Adyacentes
+clue-title-two-apart-not-middle = Dos Separadas, Pero No En El Medio
+clue-title-left-of = A La Izquierda De
+clue-title-two-adjacent = Dos Adyacentes
+clue-title-not-adjacent = No Adyacentes
+clue-title-all-in-column = Todas En Columna
+clue-title-two-in-column = Dos En Columna
+clue-title-one-matches-either = Una Coincide Con Cualquiera
+clue-title-not-in-same-column = No En La Misma Columna
+clue-title-two-in-column-one-not = Dos En Columna, Una No
+
+# Clue descriptions
+clue-desc-adjacent = {$tiles} son adyacentes (en cualquier dirección).
+clue-desc-two-adjacent = {"{"}tile:{$tile1}{"}"} está junto a {"{"}tile:{$tile2}{"}"} (en cualquier dirección).
+clue-desc-two-apart = {"{"}tile:{$tile1}{"}"} está a dos de distancia de {"{"}tile:{$tile3}{"}"}, sin {"{"}tile:{$tile2}{"}"} en el medio (en cualquier dirección).
+clue-desc-left-of = {"{"}tile:{$left}{"}"} está a la izquierda de {"{"}tile:{$right}{"}"} (cualquier número de fichas en el medio).
+clue-desc-not-adjacent = {"{"}tile:{$tile1}{"}"} no está junto a {"{"}tile:{$tile2}{"}"} (en cualquier dirección).
+clue-desc-same-column = {$tiles} están en la misma columna.
+clue-desc-two-in-column-without = {"{"}tile:{$tile1}{"}"} y {"{"}tile:{$tile2}{"}"} están en la misma columna, pero {"{"}tile:{$tile3}{"}"} no.
+clue-desc-not-same-column = {"{"}tile:{$tile1}{"}"} no está en la misma columna que {"{"}tile:{$tile2}{"}"}
+clue-desc-one-matches-either = {"{"}tile:{$tile1}{"}"} está en la misma columna que {"{"}tile:{$tile2}{"}"} o {"{"}tile:{$tile3}{"}"}, pero no ambas.
+
 # Debug/Development
 destroying-window = Destruyendo ventana
 weird = Extraño

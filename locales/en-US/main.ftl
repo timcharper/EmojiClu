@@ -132,6 +132,29 @@ action-cannot-be = cannot be
 # Converging deduction note
 converging-note = (<i>all possible solutions for this clue overlap this cell, so it can only be one of the clue values</i>)
 
+# Clue type titles
+clue-title-three-adjacent = Three Adjacent
+clue-title-two-apart-not-middle = Two Apart, But Not The Middle
+clue-title-left-of = Left Of
+clue-title-two-adjacent = Two Adjacent
+clue-title-not-adjacent = Not Adjacent
+clue-title-all-in-column = All In Column
+clue-title-two-in-column = Two In Column
+clue-title-one-matches-either = One Matches Either
+clue-title-not-in-same-column = Not In Same Column
+clue-title-two-in-column-one-not = Two In Column, One Not
+
+# Clue descriptions
+clue-desc-adjacent = {$tiles} are adjacent (in either direction).
+clue-desc-two-adjacent = {"{"}tile:{$tile1}{"}"} is next to {"{"}tile:{$tile2}{"}"} (in either direction).
+clue-desc-two-apart = {"{"}tile:{$tile1}{"}"} is two away from {"{"}tile:{$tile3}{"}"}, without {"{"}tile:{$tile2}{"}"} in the middle (in either direction).
+clue-desc-left-of = {"{"}tile:{$left}{"}"} is left of {"{"}tile:{$right}{"}"} (any number of tiles in between).
+clue-desc-not-adjacent = {"{"}tile:{$tile1}{"}"} is not next to {"{"}tile:{$tile2}{"}"} (in either direction).
+clue-desc-same-column = {$tiles} are in the same column.
+clue-desc-two-in-column-without = {"{"}tile:{$tile1}{"}"} and {"{"}tile:{$tile2}{"}"} are in the same column, but {"{"}tile:{$tile3}{"}"} isn't.
+clue-desc-not-same-column = {"{"}tile:{$tile1}{"}"} is not in the same column as {"{"}tile:{$tile2}{"}"}
+clue-desc-one-matches-either = {"{"}tile:{$tile1}{"}"} is either in the same column as {"{"}tile:{$tile2}{"}"} or {"{"}tile:{$tile3}{"}"}, but not both.
+
 # Debug/Development
 destroying-window = Destroying window
 weird = Weird

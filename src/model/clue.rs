@@ -4,6 +4,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use fluent_i18n::t;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
@@ -94,20 +95,20 @@ impl ClueType {
     pub fn get_title(&self) -> String {
         match self {
             ClueType::Horizontal(hor) => match hor {
-                HorizontalClueType::ThreeAdjacent => "Three Adjacent".to_string(),
+                HorizontalClueType::ThreeAdjacent => t!("clue-title-three-adjacent"),
                 HorizontalClueType::TwoApartNotMiddle => {
-                    "Two Apart, But Not The Middle".to_string()
+                    t!("clue-title-two-apart-not-middle")
                 }
-                HorizontalClueType::LeftOf => "Left Of".to_string(),
-                HorizontalClueType::TwoAdjacent => "Two Adjacent".to_string(),
-                HorizontalClueType::NotAdjacent => "Not Adjacent".to_string(),
+                HorizontalClueType::LeftOf => t!("clue-title-left-of"),
+                HorizontalClueType::TwoAdjacent => t!("clue-title-two-adjacent"),
+                HorizontalClueType::NotAdjacent => t!("clue-title-not-adjacent"),
             },
             ClueType::Vertical(vert) => match vert {
-                VerticalClueType::ThreeInColumn => "All In Column".to_string(),
-                VerticalClueType::TwoInColumn => "Two In Column".to_string(),
-                VerticalClueType::OneMatchesEither => "One Matches Either".to_string(),
-                VerticalClueType::NotInSameColumn => "Not In Same Column".to_string(),
-                VerticalClueType::TwoInColumnWithout => "Two In Column, One Not".to_string(),
+                VerticalClueType::ThreeInColumn => t!("clue-title-all-in-column"),
+                VerticalClueType::TwoInColumn => t!("clue-title-two-in-column"),
+                VerticalClueType::OneMatchesEither => t!("clue-title-one-matches-either"),
+                VerticalClueType::NotInSameColumn => t!("clue-title-not-in-same-column"),
+                VerticalClueType::TwoInColumnWithout => t!("clue-title-two-in-column-one-not"),
             },
         }
     }
@@ -706,54 +707,57 @@ impl Clue {
     }
 
     pub fn description(&self) -> String {
-        // Create a temporary UI just for parsing templates
         match &self.clue_type {
             ClueType::Horizontal(horiz) => match horiz {
-                HorizontalClueType::TwoAdjacent | HorizontalClueType::ThreeAdjacent => {
-                    // Create template string with tiles and description
-                    let mut template = String::new();
+                HorizontalClueType::TwoAdjacent => {
+                    t!("clue-desc-two-adjacent", {
+                        "tile1" => self.assertions[0].tile.to_string(),
+                        "tile2" => self.assertions[1].tile.to_string(),
+                    })
+                }
+
+                HorizontalClueType::ThreeAdjacent => {
+                    // Create template string with tiles
+                    let mut tiles = String::new();
                     for (i, assertion) in self.assertions.iter().enumerate() {
                         if i > 0 {
-                            template.push(' ');
+                            tiles.push(' ');
                         }
-                        template.push_str(&format!("{{tile:{}}}", assertion.tile.to_string()));
+                        tiles.push_str(&format!("{{tile:{}}}", assertion.tile.to_string()));
                     }
-                    template.push_str(" are adjacent (forward, backward).");
-                    template
+                    t!("clue-desc-adjacent", { "tiles" => tiles })
                 }
+
                 HorizontalClueType::TwoApartNotMiddle => {
-                    format!("{{tile:{}}} is two away from {{tile:{}}}, without {{tile:{}}} in the middle (forward, backward).",
-                        self.assertions[0].tile.to_string(),
-                        self.assertions[2].tile.to_string(),
-                        self.assertions[1].tile.to_string()
-                    )
+                    t!("clue-desc-two-apart", {
+                        "tile1" => self.assertions[0].tile.to_string(),
+                        "tile2" => self.assertions[1].tile.to_string(),
+                        "tile3" => self.assertions[2].tile.to_string()
+                    })
                 }
                 HorizontalClueType::LeftOf => {
-                    format!(
-                        "{{tile:{}}} is left of {{tile:{}}} (any number of tiles in between).",
-                        self.assertions[0].tile.to_string(),
-                        self.assertions[1].tile.to_string()
-                    )
+                    t!("clue-desc-left-of", {
+                        "left" => self.assertions[0].tile.to_string(),
+                        "right" => self.assertions[1].tile.to_string()
+                    })
                 }
                 HorizontalClueType::NotAdjacent => {
-                    format!(
-                        "{{tile:{}}} is not next to {{tile:{}}} (forward, backward).",
-                        self.assertions[0].tile.to_string(),
-                        self.assertions[1].tile.to_string()
-                    )
+                    t!("clue-desc-not-adjacent", {
+                        "tile1" => self.assertions[0].tile.to_string(),
+                        "tile2" => self.assertions[1].tile.to_string()
+                    })
                 }
             },
             ClueType::Vertical(vert) => match vert {
                 VerticalClueType::ThreeInColumn | VerticalClueType::TwoInColumn => {
-                    let mut template = String::new();
+                    let mut tiles = String::new();
                     for (i, assertion) in self.assertions.iter().enumerate() {
                         if i > 0 {
-                            template.push(' ');
+                            tiles.push(' ');
                         }
-                        template.push_str(&format!("{{tile:{}}}", assertion.tile.to_string()));
+                        tiles.push_str(&format!("{{tile:{}}}", assertion.tile.to_string()));
                     }
-                    template.push_str(" are in the same column.");
-                    template
+                    t!("clue-desc-same-column", { "tiles" => tiles })
                 }
                 VerticalClueType::TwoInColumnWithout => {
                     let clue_assertions: Vec<(usize, &TileAssertion)> =
@@ -774,28 +778,25 @@ impl Clue {
                     assert!(positive_assertion_positions.len() == 2);
                     assert!(negative_assertion_positions.len() == 1);
 
-                    format!(
-                        "{{tile:{}}} and {{tile:{}}} are in the same column, but {{tile:{}}} isn't.",
-                        positive_assertion_positions[0],
-                        positive_assertion_positions[1],
-                        negative_assertion_positions[0],
-                    )
+                    t!("clue-desc-two-in-column-without", {
+                        "tile1" => positive_assertion_positions[0].clone(),
+                        "tile2" => positive_assertion_positions[1].clone(),
+                        "tile3" => negative_assertion_positions[0].clone()
+                    })
                 }
 
                 VerticalClueType::NotInSameColumn => {
-                    format!(
-                        "{{tile:{}}} is not in the same column as {{tile:{}}}",
-                        self.assertions[0].tile.to_string(),
-                        self.assertions[1].tile.to_string()
-                    )
+                    t!("clue-desc-not-same-column", {
+                        "tile1" => self.assertions[0].tile.to_string(),
+                        "tile2" => self.assertions[1].tile.to_string()
+                    })
                 }
                 VerticalClueType::OneMatchesEither => {
-                    format!(
-                        "{{tile:{}}} is either in the same column as {{tile:{}}} or {{tile:{}}}, but not both.",
-                        self.assertions[0].tile.to_string(),
-                        self.assertions[1].tile.to_string(),
-                        self.assertions[2].tile.to_string()
-                    )
+                    t!("clue-desc-one-matches-either", {
+                        "tile1" => self.assertions[0].tile.to_string(),
+                        "tile2" => self.assertions[1].tile.to_string(),
+                        "tile3" => self.assertions[2].tile.to_string()
+                    })
                 }
             },
         }

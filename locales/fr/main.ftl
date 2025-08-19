@@ -132,6 +132,29 @@ action-cannot-be = ne peut pas être
 # Converging deduction note
 converging-note = (<i>toutes les solutions possibles pour cet indice se chevauchent cette cellule, donc elle ne peut être qu'une des valeurs de l'indice</i>)
 
+# Clue type titles
+clue-title-three-adjacent = Trois Adjacentes
+clue-title-two-apart-not-middle = Deux Séparées, Mais Pas Au Milieu
+clue-title-left-of = À Gauche De
+clue-title-two-adjacent = Deux Adjacentes
+clue-title-not-adjacent = Non Adjacentes
+clue-title-all-in-column = Toutes En Colonne
+clue-title-two-in-column = Deux En Colonne
+clue-title-one-matches-either = Une Correspond À L'Une Ou L'Autre
+clue-title-not-in-same-column = Pas Dans La Même Colonne
+clue-title-two-in-column-one-not = Deux En Colonne, Une Pas
+
+# Clue descriptions
+clue-desc-adjacent = {$tiles} sont adjacentes (dans les deux directions).
+clue-desc-two-adjacent = {"{"}tile:{$tile1}{"}"} est à côté de {"{"}tile:{$tile2}{"}"} (dans les deux directions).
+clue-desc-two-apart = {"{"}tile:{$tile1}{"}"} est à deux de distance de {"{"}tile:{$tile3}{"}"}, sans {"{"}tile:{$tile2}{"}"} au milieu (dans les deux directions).
+clue-desc-left-of = {"{"}tile:{$left}{"}"} est à gauche de {"{"}tile:{$right}{"}"} (n'importe quel nombre de tuiles entre).
+clue-desc-not-adjacent = {"{"}tile:{$tile1}{"}"} n'est pas à côté de {"{"}tile:{$tile2}{"}"} (dans les deux directions).
+clue-desc-same-column = {$tiles} sont dans la même colonne.
+clue-desc-two-in-column-without = {"{"}tile:{$tile1}{"}"} et {"{"}tile:{$tile2}{"}"} sont dans la même colonne, mais {"{"}tile:{$tile3}{"}"} ne l'est pas.
+clue-desc-not-same-column = {"{"}tile:{$tile1}{"}"} n'est pas dans la même colonne que {"{"}tile:{$tile2}{"}"}
+clue-desc-one-matches-either = {"{"}tile:{$tile1}{"}"} est soit dans la même colonne que {"{"}tile:{$tile2}{"}"} ou {"{"}tile:{$tile3}{"}"}, mais pas les deux.
+
 # Debug/Development
 destroying-window = Destruction de la fenêtre
 weird = Bizarre
