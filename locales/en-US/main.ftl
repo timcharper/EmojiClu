@@ -155,6 +155,13 @@ clue-desc-two-in-column-without = {"{"}tile:{$tile1}{"}"} and {"{"}tile:{$tile2}
 clue-desc-not-same-column = {"{"}tile:{$tile1}{"}"} is not in the same column as {"{"}tile:{$tile2}{"}"}
 clue-desc-one-matches-either = {"{"}tile:{$tile1}{"}"} is either in the same column as {"{"}tile:{$tile2}{"}"} or {"{"}tile:{$tile3}{"}"}, but not both.
 
+# Difficulty levels
+difficulty-tutorial = Tutorial
+difficulty-easy = Easy
+difficulty-moderate = Moderate
+difficulty-hard = Hard
+difficulty-veteran = Veteran
+
 # Debug/Development
 destroying-window = Destroying window
 weird = Weird

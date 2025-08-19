@@ -155,6 +155,13 @@ clue-desc-two-in-column-without = {"{"}tile:{$tile1}{"}"} y {"{"}tile:{$tile2}{"
 clue-desc-not-same-column = {"{"}tile:{$tile1}{"}"} no está en la misma columna que {"{"}tile:{$tile2}{"}"}
 clue-desc-one-matches-either = {"{"}tile:{$tile1}{"}"} está en la misma columna que {"{"}tile:{$tile2}{"}"} o {"{"}tile:{$tile3}{"}"}, pero no ambas.
 
+# Difficulty levels
+difficulty-tutorial = Tutorial
+difficulty-easy = Fácil
+difficulty-moderate = Moderado
+difficulty-hard = Difícil
+difficulty-veteran = Veterano
+
 # Debug/Development
 destroying-window = Destruyendo ventana
 weird = Extraño

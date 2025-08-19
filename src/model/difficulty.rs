@@ -1,3 +1,4 @@
+use fluent_i18n::t;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -67,13 +68,12 @@ impl Difficulty {
 
     pub fn to_string(&self) -> String {
         match self {
-            Difficulty::Tutorial => "Tutorial",
-            Difficulty::Easy => "Easy",
-            Difficulty::Moderate => "Moderate",
-            Difficulty::Hard => "Hard",
-            Difficulty::Veteran => "Veteran",
+            Difficulty::Tutorial => t!("difficulty-tutorial"),
+            Difficulty::Easy => t!("difficulty-easy"),
+            Difficulty::Moderate => t!("difficulty-moderate"),
+            Difficulty::Hard => t!("difficulty-hard"),
+            Difficulty::Veteran => t!("difficulty-veteran"),
         }
-        .to_string()
     }
 
     /// When generating clues, look this far ahead to find a solution that minimizes deductions
