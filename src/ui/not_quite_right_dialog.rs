@@ -8,6 +8,7 @@ use gtk4::{
 };
 
 use crate::{events::EventEmitter, model::GameActionEvent};
+use fluent_i18n::t;
 
 pub struct NotQuiteRightDialog {
     window: Rc<ApplicationWindow>,
@@ -51,9 +52,9 @@ impl NotQuiteRightDialog {
             .build();
         content_area.append(&buttons);
 
-        let cancel_button = gtk4::Button::builder().label("Cancel").build();
+        let cancel_button = gtk4::Button::builder().label(&t!("cancel")).build();
         buttons.append(&cancel_button);
-        let ok_button = gtk4::Button::builder().label("OK").build();
+        let ok_button = gtk4::Button::builder().label(&t!("ok")).build();
         buttons.append(&ok_button);
 
         let ok_clicked = Rc::new(Cell::new(false));

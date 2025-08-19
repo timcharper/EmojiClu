@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
 use crate::model::GameActionEvent;
+use fluent_i18n::t;
 use gio::SimpleAction;
 
 pub struct TimerButtonUI {
@@ -23,11 +24,11 @@ impl TimerButtonUI {
         game_action_emitter: EventEmitter<GameActionEvent>,
     ) -> Rc<RefCell<Self>> {
         let button = Button::builder()
-            .label("⏸︎")
+            .label(&t!("timer-pause"))
             .css_classes(["timer-control"])
             .action_name("win.pause")
             .build();
-        button.set_tooltip_text(Some("Pause Game (Space)"));
+        button.set_tooltip_text(Some(&t!("timer-pause-tooltip")));
 
         let timer_button_ui = Rc::new(RefCell::new(Self {
             button,

@@ -11,6 +11,7 @@ use crate::{
     events::{EventEmitter, EventObserver, Unsubscriber},
     model::{Difficulty, GameActionEvent, GameStateEvent},
 };
+use fluent_i18n::t;
 
 pub struct SeedDialog {
     window: Rc<ApplicationWindow>,
@@ -67,7 +68,7 @@ impl SeedDialog {
             .build();
 
         let dialog = gtk4::Window::builder()
-            .title("Game Seed")
+            .title(&t!("game-seed"))
             .transient_for(self.window.as_ref())
             .modal(true)
             .child(&content_area)
@@ -82,8 +83,8 @@ impl SeedDialog {
         let button_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .build();
-        let ok_button = gtk4::Button::builder().label("OK").build();
-        let cancel_button = gtk4::Button::builder().label("Cancel").build();
+        let ok_button = gtk4::Button::builder().label(&t!("ok")).build();
+        let cancel_button = gtk4::Button::builder().label(&t!("cancel")).build();
         button_box.append(&cancel_button);
         button_box.append(&ok_button);
         button_box.set_halign(gtk4::Align::End);
