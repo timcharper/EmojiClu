@@ -1,6 +1,6 @@
 use super::{ClueSet, ClueWithAddress, Deduction, Difficulty, TimerState};
-use crate::model::{GameBoard, GameStats};
-use std::rc::Rc;
+use crate::model::{ClueAddress, GameBoard, GameStats};
+use std::{collections::HashSet, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClueSelection {
@@ -32,7 +32,7 @@ pub enum GameStateEvent {
     PuzzleSubmissionReadyChanged(bool),
     PuzzleCompleted(PuzzleCompletionState),
     ClueHintHighlight(Option<ClueWithAddress>),
-    ClueSetUpdate(Rc<ClueSet>, Difficulty),
+    ClueSetUpdate(Rc<ClueSet>, Difficulty, HashSet<ClueAddress>),
     ClueSelected(Option<ClueSelection>),
 }
 

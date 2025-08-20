@@ -166,6 +166,7 @@ impl GameState {
         self.game_state_emitter.emit(GameStateEvent::ClueSetUpdate(
             self.clue_set.clone(),
             self.current_board.solution.difficulty,
+            self.current_board.completed_clues.clone(),
         ));
         self.game_state_emitter
             .emit(GameStateEvent::HistoryChanged {
