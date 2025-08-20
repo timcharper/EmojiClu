@@ -25,24 +25,24 @@ process_faces() {
   declare -a BORDERS
   GRADIENTS=(
     "#FFFFFF-#FE54FF"
-    "navy-cyan"
-    "darkred-gold"
-    "indigo-orange"
-    "#000-lightgreen" # robot
-    "#700-#f77" # party
+    "#000080-#00FFFF"
+    "#8B0000-#FFD700"
+    "#4B0082-#FFA500"
+    "#000000-#90EE90" # robot
+    "#770000-#FF7777" # party
     "#FFFFFF-#006FFF"
-    "darkgrey-turquoise"
+    "#A9A9A9-#40E0D0"
   )
 
   BORDERS=(
-    "#61B2E4"  # matches halo color
-    "#FF4500"  # OrangeRed for "navy-cyan" (strong pop against the cool tones)
-    "#00FFFF"  # Cyan for "darkred-gold" (cool contrast to warm tones)
-    "#00FF00"  # Lime Green for "indigo-orange" (electric and striking contrast)
-    "#FFA500"  # Orange for "darkblue-lightpink" (complements and enhances contrast)
-    "#8B0000"  # Party guy
-    "#FF9000"  # Zary face
-    "#FF00FF"  # Magenta for "darkgrey-turquoise" (vibrant pop against muted tones)
+    "#305972"  # matches halo color (darkened by 50%)
+    "#7F2300"  # OrangeRed for "navy-cyan" (strong pop against the cool tones, darkened by 50%)
+    "#007F7F"  # Cyan for "darkred-gold" (cool contrast to warm tones, darkened by 50%)
+    "#007F00"  # Lime Green for "indigo-orange" (electric and striking contrast, darkened by 50%)
+    "#7F5200"  # Orange for "darkblue-lightpink" (complements and enhances contrast, darkened by 50%)
+    "#450000"  # Party guy (darkened by 50%)
+    "#7F4800"  # Zary face (darkened by 50%)
+    "#7F007F"  # Magenta for "darkgrey-turquoise" (vibrant pop against muted tones, darkened by 50%)
   )
 
 
