@@ -58,7 +58,7 @@ tutorial-welcome = <b>Welcome to EmojiClu</b>, a logical deduction puzzle game.
     
     Above this text is the puzzle grid, to the right and bottom are clues. Your goal is to figure out the location of various tiles making deductions with the clues.
     
-    First, let's start off using the hint system. Press the {"{"}icon:view-reveal-symbolic{"}"} button (in the top-right corner) now.
+    First, let's start off using the hint system. Press the {"{"}icon:view-reveal-symbolic{"}"} button (in the top-left corner) now.
 
 tutorial-phase2 = Great! The game selected and highlighted a clue you should look at.
     

@@ -297,6 +297,7 @@ pub fn build_ui(app: &Application) {
     let timer_button = TimerButtonUI::new(&window, game_action_emitter.clone());
     left_box.append(&timer_button.borrow().button);
     left_box.append(&game_info_ui.borrow().timer_label);
+    left_box.append(&hint_button);
     let hints_label = Label::new(Some(&t!("hints-label")));
     hints_label.set_css_classes(&["hints-label"]);
     left_box.append(&hints_label);
@@ -318,7 +319,6 @@ pub fn build_ui(app: &Application) {
     if Settings::is_debug_mode() {
         right_box.append(&solve_button);
     }
-    right_box.append(&hint_button);
 
     let menu_button = MenuButton::builder()
         .icon_name("open-menu-symbolic")

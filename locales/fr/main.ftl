@@ -58,7 +58,7 @@ tutorial-welcome = <b>Bienvenue dans EmojiClu</b>, un jeu de puzzle de déductio
     
     Au-dessus de ce texte se trouve la grille de puzzle, à droite et en bas se trouvent les indices. Votre objectif est de découvrir l'emplacement de diverses tuiles en faisant des déductions avec les indices.
     
-    D'abord, commençons par utiliser le système d'indices. Appuyez sur le bouton {"{"}icon:view-reveal-symbolic{"}"} (dans le coin supérieur droit) maintenant.
+    D'abord, commençons par utiliser le système d'indices. Appuyez sur le bouton {"{"}icon:view-reveal-symbolic{"}"} (dans le coin supérieur gauche) maintenant.
 
 tutorial-phase2 = Parfait ! Le jeu a sélectionné et mis en évidence un indice que vous devriez examiner.
     

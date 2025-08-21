@@ -58,7 +58,7 @@ tutorial-welcome = <b>¡Bienvenido a EmojiClu</b>, un juego de rompecabezas de d
     
     Encima de este texto está la cuadrícula del rompecabezas, a la derecha y abajo están las pistas. Tu objetivo es descubrir la ubicación de varios mosaicos haciendo deducciones con las pistas.
     
-    Primero, comencemos usando el sistema de pistas. Presiona el botón {"{"}icon:view-reveal-symbolic{"}"} (en la esquina superior derecha) ahora.
+    Primero, comencemos usando el sistema de pistas. Presiona el botón {"{"}icon:view-reveal-symbolic{"}"} (en la esquina superior izquierda) ahora.
 
 tutorial-phase2 = ¡Excelente! El juego seleccionó y resaltó una pista que deberías mirar.
     
