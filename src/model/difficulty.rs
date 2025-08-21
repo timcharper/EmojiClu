@@ -12,7 +12,7 @@ pub enum Difficulty {
 
 impl Default for Difficulty {
     fn default() -> Self {
-        Difficulty::Easy
+        Difficulty::Tutorial
     }
 }
 
