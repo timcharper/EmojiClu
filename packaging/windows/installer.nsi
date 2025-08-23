@@ -1,8 +1,8 @@
 Name "EmojiClu"
 !define APPNAME "emojiclu"
-!define APPVERSION 1.0.1
+!define APPVERSION 1.1.0
 !define COMPANY "Tim Harper"
-!define OUTFILE emojiclu-installer-1.0.1.exe
+!define OUTFILE emojiclu-installer-1.1.0.exe
 !define EXECUTABLE "bin\emojiclu.exe"
 
 !include "MUI2.nsh"
