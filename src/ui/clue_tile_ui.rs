@@ -12,6 +12,7 @@ use super::ImageSet;
 
 enum Decoration {
     Negative,
+    NotAdjacent,
     Maybe,
 }
 
@@ -146,8 +147,17 @@ impl ClueTileUI {
         self.maybe_image.set_visible(true);
         self.x_image.set_visible(false);
         self.decoration_frame.set_visible(true);
-        self.decoration_frame
-            .set_css_classes(&["maybe-assertion-frame"]);
+    }
+
+    fn set_not_adjacent(&self) {
+        let paintable = if self.idx == 0 {
+            self.resources.get_not_next_to_assertion_left()
+        } else {
+            self.resources.get_not_next_to_assertion_right()
+        };
+        self.maybe_image.set_paintable(Some(paintable.as_ref()));
+        self.maybe_image.set_visible(true);
+        self.x_image.set_visible(false);
         self.decoration_frame.set_visible(true);
     }
 
@@ -200,6 +210,7 @@ impl ClueTileUI {
                         match decoration {
                             Decoration::Negative => self.set_negative(),
                             Decoration::Maybe => self.set_maybe(),
+                            Decoration::NotAdjacent => self.set_not_adjacent(),
                         }
                     }
                 }
@@ -222,6 +233,17 @@ impl ClueTileUI {
                 0 => ClueTileContents::TileAssertion(clue.assertions[0].tile, None),
                 1 => ClueTileContents::LeftOf,
                 2 => ClueTileContents::TileAssertion(clue.assertions[1].tile, None),
+                _ => ClueTileContents::None,
+            },
+            ClueType::Horizontal(HorizontalClueType::NotAdjacent) => match idx {
+                0 => ClueTileContents::TileAssertion(
+                    clue.assertions[0].tile,
+                    Some(Decoration::NotAdjacent),
+                ),
+                1 => ClueTileContents::TileAssertion(
+                    clue.assertions[1].tile,
+                    Some(Decoration::NotAdjacent),
+                ),
                 _ => ClueTileContents::None,
             },
             ClueType::Vertical(VerticalClueType::OneMatchesEither) => match idx {

@@ -18,6 +18,8 @@ pub struct OriginalIcons {
     left_of: Rc<Pixbuf>,
     maybe_assertion_top: Rc<Pixbuf>,
     maybe_assertion_bottom: Rc<Pixbuf>,
+    not_next_to_assertion_left: Rc<Pixbuf>,
+    not_next_to_assertion_right: Rc<Pixbuf>,
 }
 
 pub struct ScaledIcons {
@@ -27,6 +29,8 @@ pub struct ScaledIcons {
     scaled_left_of: Rc<Texture>,
     scaled_maybe_assertion_top: Rc<Texture>,
     scaled_maybe_assertion_bottom: Rc<Texture>,
+    scaled_not_next_to_assertion_left: Rc<Texture>,
+    scaled_not_next_to_assertion_right: Rc<Texture>,
 }
 
 pub struct ImageSet {
@@ -54,6 +58,16 @@ impl ImageSet {
                 .expect("Failed to load negative assertion icon"),
         );
 
+        let not_next_to_assertion_left = Rc::new(
+            Pixbuf::from_resource("/org/emojiclu/assets/icons/not-next-to-assertion-left.png")
+                .expect("Failed to load not next to assertion left icon"),
+        );
+
+        let not_next_to_assertion_right = Rc::new(
+            Pixbuf::from_resource("/org/emojiclu/assets/icons/not-next-to-assertion-right.png")
+                .expect("Failed to load not next to assertion right icon"),
+        );
+
         let left_of = Rc::new(
             Pixbuf::from_resource("/org/emojiclu/assets/icons/left-of.png")
                 .expect("Failed to load left-of icon"),
@@ -75,6 +89,8 @@ impl ImageSet {
             left_of,
             maybe_assertion_top,
             maybe_assertion_bottom,
+            not_next_to_assertion_left,
+            not_next_to_assertion_right,
         };
 
         let scaled_icons = ImageSet::rescale_icons(
@@ -142,6 +158,16 @@ impl ImageSet {
             scaled_solution_tile_size as u32,
         );
 
+        let scaled_not_next_to_assertion_left = ImageSet::rescale_icon_from_pixbuf(
+            &original_icons.not_next_to_assertion_left,
+            scaled_solution_tile_size as u32,
+        );
+
+        let scaled_not_next_to_assertion_right = ImageSet::rescale_icon_from_pixbuf(
+            &original_icons.not_next_to_assertion_right,
+            scaled_solution_tile_size as u32,
+        );
+
         let scaled_icons = ScaledIcons {
             solution_scale_icons,
             candidate_scale_icons,
@@ -149,6 +175,8 @@ impl ImageSet {
             scaled_left_of: Rc::new(scaled_left_of),
             scaled_maybe_assertion_top: Rc::new(scaled_maybe_assertion_top),
             scaled_maybe_assertion_bottom: Rc::new(scaled_maybe_assertion_bottom),
+            scaled_not_next_to_assertion_left: Rc::new(scaled_not_next_to_assertion_left),
+            scaled_not_next_to_assertion_right: Rc::new(scaled_not_next_to_assertion_right),
         };
 
         scaled_icons
@@ -208,6 +236,13 @@ impl ImageSet {
     }
     pub fn get_maybe_assertion_bottom(&self) -> Rc<Texture> {
         Rc::clone(&self.scaled_icons.scaled_maybe_assertion_bottom)
+    }
+
+    pub fn get_not_next_to_assertion_left(&self) -> Rc<Texture> {
+        Rc::clone(&self.scaled_icons.scaled_not_next_to_assertion_left)
+    }
+    pub fn get_not_next_to_assertion_right(&self) -> Rc<Texture> {
+        Rc::clone(&self.scaled_icons.scaled_not_next_to_assertion_right)
     }
 }
 
