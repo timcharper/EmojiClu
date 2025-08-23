@@ -12,7 +12,7 @@ VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.package
 
 tag: packaging/windows/installer.nsi packaging/emojiclu-deb/DEBIAN/control
 	cargo test
-	git commit -a -m "Bump version to $(VERSION)"
+	git status || git commit -a -m "Bump version to $(VERSION)"
 	git tag -a v$(VERSION) -m "Release $(VERSION)"
 	git push origin v$(VERSION) main
 
