@@ -21,18 +21,18 @@ pub enum GameStateEvent {
         history_index: usize,
         history_length: usize,
     },
-    GridUpdate(GameBoard),
-    ClueStatusUpdate {
+    GridUpdated(GameBoard),
+    ClueStatusUpdated {
         horizontal_hidden_tiles: Vec<usize>,
         vertical_hidden_tiles: Vec<usize>,
     },
-    CellHintHighlight(Deduction),
+    HintSuggested(Deduction),
     HintUsageChanged(u32),
     TimerStateChanged(TimerState),
     PuzzleSubmissionReadyChanged(bool),
     PuzzleCompleted(PuzzleCompletionState),
-    ClueHintHighlight(Option<ClueWithAddress>),
-    ClueSetUpdate(Rc<ClueSet>, Difficulty, HashSet<ClueAddress>),
+    ClueHintHighlighted(Option<ClueWithAddress>),
+    ClueSetUpdated(Rc<ClueSet>, Difficulty, HashSet<ClueAddress>),
     ClueSelected(Option<ClueSelection>),
 }
 

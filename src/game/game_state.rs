@@ -163,7 +163,7 @@ impl GameState {
             .emit(GameStateEvent::HintUsageChanged(self.hints_used));
         self.game_state_emitter
             .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
-        self.game_state_emitter.emit(GameStateEvent::ClueSetUpdate(
+        self.game_state_emitter.emit(GameStateEvent::ClueSetUpdated(
             self.clue_set.clone(),
             self.current_board.solution.difficulty,
             self.current_board.completed_clues.clone(),
@@ -249,7 +249,7 @@ impl GameState {
 
     fn sync_board_display(&mut self) {
         // Emit grid update event
-        self.game_state_emitter.emit(GameStateEvent::GridUpdate(
+        self.game_state_emitter.emit(GameStateEvent::GridUpdated(
             self.current_board.as_ref().clone(),
         ));
         // Emit completion state event
@@ -545,7 +545,7 @@ impl GameState {
                 }
 
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueHintHighlight(Some(
+                    .emit(GameStateEvent::ClueHintHighlighted(Some(
                         addressed_clue.clone(),
                     )));
             }
@@ -555,7 +555,7 @@ impl GameState {
                     // highlight cells
 
                     self.game_state_emitter
-                        .emit(GameStateEvent::CellHintHighlight(first_deduction.clone()));
+                        .emit(GameStateEvent::HintSuggested(first_deduction.clone()));
                 }
             }
             return true;
@@ -653,7 +653,7 @@ impl GameState {
 
             if self.current_clue_hint.is_none() {
                 self.game_state_emitter
-                    .emit(GameStateEvent::ClueHintHighlight(None));
+                    .emit(GameStateEvent::ClueHintHighlighted(None));
             }
         }
     }

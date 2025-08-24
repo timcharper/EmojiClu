@@ -201,7 +201,7 @@ impl TutorialUI {
                     _ => {}
                 }
             }
-            GameStateEvent::ClueHintHighlight(clue_with_address) => {
+            GameStateEvent::ClueHintHighlighted(clue_with_address) => {
                 if let Some(cwa) = clue_with_address {
                     match &self.current_step {
                         TutorialStep::HintUsagePhase1 => {
@@ -212,7 +212,7 @@ impl TutorialUI {
                     self.sync_tutorial_text();
                 }
             }
-            GameStateEvent::CellHintHighlight(deduction) => match &self.current_step {
+            GameStateEvent::HintSuggested(deduction) => match &self.current_step {
                 TutorialStep::HintUsagePhase2(cwa) => {
                     self.current_step =
                         TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
@@ -220,7 +220,7 @@ impl TutorialUI {
                 }
                 _ => {}
             },
-            GameStateEvent::GridUpdate(board) => {
+            GameStateEvent::GridUpdated(board) => {
                 self.current_board = Some(board.clone());
                 match &self.current_step {
                     TutorialStep::HintUsagePhase3(cwa, deduction) => {

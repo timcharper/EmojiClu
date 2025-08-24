@@ -157,7 +157,7 @@ impl PuzzleGridUI {
 
     fn handle_game_state_event(&mut self, event: &GameStateEvent) {
         match event {
-            GameStateEvent::GridUpdate(board) => {
+            GameStateEvent::GridUpdated(board) => {
                 self.current_difficulty = board.solution.difficulty;
                 self.set_grid_size(board.solution.n_rows, board.solution.n_variants);
                 for row in 0..board.solution.n_rows {
@@ -185,7 +185,7 @@ impl PuzzleGridUI {
                 self.completed_clues = board.completed_clues().clone();
                 self.sync_clue_spotlight_enabled();
             }
-            GameStateEvent::CellHintHighlight(deduction) => {
+            GameStateEvent::HintSuggested(deduction) => {
                 self.highlight_candidate(
                     deduction.tile_assertion.tile.row,
                     deduction.column,
@@ -203,7 +203,7 @@ impl PuzzleGridUI {
                     self.set_current_clue(&None);
                 }
             }
-            GameStateEvent::ClueHintHighlight(addressed_clue) => {
+            GameStateEvent::ClueHintHighlighted(addressed_clue) => {
                 self.current_clue_hint = addressed_clue.clone();
                 self.sync_spotlight();
             }

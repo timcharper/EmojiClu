@@ -203,7 +203,7 @@ impl LayoutManager {
 
     fn handle_game_state_event(&mut self, event: &GameStateEvent) {
         match event {
-            GameStateEvent::ClueSetUpdate(clue_set, _, _) => {
+            GameStateEvent::ClueSetUpdated(clue_set, _, _) => {
                 self.update_clue_stats(clue_set.as_ref())
             }
             _ => (),

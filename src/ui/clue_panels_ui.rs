@@ -175,14 +175,14 @@ impl CluePanelsUI {
 
     fn handle_game_state_event(&mut self, event: &GameStateEvent) {
         match event {
-            GameStateEvent::ClueSetUpdate(clue_set, difficulty, completed_clues) => {
+            GameStateEvent::ClueSetUpdated(clue_set, difficulty, completed_clues) => {
                 self.set_clues(clue_set, *difficulty);
                 self.set_clue_completion(completed_clues);
             }
-            GameStateEvent::ClueHintHighlight(Some(clue_with_address)) => {
+            GameStateEvent::ClueHintHighlighted(Some(clue_with_address)) => {
                 self.highlight_clue(clue_with_address.address(), Duration::from_secs(4));
             }
-            GameStateEvent::GridUpdate(grid) => {
+            GameStateEvent::GridUpdated(grid) => {
                 self.set_clue_completion(&grid.completed_clues);
             }
             GameStateEvent::ClueSelected(clue_selection) => {
