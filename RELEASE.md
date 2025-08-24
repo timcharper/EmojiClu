@@ -21,6 +21,7 @@ make tag
 ```
 
 Build the assets
+
 ```sh
 make windows linux deb
 ```
@@ -34,6 +35,7 @@ make bump-flatpak
 ```
 
 Build flatpak
+
 ```sh
 flatpak run org.flatpak.Builder \
   --force-clean \
@@ -48,9 +50,16 @@ flatpak run org.flatpak.Builder \
   io.github.timcharper.EmojiClu.yml
 ```
 
-OStree commit screenshots.
+Update flathub (https://github.com/flathub/io.github.timcharper.EmojiClu):
 
+```sh
+cp cargo-sources.json ../io.github.timcharper.EmojiClu/
+cp io.github.timcharper.EmojiClu.yml ../io.github.timcharper.EmojiClu/
+cd ../io.github.timcharper.EmojiClu/
+VERSION="$(yq e '.modules[0].sources[0].tag' io.github.timcharper.EmojiClu.yml)"
+git checkout -b release/${VERSION}
+git add .
+git commit -m "release emojiClu ${VERSION}"
+git push
+gh pr create --title "Relase EmojiClu $VERSION"
 ```
-ostree commit --repo=repo --canonical-permissions --branch=screenshots/$(flatpak --default-arch) packaging/flatpak/builddir/files/share/app-info/media
-```
-
