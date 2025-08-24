@@ -1,5 +1,5 @@
 use crate::destroyable::Destroyable;
-use crate::events::{Channel, EventEmitter};
+use crate::events::Channel;
 use crate::game::game_state::GameState;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
@@ -13,10 +13,8 @@ use crate::ui::stats_dialog::StatsDialog;
 use crate::ui::submit_ui::SubmitUI;
 use crate::ui::timer_button_ui::TimerButtonUI;
 use crate::ui::top_level_input_event_monitor::TopLevelInputEventMonitor;
-use crate::ui::NotQuiteRightDialog;
 use fluent_i18n::t;
 use gio::{Menu, SimpleAction};
-use glib::timeout_add_local_once;
 use gtk4::gdk::{Display, Monitor};
 use gtk4::{
     prelude::*, AboutDialog, Application, ApplicationWindow, Button, CssProvider, HeaderBar, Label,
@@ -25,11 +23,10 @@ use gtk4::{
 use std::cell::RefCell;
 use std::env;
 use std::rc::Rc;
-use std::time::Duration;
 
-use super::audio_set::AudioSet;
 use super::clue_panels_ui::CluePanelsUI;
 use super::game_info_ui::GameInfoUI;
+use super::hint_button_ui::HintButtonUI;
 use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
 use super::puzzle_grid_ui::PuzzleGridUI;
@@ -54,37 +51,6 @@ fn pause_screen() -> Rc<gtk4::Box> {
         .build();
     pause_screen_box.append(&pause_label);
     Rc::new(pause_screen_box)
-}
-
-fn hint_button_handler(
-    game_action_emitter: EventEmitter<GameActionEvent>,
-    game_state: &Rc<RefCell<GameState>>,
-    audio_set: &Rc<AudioSet>,
-    window: &Rc<ApplicationWindow>,
-) -> impl Fn(&Button) {
-    let game_state = Rc::clone(&game_state);
-    let audio_set_hint = Rc::clone(&audio_set);
-    let window = Rc::clone(&window);
-
-    move |button| {
-        let board_is_incorrect = game_state.borrow().current_board.is_incorrect();
-        log::trace!(target: "window", "Handling hint button click");
-        if board_is_incorrect {
-            log::trace!(target: "window", "Board is incorrect, showing rewind dialog");
-            let media = audio_set_hint.random_lose_sound();
-            media.play();
-            NotQuiteRightDialog::new(&window, game_action_emitter.clone()).show();
-        } else {
-            log::trace!(target: "window", "Board is correct, showing hint");
-            game_action_emitter.emit(GameActionEvent::ShowHint);
-            button.set_sensitive(false);
-            let button = button.clone();
-            timeout_add_local_once(Duration::from_secs(4), move || {
-                log::trace!(target: "window", "Re-enabling hint button");
-                button.set_sensitive(true);
-            });
-        }
-    }
 }
 
 pub fn build_ui(app: &Application) {
@@ -240,10 +206,6 @@ pub fn build_ui(app: &Application) {
     );
 
     let solve_button = Button::with_label(&t!("solve-button"));
-    let hint_button = Button::from_icon_name("view-reveal-symbolic");
-
-    // Add tooltips
-    hint_button.set_tooltip_text(Some(&t!("show-hint")));
 
     let default_layout =
         LayoutManager::calculate_layout(settings.borrow().difficulty, Some(ClueStats::default()));
@@ -275,6 +237,15 @@ pub fn build_ui(app: &Application) {
         settings.borrow().clone(),
     );
 
+    // Create hint button UI
+    let hint_button_ui = HintButtonUI::new(
+        game_action_emitter.clone(),
+        game_state_observer.clone(),
+        &game_state,
+        &audio_set,
+        &window,
+    );
+
     // Remove the old button_box since controls are now in header
     let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
 
@@ -297,7 +268,7 @@ pub fn build_ui(app: &Application) {
     let timer_button = TimerButtonUI::new(&window, game_action_emitter.clone());
     left_box.append(&timer_button.borrow().button);
     left_box.append(&game_info_ui.borrow().timer_label);
-    left_box.append(&hint_button);
+    left_box.append(&hint_button_ui.borrow().hint_button);
     let hints_label = Label::new(Some(&t!("hints-label")));
     hints_label.set_css_classes(&["hints-label"]);
     left_box.append(&hints_label);
@@ -341,14 +312,6 @@ pub fn build_ui(app: &Application) {
     solve_button.connect_clicked(move |_| {
         game_action_emitter_solve.emit(GameActionEvent::Solve);
     });
-
-    // Connect hint button
-    hint_button.connect_clicked(hint_button_handler(
-        game_action_emitter.clone(),
-        &game_state,
-        &audio_set,
-        &window,
-    ));
 
     // Add CSS for selected cells
     let provider = CssProvider::new();
@@ -528,6 +491,7 @@ pub fn build_ui(app: &Application) {
         history_controls_ui.borrow_mut().destroy();
         game_state.borrow_mut().destroy();
         game_info_ui.borrow_mut().destroy();
+        hint_button_ui.borrow_mut().destroy();
         submit_ui.borrow_mut().destroy();
         puzzle_grid_ui.borrow_mut().destroy();
         clue_set_ui.borrow_mut().destroy();
