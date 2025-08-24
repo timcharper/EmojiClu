@@ -72,9 +72,10 @@ impl HistoryControlsUI {
     ) {
         let history_controls_ui_moved = history_controls_ui.clone();
         let subscription_id = game_engine_event_observer.subscribe(move |event| match event {
-            GameEngineEvent::HistoryChanged {
+            GameEngineEvent::GameBoardUpdated {
                 history_index,
                 history_length,
+                ..
             } => history_controls_ui_moved
                 .borrow()
                 .update_buttons(*history_index, *history_length),

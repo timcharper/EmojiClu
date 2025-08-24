@@ -13,13 +13,13 @@ use super::{audio_set::AudioSet, image_set::ImageSet};
 pub struct ResourceManager {
     image_set: Rc<ImageSet>,
     audio_set: Rc<AudioSet>,
-    global_event_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
+    layout_event_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
     layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
 }
 
 impl Destroyable for ResourceManager {
     fn destroy(&mut self) {
-        if let Some(subscription) = self.global_event_subscription.take() {
+        if let Some(subscription) = self.layout_event_subscription.take() {
             subscription.unsubscribe();
         }
     }
@@ -35,7 +35,7 @@ impl ResourceManager {
         let manager = Rc::new(RefCell::new(Self {
             image_set: image_set.clone(),
             audio_set: audio_set.clone(),
-            global_event_subscription: None,
+            layout_event_subscription: None,
             layout_manager_event_emitter,
         }));
 
@@ -45,16 +45,16 @@ impl ResourceManager {
             let subscription = layout_manager_event_observer.subscribe(move |event| {
                 trace!(target: "resource_manager", "Received global event: {:?}", event);
                 if let Some(manager) = manager_weak.upgrade() {
-                    manager.borrow_mut().handle_global_event(event);
+                    manager.borrow_mut().handle_layout_event(event);
                 }
             });
-            manager.borrow_mut().global_event_subscription = Some(subscription);
+            manager.borrow_mut().layout_event_subscription = Some(subscription);
         }
 
         manager
     }
 
-    fn handle_global_event(&mut self, event: &LayoutManagerEvent) {
+    fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {
         match event {
             LayoutManagerEvent::OptimizeImages {
                 candidate_tile_size,

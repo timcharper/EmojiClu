@@ -12,7 +12,7 @@ use crate::{
 };
 use crate::{
     events::{EventEmitter, EventObserver},
-    model::{ClueOrientation, ClueSet, GameEngineEvent, LayoutManagerEvent, InputEvent},
+    model::{ClueOrientation, ClueSet, GameEngineEvent, InputEvent, LayoutManagerEvent},
 };
 use crate::{
     model::ClueWithAddress,
@@ -124,14 +124,14 @@ impl CluePanelsUI {
 
         let clue_set_ui_moved = clue_set_ui.clone();
         let settings_subscription = layout_manager_event_observer.subscribe(move |event| {
-            clue_set_ui_moved.borrow_mut().handle_global_event(event);
+            clue_set_ui_moved.borrow_mut().handle_layout_event(event);
         });
 
         clue_set_ui.borrow_mut().game_state_subscription_id = Some(game_state_subscription);
         clue_set_ui.borrow_mut().settings_subscription_id = Some(settings_subscription);
     }
 
-    fn handle_global_event(&mut self, event: &LayoutManagerEvent) {
+    fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {
         match event {
             LayoutManagerEvent::LayoutChanged(new_layout) => {
                 self.update_layout(new_layout);
@@ -178,8 +178,8 @@ impl CluePanelsUI {
             GameEngineEvent::ClueHintHighlighted(Some(clue_with_address)) => {
                 self.highlight_clue(clue_with_address.address(), Duration::from_secs(4));
             }
-            GameEngineEvent::GameBoardUpdated(grid) => {
-                self.set_clue_completion(&grid.completed_clues);
+            GameEngineEvent::GameBoardUpdated { board, .. } => {
+                self.set_clue_completion(&board.completed_clues);
             }
             GameEngineEvent::ClueSelected(clue_selection) => {
                 self.set_clue_selected(&clue_selection);

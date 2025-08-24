@@ -46,7 +46,7 @@ impl SeedDialog {
         // Connect observer to track current seed and difficulty
         let dialog_clone = dialog.clone();
         let subscription_id = game_engine_event_observer.subscribe(move |event| {
-            if let GameEngineEvent::GameBoardUpdated(board) = event {
+            if let GameEngineEvent::GameBoardUpdated { board, .. } = event {
                 let mut dialog = dialog_clone.borrow_mut();
                 dialog.current_seed = Some(board.solution.seed);
                 dialog.current_difficulty = board.solution.difficulty;

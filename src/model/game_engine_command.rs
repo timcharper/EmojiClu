@@ -17,7 +17,6 @@ pub enum GameEngineCommand {
     ClueFocus(Option<ClueAddress>), // clue_idx when Some
     ClueFocusNext(i32),
     NewGame(Option<Difficulty>, Option<u64>), // grid rows, grid columns
-    InitDisplay,
     CompletePuzzle,
     Solve,
     RewindLastGood,

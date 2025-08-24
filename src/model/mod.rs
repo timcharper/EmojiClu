@@ -32,7 +32,9 @@ pub use difficulty::Difficulty;
 pub use game_board::GameBoard;
 pub use game_engine_command::GameEngineCommand;
 pub use game_engine_command::SettingsChange;
-pub use game_engine_event::{ClueSelection, GameEngineEvent, PuzzleCompletionState};
+pub use game_engine_event::{
+    ClueSelection, GameBoardChangeReason, GameEngineEvent, PuzzleCompletionState,
+};
 pub use game_state_snapshot::GameStateSnapshot;
 pub use game_stats::{GameStats, GlobalStats};
 pub use input_event::{

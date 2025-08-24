@@ -9,8 +9,8 @@ use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::model::game_state_snapshot::GameStateSnapshot;
 use crate::model::{
     CandidateState, ClueAddress, ClueSelection, ClueSet, ClueWithAddress, Deduction, Difficulty,
-    GameBoard, GameEngineCommand, GameEngineEvent, GameStats, PuzzleCompletionState, Solution,
-    TimerState,
+    GameBoard, GameBoardChangeReason, GameEngineCommand, GameEngineEvent, GameStats,
+    PuzzleCompletionState, Solution, TimerState,
 };
 use crate::solver::candidate_solver::{
     deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult,
@@ -120,7 +120,11 @@ impl GameEngine {
         game_state.borrow_mut().subscription_id = Some(subscription_id);
     }
 
-    fn set_game_state(&mut self, game_state_snapshot: &GameStateSnapshot) {
+    fn set_game_state(
+        &mut self,
+        game_state_snapshot: &GameStateSnapshot,
+        change_reason: GameBoardChangeReason,
+    ) {
         println!(
             "New game; difficulty: {:?}; seed: {:?}",
             game_state_snapshot.board.solution.difficulty, game_state_snapshot.board.solution.seed
@@ -139,7 +143,7 @@ impl GameEngine {
         self.current_selected_clue = None;
         self.clue_focused = false;
         self.hint_status = HintStatus::default();
-        self.sync_board_display();
+        self.sync_board_display(change_reason);
         self.game_engine_event_emitter
             .emit(GameEngineEvent::HintUsageChanged(self.hints_used));
         self.game_engine_event_emitter
@@ -150,11 +154,6 @@ impl GameEngine {
                 self.current_board.solution.difficulty,
                 self.current_board.completed_clues.clone(),
             ));
-        self.game_engine_event_emitter
-            .emit(GameEngineEvent::HistoryChanged {
-                history_index: self.history_index,
-                history_length: self.history.len(),
-            });
         self.sync_clue_selection();
     }
 
@@ -176,13 +175,13 @@ impl GameEngine {
                         current_board.auto_solve_row(row);
                     }
                 }
-                self.push_board(current_board);
+                self.push_board(current_board, GameBoardChangeReason::TileStatusChanged);
             }
         }
     }
 
     /// moves the GameBoard into an Rc, sets it as the current state, pushes the history
-    fn push_board(&mut self, board: GameBoard) {
+    fn push_board(&mut self, board: GameBoard, change_reason: GameBoardChangeReason) {
         self.current_board = Rc::new(board);
         // if we're not at the end of the list, prune redo state
         if self.history_index < self.history.len() - 1 {
@@ -191,50 +190,35 @@ impl GameEngine {
         self.history.push(Rc::clone(&self.current_board));
         self.history_index += 1;
 
-        self.game_engine_event_emitter
-            .emit(GameEngineEvent::HistoryChanged {
-                history_index: self.history_index,
-                history_length: self.history.len(),
-            });
-
         self.maybe_reset_clue_hint();
-        self.sync_board_display();
+        self.sync_board_display(change_reason);
     }
 
     fn undo(&mut self) {
         if self.history_index > 0 {
             self.history_index -= 1;
             self.current_board = self.history[self.history_index].clone();
-            self.sync_board_display();
+            self.sync_board_display(GameBoardChangeReason::Undo);
         }
-
-        self.game_engine_event_emitter
-            .emit(GameEngineEvent::HistoryChanged {
-                history_index: self.history_index,
-                history_length: self.history.len(),
-            });
     }
 
     fn redo(&mut self) {
         if self.history_index < self.history.len() - 1 {
             self.history_index += 1;
             self.current_board = self.history[self.history_index].clone();
-            self.sync_board_display();
+            self.sync_board_display(GameBoardChangeReason::Redo);
         }
-
-        self.game_engine_event_emitter
-            .emit(GameEngineEvent::HistoryChanged {
-                history_index: self.history_index,
-                history_length: self.history.len(),
-            });
     }
 
-    fn sync_board_display(&mut self) {
+    fn sync_board_display(&mut self, change_reason: GameBoardChangeReason) {
         // Emit grid update event
         self.game_engine_event_emitter
-            .emit(GameEngineEvent::GameBoardUpdated(
-                self.current_board.as_ref().clone(),
-            ));
+            .emit(GameEngineEvent::GameBoardUpdated {
+                board: self.current_board.as_ref().clone(),
+                history_index: self.history_index,
+                history_length: self.history.len(),
+                change_reason,
+            });
         // Emit completion state event
         let all_cells_filled = self.current_board.is_complete();
         if self.get_difficulty() != Difficulty::Tutorial {
@@ -261,17 +245,16 @@ impl GameEngine {
             }
             GameEngineCommand::NewGame(difficulty, seed) => {
                 let difficulty = difficulty.unwrap_or(self.settings.difficulty);
-                self.set_game_state(&GameStateSnapshot::generate_new(difficulty, seed));
-
+                self.set_game_state(
+                    &GameStateSnapshot::generate_new(difficulty, seed),
+                    GameBoardChangeReason::NewGame,
+                );
                 self.settings.difficulty = difficulty;
                 self.update_settings();
             }
             GameEngineCommand::LoadState(save_state) => {
                 trace!(target: "game_state", "Loading saved state {:?}", save_state);
-                self.set_game_state(&save_state);
-            }
-            GameEngineCommand::InitDisplay => {
-                self.sync_board_display();
+                self.set_game_state(&save_state, GameBoardChangeReason::GameLoaded);
             }
             GameEngineCommand::Solve => self.try_solve(),
             GameEngineCommand::RewindLastGood => self.rewind_last_good(),
@@ -290,10 +273,10 @@ impl GameEngine {
                 // Start a new game with current difficulty and seed
                 let current_seed = self.current_board.solution.seed;
                 let current_difficulty = self.current_board.solution.difficulty;
-                self.set_game_state(&GameStateSnapshot::generate_new(
-                    current_difficulty,
-                    Some(current_seed),
-                ));
+                self.set_game_state(
+                    &GameStateSnapshot::generate_new(current_difficulty, Some(current_seed)),
+                    GameBoardChangeReason::NewGame,
+                );
             }
             GameEngineCommand::ClueToggleComplete(clue_address) => {
                 self.handle_clue_toggle_complete(clue_address)
@@ -395,7 +378,7 @@ impl GameEngine {
         if current_board.has_selection(row, col) {
             // Reset the cell back to candidates
             current_board.remove_selection(row, col);
-            self.push_board(current_board);
+            self.push_board(current_board, GameBoardChangeReason::TileStatusChanged);
             return;
         }
 
@@ -405,7 +388,7 @@ impl GameEngine {
                 if candidate.state == CandidateState::Available {
                     current_board.remove_candidate(col, candidate.tile);
                     current_board.auto_solve_row(row);
-                    self.push_board(current_board);
+                    self.push_board(current_board, GameBoardChangeReason::TileStatusChanged);
                 }
             }
         }
@@ -444,7 +427,7 @@ impl GameEngine {
             }
         }
         current_board.auto_solve_all();
-        self.push_board(current_board);
+        self.push_board(current_board, GameBoardChangeReason::TileStatusChanged);
     }
 
     fn find_deductions(&self) -> Option<DeductionResult> {
@@ -540,7 +523,7 @@ impl GameEngine {
                 {
                     let mut current_board = self.current_board.as_ref().clone();
                     current_board.toggle_clue_completed(addressed_clue.address());
-                    self.push_board(current_board);
+                    self.push_board(current_board, GameBoardChangeReason::ClueStatusChanged);
                 }
 
                 self.game_engine_event_emitter
@@ -572,13 +555,8 @@ impl GameEngine {
         while self.history_index > 0 && self.current_board.is_incorrect() {
             self.history_index -= 1;
             self.current_board = self.history[self.history_index].clone();
-            self.sync_board_display();
+            self.sync_board_display(GameBoardChangeReason::Undo);
         }
-        self.game_engine_event_emitter
-            .emit(GameEngineEvent::HistoryChanged {
-                history_index: self.history_index,
-                history_length: self.history.len(),
-            });
     }
 
     pub fn get_game_stats(&self) -> GameStats {
@@ -600,7 +578,7 @@ impl GameEngine {
     fn handle_clue_toggle_complete(&mut self, clue_address: ClueAddress) {
         let mut current_board = self.current_board.as_ref().clone();
         current_board.toggle_clue_completed(clue_address);
-        self.push_board(current_board);
+        self.push_board(current_board, GameBoardChangeReason::ClueStatusChanged);
         self.sync_clue_selection();
     }
 

@@ -10,8 +10,8 @@ use crate::{
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
     model::{
-        ClueAddress, ClueWithAddress, Difficulty, GameEngineEvent, LayoutManagerEvent, InputEvent,
-        LayoutConfiguration, Solution,
+        ClueAddress, ClueWithAddress, Difficulty, GameEngineEvent, InputEvent, LayoutConfiguration,
+        LayoutManagerEvent, Solution,
     },
 };
 
@@ -119,7 +119,7 @@ impl PuzzleGridUI {
     ) {
         let puzzle_grid_ui_moved = puzzle_grid_ui.clone();
         let layout_subscription_id = layout_manager_event_observer.subscribe(move |event| {
-            puzzle_grid_ui_moved.borrow_mut().handle_global_event(event);
+            puzzle_grid_ui_moved.borrow_mut().handle_layout_event(event);
         });
 
         puzzle_grid_ui.borrow_mut().settings_subscription_id = Some(layout_subscription_id);
@@ -138,7 +138,7 @@ impl PuzzleGridUI {
         puzzle_grid_ui.borrow_mut().game_state_subscription_id = Some(subscription_id);
     }
 
-    fn handle_global_event(&mut self, event: &LayoutManagerEvent) {
+    fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {
         match event {
             LayoutManagerEvent::LayoutChanged(new_layout) => self.update_layout(new_layout),
             LayoutManagerEvent::ImagesOptimized(new_image_set) => {
@@ -156,7 +156,7 @@ impl PuzzleGridUI {
 
     fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         match event {
-            GameEngineEvent::GameBoardUpdated(board) => {
+            GameEngineEvent::GameBoardUpdated { board, .. } => {
                 self.current_difficulty = board.solution.difficulty;
                 self.set_grid_size(board.solution.n_rows, board.solution.n_variants);
                 for row in 0..board.solution.n_rows {

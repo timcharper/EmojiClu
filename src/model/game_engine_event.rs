@@ -16,13 +16,24 @@ pub enum PuzzleCompletionState {
     Incorrect,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GameBoardChangeReason {
+    NewGame,
+    Undo,
+    Redo,
+    ClueStatusChanged,
+    TileStatusChanged,
+    GameLoaded,
+}
+
 #[derive(Debug)]
 pub enum GameEngineEvent {
-    HistoryChanged {
+    GameBoardUpdated {
+        board: GameBoard,
         history_index: usize,
         history_length: usize,
+        change_reason: GameBoardChangeReason,
     },
-    GameBoardUpdated(GameBoard),
     ClueStatusUpdated {
         horizontal_hidden_tiles: Vec<usize>,
         vertical_hidden_tiles: Vec<usize>,
