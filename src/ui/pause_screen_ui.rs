@@ -5,13 +5,13 @@ use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
 use crate::events::{EventObserver, Unsubscriber};
-use crate::model::GameStateEvent;
+use crate::model::GameEngineEvent;
 use fluent_i18n::t;
 
 pub struct PauseScreenUI {
     pub pause_screen_box: GtkBox,
     pub pause_label: Label,
-    subscription_id: Option<Unsubscriber<GameStateEvent>>,
+    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
 }
 
 impl Destroyable for PauseScreenUI {
@@ -23,7 +23,7 @@ impl Destroyable for PauseScreenUI {
 }
 
 impl PauseScreenUI {
-    pub fn new(game_state_observer: EventObserver<GameStateEvent>) -> Rc<RefCell<Self>> {
+    pub fn new(game_engine_event_observer: EventObserver<GameEngineEvent>) -> Rc<RefCell<Self>> {
         // Create pause label
         let pause_label = Label::builder()
             .name("pause-label")
@@ -50,18 +50,18 @@ impl PauseScreenUI {
         }));
 
         // Connect to game state observer for pause/unpause events
-        Self::connect_observer(pause_screen_ui.clone(), game_state_observer);
+        Self::connect_observer(pause_screen_ui.clone(), game_engine_event_observer);
 
         pause_screen_ui
     }
 
     fn connect_observer(
         pause_screen_ui: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) {
         let pause_screen_ui_moved = pause_screen_ui.clone();
-        let subscription_id = game_state_observer.subscribe(move |event| match event {
-            GameStateEvent::TimerStateChanged(timer_state) => {
+        let subscription_id = game_engine_event_observer.subscribe(move |event| match event {
+            GameEngineEvent::TimerStateChanged(timer_state) => {
                 if timer_state.is_paused() {
                     pause_screen_ui_moved
                         .borrow()

@@ -10,8 +10,8 @@ use crate::events::EventEmitter;
 use crate::events::EventObserver;
 use crate::events::Unsubscriber;
 use crate::game::stats_manager::StatsManager;
-use crate::model::GameStateEvent;
-use crate::model::{GameActionEvent, PuzzleCompletionState};
+use crate::model::GameEngineEvent;
+use crate::model::{GameEngineCommand, PuzzleCompletionState};
 use crate::ui::stats_dialog::StatsDialog;
 use fluent_i18n::t;
 
@@ -19,11 +19,11 @@ use super::audio_set::AudioSet;
 use super::NotQuiteRightDialog;
 
 pub struct SubmitUI {
-    subscription_id: Option<Unsubscriber<GameStateEvent>>,
+    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
     stats_manager: Rc<RefCell<StatsManager>>,
     audio_set: Rc<AudioSet>,
     window: Rc<ApplicationWindow>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     submit_dialog: Rc<RefCell<CompletionDialog>>,
 }
 
@@ -37,8 +37,8 @@ impl Destroyable for SubmitUI {
 
 impl SubmitUI {
     pub fn new(
-        game_state_observer: EventObserver<GameStateEvent>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
         stats_manager: &Rc<RefCell<StatsManager>>,
         audio_set: &Rc<AudioSet>,
         window: &Rc<ApplicationWindow>,
@@ -53,15 +53,15 @@ impl SubmitUI {
         submit_dialog = CompletionDialog::new(
             window,
             Box::new({
-                let game_action_emitter = game_action_emitter.clone();
+                let game_engine_command_emitter = game_engine_command_emitter.clone();
                 move || {
-                    game_action_emitter.emit(GameActionEvent::CompletePuzzle);
+                    game_engine_command_emitter.emit(GameEngineCommand::CompletePuzzle);
                 }
             }),
             Box::new({
-                let game_action_emitter = game_action_emitter.clone();
+                let game_engine_command_emitter = game_engine_command_emitter.clone();
                 move || {
-                    game_action_emitter.emit(GameActionEvent::Undo);
+                    game_engine_command_emitter.emit(GameEngineCommand::Undo);
                 }
             }),
         );
@@ -71,12 +71,12 @@ impl SubmitUI {
             stats_manager: Rc::clone(stats_manager),
             audio_set: Rc::clone(audio_set),
             window: Rc::clone(window),
-            game_action_emitter: game_action_emitter,
+            game_engine_command_emitter: game_engine_command_emitter,
             submit_dialog,
         }));
 
         // Connect observer
-        SubmitUI::connect_observer(submit_ui.clone(), game_state_observer);
+        SubmitUI::connect_observer(submit_ui.clone(), game_engine_event_observer);
 
         submit_ui
     }
@@ -97,7 +97,7 @@ impl SubmitUI {
                 }
 
                 // Drop the mutable borrow before showing stats
-                let game_action_emitter = self.game_action_emitter.clone();
+                let game_engine_command_emitter = self.game_engine_command_emitter.clone();
                 let stats_manager = self.stats_manager.as_ref().borrow_mut();
                 StatsDialog::show(
                     &self.window,
@@ -105,34 +105,34 @@ impl SubmitUI {
                     &stats_manager,
                     Some(stats),
                     move || {
-                        game_action_emitter.emit(GameActionEvent::NewGame(difficulty, None));
+                        game_engine_command_emitter.emit(GameEngineCommand::NewGame(difficulty, None));
                     },
                 );
             }
             PuzzleCompletionState::Incorrect => {
                 // Play game over sound using a MediaStream
-                self.game_action_emitter
-                    .emit(GameActionEvent::IncrementHintsUsed);
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::IncrementHintsUsed);
                 let media = self.audio_set.random_lose_sound();
                 media.play();
 
-                NotQuiteRightDialog::new(&self.window, self.game_action_emitter.clone()).show();
+                NotQuiteRightDialog::new(&self.window, self.game_engine_command_emitter.clone()).show();
             }
         }
     }
 
     fn connect_observer(
         submit_ui: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) {
         let submit_ui_moved = submit_ui.clone();
-        let subscription_id = game_state_observer.subscribe(move |event| match event {
-            GameStateEvent::PuzzleSubmissionReadyChanged(all_cells_filled) => {
+        let subscription_id = game_engine_event_observer.subscribe(move |event| match event {
+            GameEngineEvent::PuzzleSubmissionReadyChanged(all_cells_filled) => {
                 if *all_cells_filled {
                     CompletionDialog::show(submit_ui_moved.borrow().submit_dialog.clone());
                 }
             }
-            GameStateEvent::PuzzleCompleted(state) => {
+            GameEngineEvent::PuzzleCompleted(state) => {
                 submit_ui_moved.borrow().handle_game_completion(state);
             }
             _ => (),

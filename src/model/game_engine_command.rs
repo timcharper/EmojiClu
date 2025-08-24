@@ -1,7 +1,7 @@
 use super::{ClueAddress, Difficulty, GameStateSnapshot};
 
 #[derive(Debug, Clone)]
-pub enum GameActionEvent {
+pub enum GameEngineCommand {
     CellSelect(usize, usize, Option<char>),
     CellClear(usize, usize, Option<char>),
     ClueToggleComplete(ClueAddress), // clue_idx

@@ -11,7 +11,7 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, Unsubscriber},
     game::settings::Settings,
-    model::{GameStateEvent, GlobalEvent},
+    model::{GameEngineEvent, GlobalEvent},
 };
 use fluent_i18n::t;
 
@@ -21,7 +21,7 @@ pub struct SettingsMenuUI {
     action_toggle_tooltips: SimpleAction,
     action_toggle_spotlight: SimpleAction,
     action_toggle_touch_controls: SimpleAction,
-    game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
+    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
     settings_ref: Rc<RefCell<Settings>>,
     global_event_emitter: EventEmitter<GlobalEvent>,
 }

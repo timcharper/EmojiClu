@@ -6,11 +6,11 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
-    model::{Clickable, GameActionEvent, GlobalEvent, InputEvent, LONG_PRESS_DURATION},
+    model::{Clickable, GameEngineCommand, GlobalEvent, InputEvent, LONG_PRESS_DURATION},
 };
 
 pub struct InputTranslator {
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     settings: Settings,
     input_subscription: Option<Unsubscriber<InputEvent>>,
     global_subscription: Option<Unsubscriber<GlobalEvent>>,
@@ -30,13 +30,13 @@ impl Destroyable for InputTranslator {
 
 impl InputTranslator {
     pub fn new(
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
         input_event_observer: EventObserver<InputEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         settings: &Settings,
     ) -> Rc<RefCell<Self>> {
         let input_translator = Rc::new(RefCell::new(Self {
-            game_action_emitter,
+            game_engine_command_emitter,
             settings: settings.clone(),
             input_subscription: None,
             global_subscription: None,
@@ -105,13 +105,13 @@ impl InputTranslator {
             Clickable::CandidateCellTile(data) => {
                 // Long press = left click, short press = right click
                 if is_long_press {
-                    self.game_action_emitter.emit(GameActionEvent::CellSelect(
+                    self.game_engine_command_emitter.emit(GameEngineCommand::CellSelect(
                         data.row,
                         data.col,
                         Some(data.variant),
                     ));
                 } else {
-                    self.game_action_emitter.emit(GameActionEvent::CellClear(
+                    self.game_engine_command_emitter.emit(GameEngineCommand::CellClear(
                         data.row,
                         data.col,
                         Some(data.variant),
@@ -121,27 +121,27 @@ impl InputTranslator {
             Clickable::SolutionTile(data) => {
                 // Long press = left click, short press = right click
                 if is_long_press {
-                    self.game_action_emitter
-                        .emit(GameActionEvent::CellSelect(data.row, data.col, None));
+                    self.game_engine_command_emitter
+                        .emit(GameEngineCommand::CellSelect(data.row, data.col, None));
                 } else {
-                    self.game_action_emitter
-                        .emit(GameActionEvent::CellClear(data.row, data.col, None));
+                    self.game_engine_command_emitter
+                        .emit(GameEngineCommand::CellClear(data.row, data.col, None));
                 }
             }
             Clickable::Clue(address) => {
                 // Long press = left click (focus), short press = right click (toggle complete)
                 if is_long_press {
-                    self.game_action_emitter
-                        .emit(GameActionEvent::ClueFocus(Some(*address)));
+                    self.game_engine_command_emitter
+                        .emit(GameEngineCommand::ClueFocus(Some(*address)));
                 } else {
-                    self.game_action_emitter
-                        .emit(GameActionEvent::ClueToggleComplete(*address));
+                    self.game_engine_command_emitter
+                        .emit(GameEngineCommand::ClueToggleComplete(*address));
                 }
             }
             Clickable::Surface => {
                 // Surface clicks are always treated as focus removal, regardless of duration
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueFocus(None));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueFocus(None));
             }
         }
     }
@@ -149,23 +149,23 @@ impl InputTranslator {
     fn handle_left_click(&self, clickable: &Clickable) {
         match clickable {
             Clickable::CandidateCellTile(data) => {
-                self.game_action_emitter.emit(GameActionEvent::CellSelect(
+                self.game_engine_command_emitter.emit(GameEngineCommand::CellSelect(
                     data.row,
                     data.col,
                     Some(data.variant),
                 ));
             }
             Clickable::SolutionTile(data) => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::CellSelect(data.row, data.col, None));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::CellSelect(data.row, data.col, None));
             }
             Clickable::Clue(address) => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueFocus(Some(*address)));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueFocus(Some(*address)));
             }
             Clickable::Surface => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueFocus(None));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueFocus(None));
             }
         }
     }
@@ -173,19 +173,19 @@ impl InputTranslator {
     fn handle_right_click(&self, clickable: &Clickable) {
         match clickable {
             Clickable::CandidateCellTile(data) => {
-                self.game_action_emitter.emit(GameActionEvent::CellClear(
+                self.game_engine_command_emitter.emit(GameEngineCommand::CellClear(
                     data.row,
                     data.col,
                     Some(data.variant),
                 ));
             }
             Clickable::SolutionTile(data) => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::CellClear(data.row, data.col, None));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::CellClear(data.row, data.col, None));
             }
             Clickable::Clue(address) => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueToggleComplete(*address));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueToggleComplete(*address));
             }
             _ => {} // No right-click handling for other clickables
         }
@@ -194,20 +194,20 @@ impl InputTranslator {
     fn handle_key_press(&self, key: gdk::Key) {
         match key {
             gdk::Key::a | gdk::Key::k => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueFocusNext(-1));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueFocusNext(-1));
             }
             gdk::Key::d | gdk::Key::j => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueFocusNext(1));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueFocusNext(1));
             }
             gdk::Key::c => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueToggleSelectedComplete);
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueToggleSelectedComplete);
             }
             gdk::Key::Escape => {
-                self.game_action_emitter
-                    .emit(GameActionEvent::ClueFocus(None));
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueFocus(None));
             }
             _ => {} // Ignore other keys
         }

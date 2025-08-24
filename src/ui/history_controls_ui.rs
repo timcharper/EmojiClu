@@ -9,12 +9,12 @@ use std::time::Duration;
 use crate::destroyable::Destroyable;
 use crate::events::EventObserver;
 use crate::events::Unsubscriber;
-use crate::model::GameStateEvent;
+use crate::model::GameEngineEvent;
 
 pub struct HistoryControlsUI {
     pub undo_button: Rc<Button>,
     pub redo_button: Rc<Button>,
-    subscription_id: Option<Unsubscriber<GameStateEvent>>,
+    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
 }
 
 impl Destroyable for HistoryControlsUI {
@@ -26,7 +26,7 @@ impl Destroyable for HistoryControlsUI {
 }
 
 impl HistoryControlsUI {
-    pub fn new(game_state_observer: EventObserver<GameStateEvent>) -> Rc<RefCell<Self>> {
+    pub fn new(game_engine_event_observer: EventObserver<GameEngineEvent>) -> Rc<RefCell<Self>> {
         // Create buttons first
         let undo_button = Rc::new(Button::from_icon_name("edit-undo-symbolic"));
         let redo_button = Rc::new(Button::from_icon_name("edit-redo-symbolic"));
@@ -38,13 +38,13 @@ impl HistoryControlsUI {
 
         // Wire up undo button
         // Because we're connected to the action here, we don't need to bind another handler.
-        // let game_action_emitter_undo = game_action_emitter.clone();
+        // let game_engine_command_emitter_undo = game_engine_command_emitter.clone();
         // undo_button.connect_clicked(move |_| {
-        //     game_action_emitter_undo.emit(&GameActionEvent::Undo);
+        //     game_engine_command_emitter_undo.emit(&GameActionEvent::Undo);
         // });
-        // let game_action_emitter_redo = game_action_emitter.clone();
+        // let game_engine_command_emitter_redo = game_engine_command_emitter.clone();
         // redo_button.connect_clicked(move |_| {
-        //     game_action_emitter_redo.emit(&GameActionEvent::Redo);
+        //     game_engine_command_emitter_redo.emit(&GameActionEvent::Redo);
         // });
 
         let history_controls_ui = Rc::new(RefCell::new(Self {
@@ -58,18 +58,21 @@ impl HistoryControlsUI {
             Self::idle_add_handler(history_controls_ui.clone()),
         );
 
-        HistoryControlsUI::connect_observer(history_controls_ui.clone(), game_state_observer);
+        HistoryControlsUI::connect_observer(
+            history_controls_ui.clone(),
+            game_engine_event_observer,
+        );
 
         history_controls_ui
     }
 
     fn connect_observer(
         history_controls_ui: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) {
         let history_controls_ui_moved = history_controls_ui.clone();
-        let subscription_id = game_state_observer.subscribe(move |event| match event {
-            GameStateEvent::HistoryChanged {
+        let subscription_id = game_engine_event_observer.subscribe(move |event| match event {
+            GameEngineEvent::HistoryChanged {
                 history_index,
                 history_length,
             } => history_controls_ui_moved

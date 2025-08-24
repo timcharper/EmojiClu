@@ -4,14 +4,14 @@ use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
-use crate::model::GameActionEvent;
+use crate::model::GameEngineCommand;
 use fluent_i18n::t;
 use gio::SimpleAction;
 
 pub struct TimerButtonUI {
     pub button: Button,
     is_paused: bool,
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    game_engine_command_emitter: EventEmitter<GameEngineCommand>,
 }
 
 impl Destroyable for TimerButtonUI {
@@ -21,7 +21,7 @@ impl Destroyable for TimerButtonUI {
 impl TimerButtonUI {
     pub fn new(
         window: &Rc<ApplicationWindow>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     ) -> Rc<RefCell<Self>> {
         let button = Button::builder()
             .label(&t!("timer-pause"))
@@ -33,7 +33,7 @@ impl TimerButtonUI {
         let timer_button_ui = Rc::new(RefCell::new(Self {
             button,
             is_paused: false,
-            game_action_emitter,
+            game_engine_command_emitter,
         }));
 
         let action_pause = SimpleAction::new("pause", None);
@@ -53,10 +53,10 @@ impl TimerButtonUI {
     fn toggle_pause(&mut self) {
         if self.is_paused {
             self.is_paused = false;
-            self.game_action_emitter.emit(GameActionEvent::Resume);
+            self.game_engine_command_emitter.emit(GameEngineCommand::Resume);
         } else {
             self.is_paused = true;
-            self.game_action_emitter.emit(GameActionEvent::Pause);
+            self.game_engine_command_emitter.emit(GameEngineCommand::Pause);
         }
         TimerButtonUI::update_button_state(&self.button, self.is_paused);
     }

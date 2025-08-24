@@ -18,8 +18,8 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
     model::{
-        ClueSet, CluesSizing, Difficulty, Dimensions, GameActionEvent, GameStateEvent, GlobalEvent,
-        GridCellSizing, GridSizing, HorizontalCluePanelSizing, LayoutConfiguration,
+        ClueSet, CluesSizing, Difficulty, Dimensions, GameEngineCommand, GameEngineEvent,
+        GlobalEvent, GridCellSizing, GridSizing, HorizontalCluePanelSizing, LayoutConfiguration,
         VerticalCluePanelSizing, MAX_GRID_SIZE,
     },
     solver::clue_generator_state::MAX_HORIZ_CLUES,
@@ -68,8 +68,8 @@ pub struct LayoutManager {
     window: Rc<ApplicationWindow>,
     handle_surface_enter_monitor: Option<SignalHandlerId>,
     handle_surface_layout: Option<SignalHandlerId>,
-    game_action_subscription: Option<Unsubscriber<GameActionEvent>>,
-    game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
+    game_action_subscription: Option<Unsubscriber<GameEngineCommand>>,
+    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
     current_difficulty: Difficulty,
     scrolled_window: gtk4::ScrolledWindow,
     container_dimensions: Option<Dimensions>,
@@ -110,8 +110,8 @@ impl LayoutManager {
     pub fn new(
         window: Rc<ApplicationWindow>,
         global_event_emitter: EventEmitter<GlobalEvent>,
-        game_action_observer: EventObserver<GameActionEvent>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_command_observer: EventObserver<GameEngineCommand>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
         scrolled_window: gtk4::ScrolledWindow,
         current_difficulty: Difficulty,
     ) -> Rc<RefCell<Self>> {
@@ -132,17 +132,17 @@ impl LayoutManager {
             scale_factor: I8F8::from_num(1),
         }));
 
-        let game_action_handle = game_action_observer.subscribe({
+        let game_action_handle = game_engine_command_observer.subscribe({
             let dw = dw.clone();
             move |event| {
-                dw.borrow_mut().handle_game_action_event(event);
+                dw.borrow_mut().handle_game_action_command(event);
             }
         });
 
-        let game_state_handle = game_state_observer.subscribe({
+        let game_state_handle = game_engine_event_observer.subscribe({
             let dw = dw.clone();
             move |event| {
-                dw.borrow_mut().handle_game_state_event(event);
+                dw.borrow_mut().handle_game_engine_event(event);
             }
         });
 
@@ -194,16 +194,16 @@ impl LayoutManager {
         dw
     }
 
-    fn handle_game_action_event(&mut self, event: &GameActionEvent) {
+    fn handle_game_action_command(&mut self, event: &GameEngineCommand) {
         match event {
-            GameActionEvent::NewGame(difficulty, _) => self.update_difficulty(*difficulty),
+            GameEngineCommand::NewGame(difficulty, _) => self.update_difficulty(*difficulty),
             _ => (),
         }
     }
 
-    fn handle_game_state_event(&mut self, event: &GameStateEvent) {
+    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         match event {
-            GameStateEvent::ClueSetUpdated(clue_set, _, _) => {
+            GameEngineEvent::ClueSetUpdated(clue_set, _, _) => {
                 self.update_clue_stats(clue_set.as_ref())
             }
             _ => (),

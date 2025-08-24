@@ -7,22 +7,22 @@ use gtk4::{
     ApplicationWindow, EventControllerKey, Label,
 };
 
-use crate::{events::EventEmitter, model::GameActionEvent};
+use crate::{events::EventEmitter, model::GameEngineCommand};
 use fluent_i18n::t;
 
 pub struct NotQuiteRightDialog {
     window: Rc<ApplicationWindow>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    game_engine_command_emitter: EventEmitter<GameEngineCommand>,
 }
 
 impl NotQuiteRightDialog {
     pub fn new(
         window: &Rc<ApplicationWindow>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     ) -> Self {
         Self {
             window: window.clone(),
-            game_action_emitter,
+            game_engine_command_emitter,
         }
     }
 
@@ -89,12 +89,12 @@ impl NotQuiteRightDialog {
         dialog.add_controller(key_controller);
 
         dialog.connect_close_request({
-            let game_action_emitter = self.game_action_emitter.clone();
+            let game_engine_command_emitter = self.game_engine_command_emitter.clone();
             move |_| {
                 if ok_clicked.get() {
-                    game_action_emitter.emit(GameActionEvent::RewindLastGood);
+                    game_engine_command_emitter.emit(GameEngineCommand::RewindLastGood);
                 } else {
-                    game_action_emitter.emit(GameActionEvent::Undo);
+                    game_engine_command_emitter.emit(GameEngineCommand::Undo);
                 }
                 Propagation::Proceed
             }

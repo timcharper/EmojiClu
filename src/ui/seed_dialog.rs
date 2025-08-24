@@ -9,14 +9,14 @@ use gtk4::{prelude::*, ApplicationWindow, Entry};
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
-    model::{Difficulty, GameActionEvent, GameStateEvent},
+    model::{Difficulty, GameEngineCommand, GameEngineEvent},
 };
 use fluent_i18n::t;
 
 pub struct SeedDialog {
     window: Rc<ApplicationWindow>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
-    subscription_id: Option<Unsubscriber<GameStateEvent>>,
+    game_engine_command_emitter: EventEmitter<GameEngineCommand>,
+    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
     current_seed: Option<u64>,
     current_difficulty: Difficulty,
 }
@@ -32,12 +32,12 @@ impl Destroyable for SeedDialog {
 impl SeedDialog {
     pub fn new(
         window: &Rc<ApplicationWindow>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) -> Rc<RefCell<Self>> {
         let dialog = Rc::new(RefCell::new(Self {
             window: window.clone(),
-            game_action_emitter,
+            game_engine_command_emitter,
             subscription_id: None,
             current_seed: None,
             current_difficulty: Difficulty::Easy, // Default value, will be updated by observer
@@ -45,8 +45,8 @@ impl SeedDialog {
 
         // Connect observer to track current seed and difficulty
         let dialog_clone = dialog.clone();
-        let subscription_id = game_state_observer.subscribe(move |event| {
-            if let GameStateEvent::GridUpdated(board) = event {
+        let subscription_id = game_engine_event_observer.subscribe(move |event| {
+            if let GameEngineEvent::GameBoardUpdated(board) = event {
                 let mut dialog = dialog_clone.borrow_mut();
                 dialog.current_seed = Some(board.solution.seed);
                 dialog.current_difficulty = board.solution.difficulty;
@@ -131,15 +131,15 @@ impl SeedDialog {
         });
         dialog.connect_close_request({
             let value_accepted = value_accepted.clone();
-            let game_action_emitter = self.game_action_emitter.clone();
+            let game_engine_command_emitter = self.game_engine_command_emitter.clone();
             let current_seed = self.current_seed;
             let current_difficulty = self.current_difficulty;
             move |_| {
                 if value_accepted.take() {
                     if let Ok(new_seed) = entry.text().as_str().parse::<u64>() {
                         if Some(new_seed) != current_seed {
-                            game_action_emitter
-                                .emit(GameActionEvent::NewGame(current_difficulty, Some(new_seed)));
+                            game_engine_command_emitter
+                                .emit(GameEngineCommand::NewGame(current_difficulty, Some(new_seed)));
                         }
                     }
                 }

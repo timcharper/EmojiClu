@@ -16,24 +16,24 @@ pub enum PuzzleCompletionState {
 }
 
 #[derive(Debug)]
-pub enum GameStateEvent {
+pub enum GameEngineEvent {
     HistoryChanged {
         history_index: usize,
         history_length: usize,
     },
-    GridUpdated(GameBoard),
+    GameBoardUpdated(GameBoard),
     ClueStatusUpdated {
         horizontal_hidden_tiles: Vec<usize>,
         vertical_hidden_tiles: Vec<usize>,
     },
+    ClueHintHighlighted(Option<ClueWithAddress>),
+    ClueSetUpdated(Rc<ClueSet>, Difficulty, HashSet<ClueAddress>),
+    ClueSelected(Option<ClueSelection>),
     HintSuggested(Deduction),
     HintUsageChanged(u32),
     TimerStateChanged(TimerState),
     PuzzleSubmissionReadyChanged(bool),
     PuzzleCompleted(PuzzleCompletionState),
-    ClueHintHighlighted(Option<ClueWithAddress>),
-    ClueSetUpdated(Rc<ClueSet>, Difficulty, HashSet<ClueAddress>),
-    ClueSelected(Option<ClueSelection>),
 }
 
-impl GameStateEvent {}
+impl GameEngineEvent {}

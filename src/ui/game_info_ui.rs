@@ -8,7 +8,7 @@ use gtk4::{prelude::*, Box, Label};
 use crate::{
     destroyable::Destroyable,
     events::{EventObserver, Unsubscriber},
-    model::{GameStateEvent, TimerState},
+    model::{GameEngineEvent, TimerState},
 };
 
 pub struct GameInfoUI {
@@ -19,7 +19,7 @@ pub struct GameInfoUI {
     timer: Option<SourceId>,
     game_box: Rc<Box>,
     pause_screen: Rc<Box>,
-    game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
+    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
 }
 
 impl Destroyable for GameInfoUI {
@@ -35,7 +35,7 @@ impl Destroyable for GameInfoUI {
 
 impl GameInfoUI {
     pub fn new(
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
         game_box: Rc<Box>,
         pause_screen: Rc<Box>,
     ) -> Rc<RefCell<Self>> {
@@ -64,33 +64,33 @@ impl GameInfoUI {
         game_info
             .borrow_mut()
             .start_timer_label_handler(game_info.clone());
-        GameInfoUI::bind_observer(Rc::clone(&game_info), game_state_observer);
+        GameInfoUI::bind_observer(Rc::clone(&game_info), game_engine_event_observer);
 
         game_info
     }
 
     fn bind_observer(
         game_info: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) {
         let game_state_subscription = {
             let game_info = game_info.clone();
-            game_state_observer.subscribe(move |event| {
+            game_engine_event_observer.subscribe(move |event| {
                 game_info
                     .borrow_mut()
-                    .handle_game_state_event(game_info.clone(), event);
+                    .handle_game_engine_event(game_info.clone(), event);
             })
         };
 
         game_info.borrow_mut().game_state_subscription = Some(game_state_subscription);
     }
 
-    fn handle_game_state_event(&mut self, game_info: Rc<RefCell<Self>>, event: &GameStateEvent) {
+    fn handle_game_engine_event(&mut self, game_info: Rc<RefCell<Self>>, event: &GameEngineEvent) {
         match event {
-            GameStateEvent::TimerStateChanged(timer_state) => {
+            GameEngineEvent::TimerStateChanged(timer_state) => {
                 self.update_timer_state(game_info.clone(), &timer_state);
             }
-            GameStateEvent::HintUsageChanged(hints_used) => {
+            GameEngineEvent::HintUsageChanged(hints_used) => {
                 self.update_hints_used(*hints_used);
             }
             _ => {}

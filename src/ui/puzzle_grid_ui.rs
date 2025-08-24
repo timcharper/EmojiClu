@@ -10,7 +10,7 @@ use crate::{
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
     model::{
-        ClueAddress, ClueWithAddress, Difficulty, GameStateEvent, GlobalEvent, InputEvent,
+        ClueAddress, ClueWithAddress, Difficulty, GameEngineEvent, GlobalEvent, InputEvent,
         LayoutConfiguration, Solution,
     },
 };
@@ -22,7 +22,7 @@ pub struct PuzzleGridUI {
     cells: Vec<Vec<Rc<RefCell<PuzzleCellUI>>>>,
     input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
-    game_state_subscription_id: Option<Unsubscriber<GameStateEvent>>,
+    game_state_subscription_id: Option<Unsubscriber<GameEngineEvent>>,
     settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     current_layout: LayoutConfiguration,
     n_rows: usize,
@@ -51,7 +51,7 @@ impl Destroyable for PuzzleGridUI {
 impl PuzzleGridUI {
     pub fn new(
         input_event_emitter: EventEmitter<InputEvent>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         resources: Rc<ImageSet>,
         layout: LayoutConfiguration,
@@ -80,7 +80,10 @@ impl PuzzleGridUI {
 
         // Subscribe to layout changes
         Self::connect_global_observer(puzzle_grid_ui.clone(), global_event_observer);
-        Self::connect_game_state_observer(puzzle_grid_ui.clone(), game_state_observer);
+        Self::connect_game_engine_event_observer(
+            puzzle_grid_ui.clone(),
+            game_engine_event_observer,
+        );
 
         puzzle_grid_ui
             .borrow_mut()
@@ -122,15 +125,15 @@ impl PuzzleGridUI {
         puzzle_grid_ui.borrow_mut().settings_subscription_id = Some(layout_subscription_id);
     }
 
-    fn connect_game_state_observer(
+    fn connect_game_engine_event_observer(
         puzzle_grid_ui: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) {
         let puzzle_grid_ui_moved = puzzle_grid_ui.clone();
-        let subscription_id = game_state_observer.subscribe(move |event| {
+        let subscription_id = game_engine_event_observer.subscribe(move |event| {
             puzzle_grid_ui_moved
                 .borrow_mut()
-                .handle_game_state_event(event);
+                .handle_game_engine_event(event);
         });
         puzzle_grid_ui.borrow_mut().game_state_subscription_id = Some(subscription_id);
     }
@@ -155,9 +158,9 @@ impl PuzzleGridUI {
         }
     }
 
-    fn handle_game_state_event(&mut self, event: &GameStateEvent) {
+    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         match event {
-            GameStateEvent::GridUpdated(board) => {
+            GameEngineEvent::GameBoardUpdated(board) => {
                 self.current_difficulty = board.solution.difficulty;
                 self.set_grid_size(board.solution.n_rows, board.solution.n_variants);
                 for row in 0..board.solution.n_rows {
@@ -185,14 +188,14 @@ impl PuzzleGridUI {
                 self.completed_clues = board.completed_clues().clone();
                 self.sync_clue_spotlight_enabled();
             }
-            GameStateEvent::HintSuggested(deduction) => {
+            GameEngineEvent::HintSuggested(deduction) => {
                 self.highlight_candidate(
                     deduction.tile_assertion.tile.row,
                     deduction.column,
                     deduction.tile_assertion.tile.variant,
                 );
             }
-            GameStateEvent::ClueSelected(clue_selection) => {
+            GameEngineEvent::ClueSelected(clue_selection) => {
                 if let Some(clue_selection) = clue_selection {
                     if clue_selection.is_focused {
                         self.set_current_clue(&Some(clue_selection.clue.clone()));
@@ -203,7 +206,7 @@ impl PuzzleGridUI {
                     self.set_current_clue(&None);
                 }
             }
-            GameStateEvent::ClueHintHighlighted(addressed_clue) => {
+            GameEngineEvent::ClueHintHighlighted(addressed_clue) => {
                 self.current_clue_hint = addressed_clue.clone();
                 self.sync_spotlight();
             }

@@ -12,8 +12,8 @@ use crate::{
     game::settings::Settings,
     helpers::Capitalize,
     model::{
-        ClueWithAddress, Deduction, DeductionKind, Difficulty, Dimensions, GameActionEvent,
-        GameBoard, GameStateEvent, GlobalEvent, LayoutConfiguration,
+        ClueWithAddress, Deduction, DeductionKind, Difficulty, Dimensions, GameBoard,
+        GameEngineCommand, GameEngineEvent, GlobalEvent, LayoutConfiguration,
     },
     solver::{
         clue_completion_evaluator::is_clue_fully_completed, deduce_clue, simplify_deductions,
@@ -57,10 +57,10 @@ pub struct TutorialUI {
     resources: Rc<ImageSet>,
     tutorial_text: TextView,
     pub scrolled_window: ScrolledWindow,
-    game_state_subscription: Option<Unsubscriber<GameStateEvent>>,
-    game_action_subscription: Option<Unsubscriber<GameActionEvent>>,
+    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
+    game_action_subscription: Option<Unsubscriber<GameEngineCommand>>,
     global_event_subscription: Option<Unsubscriber<GlobalEvent>>,
-    game_action_emitter: EventEmitter<GameActionEvent>,
+    game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     current_step: TutorialStep,
     buffer: TextBuffer,
     settings: Settings,
@@ -85,10 +85,10 @@ impl Destroyable for TutorialUI {
 
 impl TutorialUI {
     pub fn new(
-        game_state_observer: EventObserver<GameStateEvent>,
-        game_action_observer: EventObserver<GameActionEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
+        game_engine_command_observer: EventObserver<GameEngineCommand>,
         global_event_observer: EventObserver<GlobalEvent>,
-        game_action_emitter: EventEmitter<GameActionEvent>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
         window: &Rc<ApplicationWindow>,
         resources: &Rc<ImageSet>,
         settings: &Settings,
@@ -123,7 +123,7 @@ impl TutorialUI {
             game_state_subscription: None,
             game_action_subscription: None,
             global_event_subscription: None,
-            game_action_emitter,
+            game_engine_command_emitter,
             current_step: TutorialStep::default(),
             buffer,
             window: window.clone(),
@@ -136,8 +136,8 @@ impl TutorialUI {
 
         TutorialUI::bind_observers(
             Rc::clone(&tutorial_ui),
-            game_state_observer,
-            game_action_observer,
+            game_engine_event_observer,
+            game_engine_command_observer,
             global_event_observer,
         );
         tutorial_ui.borrow_mut().sync_tutorial_text();
@@ -147,21 +147,21 @@ impl TutorialUI {
 
     fn bind_observers(
         tutorial_ui: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
-        game_action_observer: EventObserver<GameActionEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
+        game_engine_command_observer: EventObserver<GameEngineCommand>,
         global_event_observer: EventObserver<GlobalEvent>,
     ) {
         let game_state_subscription = {
             let tutorial_ui = tutorial_ui.clone();
-            game_state_observer.subscribe(move |event| {
-                tutorial_ui.borrow_mut().handle_game_state_event(event);
+            game_engine_event_observer.subscribe(move |event| {
+                tutorial_ui.borrow_mut().handle_game_engine_event(event);
             })
         };
 
         let game_action_subscription = {
             let tutorial_ui = tutorial_ui.clone();
-            game_action_observer.subscribe(move |event| {
-                tutorial_ui.borrow_mut().handle_game_action_event(event);
+            game_engine_command_observer.subscribe(move |event| {
+                tutorial_ui.borrow_mut().handle_game_action_command(event);
             })
         };
 
@@ -177,12 +177,12 @@ impl TutorialUI {
         tutorial_ui.borrow_mut().global_event_subscription = Some(global_event_subscription);
     }
 
-    fn handle_game_state_event(&mut self, event: &GameStateEvent) {
+    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         if self.current_step == TutorialStep::Disabled {
             return;
         }
         match event {
-            GameStateEvent::ClueSelected(clue_selection) => {
+            GameEngineEvent::ClueSelected(clue_selection) => {
                 self.current_clue = clue_selection
                     .as_ref()
                     .map(|clue_selection| clue_selection.clue.clone());
@@ -201,7 +201,7 @@ impl TutorialUI {
                     _ => {}
                 }
             }
-            GameStateEvent::ClueHintHighlighted(clue_with_address) => {
+            GameEngineEvent::ClueHintHighlighted(clue_with_address) => {
                 if let Some(cwa) = clue_with_address {
                     match &self.current_step {
                         TutorialStep::HintUsagePhase1 => {
@@ -212,7 +212,7 @@ impl TutorialUI {
                     self.sync_tutorial_text();
                 }
             }
-            GameStateEvent::HintSuggested(deduction) => match &self.current_step {
+            GameEngineEvent::HintSuggested(deduction) => match &self.current_step {
                 TutorialStep::HintUsagePhase2(cwa) => {
                     self.current_step =
                         TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
@@ -220,7 +220,7 @@ impl TutorialUI {
                 }
                 _ => {}
             },
-            GameStateEvent::GridUpdated(board) => {
+            GameEngineEvent::GameBoardUpdated(board) => {
                 self.current_board = Some(board.clone());
                 match &self.current_step {
                     TutorialStep::HintUsagePhase3(cwa, deduction) => {
@@ -250,15 +250,15 @@ impl TutorialUI {
                     _ => {}
                 }
             }
-            GameStateEvent::HistoryChanged { history_index, .. } => match &self.current_step {
+            GameEngineEvent::HistoryChanged { history_index, .. } => match &self.current_step {
                 TutorialStep::HintUsagePhase3Oops(cwa, deduction) if *history_index == 0 => {
                     self.current_step =
                         TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
                     self.sync_tutorial_text();
                 }
                 TutorialStep::Undo if *history_index == 0 => {
-                    self.game_action_emitter
-                        .emit(GameActionEvent::ClueFocus(None));
+                    self.game_engine_command_emitter
+                        .emit(GameEngineCommand::ClueFocus(None));
                     self.current_step = TutorialStep::SelectAClue;
                     self.sync_tutorial_text();
                 }
@@ -268,9 +268,10 @@ impl TutorialUI {
         }
     }
 
-    fn handle_game_action_event(&mut self, event: &GameActionEvent) {
+    fn handle_game_action_command(&mut self, event: &GameEngineCommand) {
+        // TODO - GameEngineEvent::NewGameStarted(difficulty)
         match event {
-            GameActionEvent::NewGame(difficulty, _) => {
+            GameEngineCommand::NewGame(difficulty, _) => {
                 if *difficulty == Difficulty::Tutorial {
                     self.reset_tutorial();
                 } else {

@@ -8,15 +8,15 @@ use std::time::Duration;
 
 use crate::destroyable::Destroyable;
 use crate::events::{EventEmitter, EventObserver, Unsubscriber};
-use crate::game::game_state::GameState;
-use crate::model::{GameActionEvent, GameStateEvent};
+use crate::game::game_engine::GameEngine;
+use crate::model::{GameEngineCommand, GameEngineEvent};
 use crate::ui::audio_set::AudioSet;
 use crate::ui::NotQuiteRightDialog;
 use fluent_i18n::t;
 
 pub struct HintButtonUI {
     pub hint_button: Button,
-    subscription_id: Option<Unsubscriber<GameStateEvent>>,
+    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
 }
 
 impl Destroyable for HintButtonUI {
@@ -29,9 +29,9 @@ impl Destroyable for HintButtonUI {
 
 impl HintButtonUI {
     pub fn new(
-        game_action_emitter: EventEmitter<GameActionEvent>,
-        game_state_observer: EventObserver<GameStateEvent>,
-        game_state: &Rc<RefCell<GameState>>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
+        game_state: &Rc<RefCell<GameEngine>>,
         audio_set: &Rc<AudioSet>,
         window: &Rc<ApplicationWindow>,
     ) -> Rc<RefCell<Self>> {
@@ -42,7 +42,7 @@ impl HintButtonUI {
         // Connect the click handler
         Self::connect_click_handler(
             &hint_button,
-            game_action_emitter.clone(),
+            game_engine_command_emitter.clone(),
             game_state,
             audio_set,
             window,
@@ -54,15 +54,15 @@ impl HintButtonUI {
         }));
 
         // Connect to game state observer for any future state-based updates
-        Self::connect_observer(hint_button_ui.clone(), game_state_observer);
+        Self::connect_observer(hint_button_ui.clone(), game_engine_event_observer);
 
         hint_button_ui
     }
 
     fn connect_click_handler(
         hint_button: &Button,
-        game_action_emitter: EventEmitter<GameActionEvent>,
-        game_state: &Rc<RefCell<GameState>>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
+        game_state: &Rc<RefCell<GameEngine>>,
         audio_set: &Rc<AudioSet>,
         window: &Rc<ApplicationWindow>,
     ) {
@@ -77,10 +77,10 @@ impl HintButtonUI {
                 trace!(target: "hint_button_ui", "Board is incorrect, showing rewind dialog");
                 let media = audio_set_hint.random_lose_sound();
                 media.play();
-                NotQuiteRightDialog::new(&window, game_action_emitter.clone()).show();
+                NotQuiteRightDialog::new(&window, game_engine_command_emitter.clone()).show();
             } else {
                 trace!(target: "hint_button_ui", "Board is correct, showing hint");
-                game_action_emitter.emit(GameActionEvent::ShowHint);
+                game_engine_command_emitter.emit(GameEngineCommand::ShowHint);
                 button.set_sensitive(false);
                 let button = button.clone();
                 timeout_add_local_once(Duration::from_secs(4), move || {
@@ -93,11 +93,11 @@ impl HintButtonUI {
 
     fn connect_observer(
         hint_button_ui: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) {
         // For now, we don't need to listen to specific game state events for the hint button
         // But we keep the subscription infrastructure in case it's needed later
-        let subscription_id = game_state_observer.subscribe(move |_event| {
+        let subscription_id = game_engine_event_observer.subscribe(move |_event| {
             // Future: Add any game state event handling here if needed
         });
         hint_button_ui.borrow_mut().subscription_id = Some(subscription_id);

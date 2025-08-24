@@ -1,4 +1,4 @@
-pub mod game_state;
+pub mod game_engine;
 pub mod settings;
 pub mod stats_manager;
 

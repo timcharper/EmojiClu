@@ -9,7 +9,7 @@ use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::model::game_state_snapshot::GameStateSnapshot;
 use crate::model::{
     CandidateState, ClueAddress, ClueSelection, ClueSet, ClueWithAddress, Deduction, Difficulty,
-    GameActionEvent, GameBoard, GameStateEvent, GameStats, GlobalEvent, PuzzleCompletionState,
+    GameBoard, GameEngineCommand, GameEngineEvent, GameStats, GlobalEvent, PuzzleCompletionState,
     Solution, TimerState,
 };
 use crate::solver::candidate_solver::{
@@ -49,7 +49,7 @@ impl Default for HintStatus {
     }
 }
 
-pub struct GameState {
+pub struct GameEngine {
     clue_set: Rc<ClueSet>,
     history: Vec<Rc<GameBoard>>,
     pub current_board: Rc<GameBoard>,
@@ -61,16 +61,16 @@ pub struct GameState {
     current_playthrough_id: Uuid,
     is_paused: bool,
     timer_state: TimerState,
-    subscription_id: Option<Unsubscriber<GameActionEvent>>,
+    subscription_id: Option<Unsubscriber<GameEngineCommand>>,
     global_subscription_id: Option<Unsubscriber<GlobalEvent>>,
-    game_state_emitter: EventEmitter<GameStateEvent>,
+    game_engine_event_emitter: EventEmitter<GameEngineEvent>,
     settings: Settings,
     current_selected_clue: Option<ClueWithAddress>,
     clue_focused: bool,
     current_clue_hint: Option<ClueWithAddress>,
 }
 
-impl Destroyable for GameState {
+impl Destroyable for GameEngine {
     fn destroy(&mut self) {
         if let Some(subscription_id) = self.subscription_id.take() {
             subscription_id.unsubscribe();
@@ -81,10 +81,10 @@ impl Destroyable for GameState {
     }
 }
 
-impl GameState {
+impl GameEngine {
     pub fn new(
-        game_action_observer: EventObserver<GameActionEvent>,
-        game_state_emitter: EventEmitter<GameStateEvent>,
+        game_engine_command_observer: EventObserver<GameEngineCommand>,
+        game_engine_event_emitter: EventEmitter<GameEngineEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         settings: Settings,
     ) -> Rc<RefCell<Self>> {
@@ -103,26 +103,26 @@ impl GameState {
             timer_state: TimerState::default(),
             subscription_id: None,
             global_subscription_id: None,
-            game_state_emitter,
+            game_engine_event_emitter,
             settings,
             current_selected_clue: None,
             clue_focused: false,
             current_clue_hint: None,
         };
         let refcell = Rc::new(RefCell::new(game_state));
-        GameState::wire_subscription(refcell.clone(), game_action_observer);
-        GameState::wire_global_subscription(refcell.clone(), global_event_observer);
+        GameEngine::wire_subscription(refcell.clone(), game_engine_command_observer);
+        GameEngine::wire_global_subscription(refcell.clone(), global_event_observer);
         refcell
     }
 
     fn wire_subscription(
         game_state: Rc<RefCell<Self>>,
-        game_action_emitter: EventObserver<GameActionEvent>,
+        game_engine_command_emitter: EventObserver<GameEngineCommand>,
     ) {
         let game_state_handler = game_state.clone();
-        let subscription_id = game_action_emitter.subscribe(move |event| {
+        let subscription_id = game_engine_command_emitter.subscribe(move |event| {
             let mut game_state = game_state_handler.borrow_mut();
-            game_state.handle_event(event.clone());
+            game_state.handle_command(event.clone());
         });
         game_state.borrow_mut().subscription_id = Some(subscription_id);
     }
@@ -159,17 +159,18 @@ impl GameState {
         self.clue_focused = false;
         self.hint_status = HintStatus::default();
         self.sync_board_display();
-        self.game_state_emitter
-            .emit(GameStateEvent::HintUsageChanged(self.hints_used));
-        self.game_state_emitter
-            .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
-        self.game_state_emitter.emit(GameStateEvent::ClueSetUpdated(
-            self.clue_set.clone(),
-            self.current_board.solution.difficulty,
-            self.current_board.completed_clues.clone(),
-        ));
-        self.game_state_emitter
-            .emit(GameStateEvent::HistoryChanged {
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::HintUsageChanged(self.hints_used));
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::TimerStateChanged(self.timer_state.clone()));
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::ClueSetUpdated(
+                self.clue_set.clone(),
+                self.current_board.solution.difficulty,
+                self.current_board.completed_clues.clone(),
+            ));
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -209,8 +210,8 @@ impl GameState {
         self.history.push(Rc::clone(&self.current_board));
         self.history_index += 1;
 
-        self.game_state_emitter
-            .emit(GameStateEvent::HistoryChanged {
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -226,8 +227,8 @@ impl GameState {
             self.sync_board_display();
         }
 
-        self.game_state_emitter
-            .emit(GameStateEvent::HistoryChanged {
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -240,8 +241,8 @@ impl GameState {
             self.sync_board_display();
         }
 
-        self.game_state_emitter
-            .emit(GameStateEvent::HistoryChanged {
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -249,15 +250,16 @@ impl GameState {
 
     fn sync_board_display(&mut self) {
         // Emit grid update event
-        self.game_state_emitter.emit(GameStateEvent::GridUpdated(
-            self.current_board.as_ref().clone(),
-        ));
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::GameBoardUpdated(
+                self.current_board.as_ref().clone(),
+            ));
         // Emit completion state event
         let all_cells_filled = self.current_board.is_complete();
         if self.get_difficulty() != Difficulty::Tutorial {
             // we don't want to show submission screen for tutorial
-            self.game_state_emitter
-                .emit(GameStateEvent::PuzzleSubmissionReadyChanged(
+            self.game_engine_event_emitter
+                .emit(GameEngineEvent::PuzzleSubmissionReadyChanged(
                     all_cells_filled,
                 ));
         }
@@ -267,39 +269,39 @@ impl GameState {
         }
     }
 
-    pub fn handle_event(&mut self, event: GameActionEvent) {
+    fn handle_command(&mut self, event: GameEngineCommand) {
         log::trace!(target: "game_state", "Handling event: {:?}", event);
         match event {
-            GameActionEvent::CellSelect(row, col, variant) => {
+            GameEngineCommand::CellSelect(row, col, variant) => {
                 self.handle_cell_select(row, col, variant)
             }
-            GameActionEvent::CellClear(row, col, variant) => {
+            GameEngineCommand::CellClear(row, col, variant) => {
                 self.handle_cell_clear(row, col, variant)
             }
-            GameActionEvent::NewGame(difficulty, seed) => {
+            GameEngineCommand::NewGame(difficulty, seed) => {
                 self.set_game_state(&GameStateSnapshot::generate_new(difficulty, seed));
             }
-            GameActionEvent::LoadState(save_state) => {
+            GameEngineCommand::LoadState(save_state) => {
                 trace!(target: "game_state", "Loading saved state {:?}", save_state);
                 self.set_game_state(&save_state);
             }
-            GameActionEvent::InitDisplay => {
+            GameEngineCommand::InitDisplay => {
                 self.sync_board_display();
             }
-            GameActionEvent::Solve => self.try_solve(),
-            GameActionEvent::RewindLastGood => self.rewind_last_good(),
-            GameActionEvent::IncrementHintsUsed => self.increment_hints_used(),
-            GameActionEvent::ShowHint => {
+            GameEngineCommand::Solve => self.try_solve(),
+            GameEngineCommand::RewindLastGood => self.rewind_last_good(),
+            GameEngineCommand::IncrementHintsUsed => self.increment_hints_used(),
+            GameEngineCommand::ShowHint => {
                 self.show_hint();
             }
-            GameActionEvent::Undo => self.undo(),
-            GameActionEvent::Redo => self.redo(),
-            GameActionEvent::Pause => self.pause_game(),
-            GameActionEvent::Resume => self.resume_game(),
-            GameActionEvent::Quit => (),
-            GameActionEvent::Submit => todo!(),
-            GameActionEvent::CompletePuzzle => self.complete_puzzle(),
-            GameActionEvent::Restart => {
+            GameEngineCommand::Undo => self.undo(),
+            GameEngineCommand::Redo => self.redo(),
+            GameEngineCommand::Pause => self.pause_game(),
+            GameEngineCommand::Resume => self.resume_game(),
+            GameEngineCommand::Quit => (),
+            GameEngineCommand::Submit => todo!(),
+            GameEngineCommand::CompletePuzzle => self.complete_puzzle(),
+            GameEngineCommand::Restart => {
                 // Start a new game with current difficulty and seed
                 let current_seed = self.current_board.solution.seed;
                 let current_difficulty = self.current_board.solution.difficulty;
@@ -308,16 +310,16 @@ impl GameState {
                     Some(current_seed),
                 ));
             }
-            GameActionEvent::ClueToggleComplete(clue_address) => {
+            GameEngineCommand::ClueToggleComplete(clue_address) => {
                 self.handle_clue_toggle_complete(clue_address)
             }
-            GameActionEvent::ClueToggleSelectedComplete => {
+            GameEngineCommand::ClueToggleSelectedComplete => {
                 if let Some(addressed_clue) = &self.current_selected_clue {
                     self.handle_clue_toggle_complete(addressed_clue.address())
                 }
             }
-            GameActionEvent::ClueFocus(maybe_clue) => self.focus_clue(maybe_clue),
-            GameActionEvent::ClueFocusNext(direction) => self.focus_next_clue(direction),
+            GameEngineCommand::ClueFocus(maybe_clue) => self.focus_clue(maybe_clue),
+            GameEngineCommand::ClueFocusNext(direction) => self.focus_next_clue(direction),
         }
     }
     fn focus_next_clue(&mut self, direction: i32) {
@@ -368,23 +370,23 @@ impl GameState {
     fn complete_puzzle(&mut self) {
         if self.current_board.is_complete() {
             if self.current_board.is_incorrect() {
-                self.game_state_emitter
-                    .emit(GameStateEvent::PuzzleCompleted(
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::PuzzleCompleted(
                         PuzzleCompletionState::Incorrect,
                     ));
             } else {
-                self.game_state_emitter
-                    .emit(GameStateEvent::PuzzleCompleted(
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::PuzzleCompleted(
                         PuzzleCompletionState::Correct(self.get_game_stats()),
                     ));
 
                 self.timer_state = self.timer_state.ended(SystemTime::now());
-                self.game_state_emitter
-                    .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::TimerStateChanged(self.timer_state.clone()));
             }
         } else {
-            self.game_state_emitter
-                .emit(GameStateEvent::PuzzleCompleted(
+            self.game_engine_event_emitter
+                .emit(GameEngineEvent::PuzzleCompleted(
                     PuzzleCompletionState::Incomplete,
                 ));
         }
@@ -426,8 +428,8 @@ impl GameState {
             }
             EvaluationStepResult::HiddenSetsFound => {
                 log::info!("Hidden pairs found");
-                self.game_state_emitter
-                    .emit(GameStateEvent::ClueSelected(None));
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::ClueSelected(None));
             }
             EvaluationStepResult::DeductionsFound(clue) => {
                 log::info!("Deductions found from clue: {:?}", clue);
@@ -437,8 +439,8 @@ impl GameState {
                     .cloned()
                     .expect("This should have returned a clue");
 
-                self.game_state_emitter
-                    .emit(GameStateEvent::ClueSelected(Some(ClueSelection {
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::ClueSelected(Some(ClueSelection {
                         clue: addressed_clue,
                         is_focused: true,
                     })));
@@ -506,8 +508,8 @@ impl GameState {
             self.hints_used += 1;
             self.hint_status.hint_level += 1;
         }
-        self.game_state_emitter
-            .emit(GameStateEvent::HintUsageChanged(self.hints_used));
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::HintUsageChanged(self.hints_used));
     }
 
     fn show_hint(&mut self) -> bool {
@@ -525,8 +527,8 @@ impl GameState {
 
         if let Some(DeductionResult { deductions, clue }) = deduction_result {
             if let Some(addressed_clue) = &clue {
-                self.game_state_emitter
-                    .emit(GameStateEvent::ClueSelected(Some(ClueSelection {
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::ClueSelected(Some(ClueSelection {
                         clue: addressed_clue.clone(),
                         is_focused: true,
                     })));
@@ -544,8 +546,8 @@ impl GameState {
                     self.push_board(current_board);
                 }
 
-                self.game_state_emitter
-                    .emit(GameStateEvent::ClueHintHighlighted(Some(
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::ClueHintHighlighted(Some(
                         addressed_clue.clone(),
                     )));
             }
@@ -554,8 +556,8 @@ impl GameState {
                 if let Some(first_deduction) = deductions.first() {
                     // highlight cells
 
-                    self.game_state_emitter
-                        .emit(GameStateEvent::HintSuggested(first_deduction.clone()));
+                    self.game_engine_event_emitter
+                        .emit(GameEngineEvent::HintSuggested(first_deduction.clone()));
                 }
             }
             return true;
@@ -575,8 +577,8 @@ impl GameState {
             self.current_board = self.history[self.history_index].clone();
             self.sync_board_display();
         }
-        self.game_state_emitter
-            .emit(GameStateEvent::HistoryChanged {
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::HistoryChanged {
                 history_index: self.history_index,
                 history_length: self.history.len(),
             });
@@ -613,8 +615,8 @@ impl GameState {
         if !self.is_paused {
             self.is_paused = true;
             self.timer_state = self.timer_state.paused(SystemTime::now());
-            self.game_state_emitter
-                .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+            self.game_engine_event_emitter
+                .emit(GameEngineEvent::TimerStateChanged(self.timer_state.clone()));
         }
     }
 
@@ -622,8 +624,8 @@ impl GameState {
         if self.is_paused {
             self.is_paused = false;
             self.timer_state = self.timer_state.resumed();
-            self.game_state_emitter
-                .emit(GameStateEvent::TimerStateChanged(self.timer_state.clone()));
+            self.game_engine_event_emitter
+                .emit(GameEngineEvent::TimerStateChanged(self.timer_state.clone()));
         }
     }
 
@@ -652,8 +654,8 @@ impl GameState {
             }
 
             if self.current_clue_hint.is_none() {
-                self.game_state_emitter
-                    .emit(GameStateEvent::ClueHintHighlighted(None));
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::ClueHintHighlighted(None));
             }
         }
     }
@@ -661,8 +663,8 @@ impl GameState {
     fn sync_clue_selection(&mut self) {
         let clue = self.current_selected_clue.clone();
 
-        self.game_state_emitter
-            .emit(GameStateEvent::ClueSelected(clue.map(|c| ClueSelection {
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::ClueSelected(clue.map(|c| ClueSelection {
                 clue: c,
                 is_focused: self.clue_focused,
             })));

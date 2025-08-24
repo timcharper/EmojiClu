@@ -12,7 +12,7 @@ use crate::{
 };
 use crate::{
     events::{EventEmitter, EventObserver},
-    model::{ClueOrientation, ClueSet, GameStateEvent, GlobalEvent, InputEvent},
+    model::{ClueOrientation, ClueSet, GameEngineEvent, GlobalEvent, InputEvent},
 };
 use crate::{
     model::ClueWithAddress,
@@ -28,7 +28,7 @@ pub struct CluePanelsUI {
     vertical_clue_uis: Vec<Rc<RefCell<ClueUI>>>,
     input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
-    game_state_subscription_id: Option<Unsubscriber<GameStateEvent>>,
+    game_state_subscription_id: Option<Unsubscriber<GameEngineEvent>>,
     settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     current_layout: LayoutConfiguration,
     tooltips_enabled: bool,
@@ -61,7 +61,7 @@ impl Destroyable for CluePanelsUI {
 impl CluePanelsUI {
     pub fn new(
         input_event_emitter: EventEmitter<InputEvent>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
         resources: &Rc<ImageSet>,
         layout: LayoutConfiguration,
@@ -103,7 +103,7 @@ impl CluePanelsUI {
 
         Self::connect_observers(
             clue_set_ui.clone(),
-            game_state_observer,
+            game_engine_event_observer,
             global_event_observer,
         );
 
@@ -112,14 +112,14 @@ impl CluePanelsUI {
 
     fn connect_observers(
         clue_set_ui: Rc<RefCell<Self>>,
-        game_state_observer: EventObserver<GameStateEvent>,
+        game_engine_event_observer: EventObserver<GameEngineEvent>,
         global_event_observer: EventObserver<GlobalEvent>,
     ) {
         let clue_set_ui_moved = clue_set_ui.clone();
-        let game_state_subscription = game_state_observer.subscribe(move |event| {
+        let game_state_subscription = game_engine_event_observer.subscribe(move |event| {
             clue_set_ui_moved
                 .borrow_mut()
-                .handle_game_state_event(event);
+                .handle_game_engine_event(event);
         });
 
         let clue_set_ui_moved = clue_set_ui.clone();
@@ -173,19 +173,19 @@ impl CluePanelsUI {
         }
     }
 
-    fn handle_game_state_event(&mut self, event: &GameStateEvent) {
+    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         match event {
-            GameStateEvent::ClueSetUpdated(clue_set, difficulty, completed_clues) => {
+            GameEngineEvent::ClueSetUpdated(clue_set, difficulty, completed_clues) => {
                 self.set_clues(clue_set, *difficulty);
                 self.set_clue_completion(completed_clues);
             }
-            GameStateEvent::ClueHintHighlighted(Some(clue_with_address)) => {
+            GameEngineEvent::ClueHintHighlighted(Some(clue_with_address)) => {
                 self.highlight_clue(clue_with_address.address(), Duration::from_secs(4));
             }
-            GameStateEvent::GridUpdated(grid) => {
+            GameEngineEvent::GameBoardUpdated(grid) => {
                 self.set_clue_completion(&grid.completed_clues);
             }
-            GameStateEvent::ClueSelected(clue_selection) => {
+            GameEngineEvent::ClueSelected(clue_selection) => {
                 self.set_clue_selected(&clue_selection);
             }
             _ => {}
