@@ -4,7 +4,8 @@ use crate::game::game_engine::GameEngine;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
 use crate::model::{
-    game_state_snapshot, Difficulty, GameEngineCommand, GameEngineEvent, GlobalEvent, InputEvent,
+    game_state_snapshot, Difficulty, GameEngineCommand, GameEngineEvent, GameStateSnapshot,
+    InputEvent, LayoutManagerEvent, SettingsProjection,
 };
 use crate::ui::input_translator::InputTranslator;
 use crate::ui::seed_dialog::SeedDialog;
@@ -36,25 +37,36 @@ use super::tutorial_ui::TutorialUI;
 
 const APP_VERSION: &str = env!("APP_VERSION");
 
-pub fn build_ui(app: &Application) {
-    let (game_engine_command_emitter, game_engine_command_observer) =
-        Channel::<GameEngineCommand>::new();
-    let (game_engine_event_emitter, game_engine_event_observer) = Channel::<GameEngineEvent>::new();
-    let (global_event_emitter, global_event_observer) = Channel::<GlobalEvent>::new();
-    let (input_event_emitter, input_event_observer) = Channel::<InputEvent>::new();
-
-    let settings = Rc::new(RefCell::new(Settings::load()));
+pub fn load_settings_and_game_state() -> (Settings, Option<GameStateSnapshot>) {
+    let mut initial_settings = Settings::load();
     let saved_game_state = game_state_snapshot::load_game_state_snapshot();
     if let Some(save_state) = &saved_game_state {
         log::info!(target: "window", "Loaded saved game state");
         // if these disagree, then bad things happen.
-        settings.borrow_mut().difficulty = save_state.board.solution.difficulty;
+        initial_settings.difficulty = save_state.board.solution.difficulty;
     } else {
         log::info!(target: "window", "No saved game state found");
     }
+    (initial_settings, saved_game_state)
+}
 
-    let resource_manager =
-        ResourceManager::new(global_event_observer.clone(), global_event_emitter.clone());
+pub fn build_ui(app: &Application) {
+    let (game_engine_command_emitter, game_engine_command_observer) =
+        Channel::<GameEngineCommand>::new();
+    let (game_engine_event_emitter, game_engine_event_observer) = Channel::<GameEngineEvent>::new();
+    let (layout_manager_event_emitter, layout_manager_event_observer) =
+        Channel::<LayoutManagerEvent>::new();
+    let (input_event_emitter, input_event_observer) = Channel::<InputEvent>::new();
+
+    let (initial_settings, saved_game_state) = load_settings_and_game_state();
+
+    let settings_projection =
+        SettingsProjection::new(&initial_settings, &game_engine_event_observer);
+
+    let resource_manager = ResourceManager::new(
+        layout_manager_event_observer.clone(),
+        layout_manager_event_emitter.clone(),
+    );
     let image_set = resource_manager.borrow().get_image_set();
     let audio_set = resource_manager.borrow().get_audio_set();
 
@@ -105,11 +117,10 @@ pub fn build_ui(app: &Application) {
 
     let layout_manager = LayoutManager::new(
         window.clone(),
-        global_event_emitter.clone(),
-        game_engine_command_observer.clone(),
+        layout_manager_event_emitter.clone(),
         game_engine_event_observer.clone(),
         scrolled_window.clone(),
-        settings.borrow().difficulty,
+        initial_settings.difficulty,
     );
 
     // Set up keyboard shortcuts
@@ -125,8 +136,8 @@ pub fn build_ui(app: &Application) {
     // Create Settings submenu
     let settings_menu_ui = SettingsMenuUI::new(
         window.clone(),
-        global_event_emitter.clone(),
-        settings.clone(),
+        game_engine_command_emitter.clone(),
+        initial_settings.clone(),
     );
 
     // Add all menu items
@@ -167,17 +178,15 @@ pub fn build_ui(app: &Application) {
     difficulty_box.append(&difficulty_selector);
 
     // Set initial selection based on current settings
-    let current_difficulty = settings.borrow().difficulty;
+    let current_difficulty = initial_settings.difficulty;
     difficulty_selector.set_selected(current_difficulty.index() as u32);
 
     // Handle difficulty changes
-    let settings_ref = Rc::clone(&settings);
     let game_engine_command_emitter_new_game = game_engine_command_emitter.clone();
     difficulty_selector.connect_selected_notify(move |selector| {
         let new_difficulty = Difficulty::from_index(selector.selected() as usize);
-        settings_ref.borrow_mut().difficulty = new_difficulty;
-        let _ = settings_ref.borrow().save();
-        game_engine_command_emitter_new_game.emit(GameEngineCommand::NewGame(new_difficulty, None));
+        game_engine_command_emitter_new_game
+            .emit(GameEngineCommand::NewGame(Some(new_difficulty), None));
     });
 
     header_bar.pack_start(&difficulty_box);
@@ -193,33 +202,32 @@ pub fn build_ui(app: &Application) {
     let solve_button = Button::with_label(&t!("solve-button"));
 
     let default_layout =
-        LayoutManager::calculate_layout(settings.borrow().difficulty, Some(ClueStats::default()));
+        LayoutManager::calculate_layout(initial_settings.difficulty, Some(ClueStats::default()));
 
     // Create puzzle grid and clue set UI first
     let puzzle_grid_ui = PuzzleGridUI::new(
         input_event_emitter.clone(),
         game_engine_event_observer.clone(),
-        global_event_observer.clone(),
+        layout_manager_event_observer.clone(),
         image_set.clone(),
         default_layout.clone(),
-        &settings.borrow(),
+        &initial_settings,
     );
 
     let clue_set_ui = CluePanelsUI::new(
         input_event_emitter.clone(),
         game_engine_event_observer.clone(),
-        global_event_observer.clone(),
+        layout_manager_event_observer.clone(),
         &image_set,
         default_layout.clone(),
-        &settings.borrow(),
+        &initial_settings,
     );
 
     // Create game state with UI references
     let game_state = GameEngine::new(
         game_engine_command_observer.clone(),
         game_engine_event_emitter.clone(),
-        global_event_observer.clone(),
-        settings.borrow().clone(),
+        initial_settings.clone(),
     );
 
     // Create hint button UI
@@ -318,11 +326,11 @@ pub fn build_ui(app: &Application) {
     let tutorial_ui = TutorialUI::new(
         game_engine_event_observer.clone(),
         game_engine_command_observer.clone(),
-        global_event_observer.clone(),
+        layout_manager_event_observer.clone(),
         game_engine_command_emitter.clone(),
         &window,
         &image_set,
-        &settings.borrow(),
+        &initial_settings,
         &default_layout,
     );
 
@@ -372,12 +380,10 @@ pub fn build_ui(app: &Application) {
 
     // Add new game action that uses current difficulty
     let action_new_game = SimpleAction::new("new-game", None);
-    let settings_ref: Rc<RefCell<Settings>> = Rc::clone(&settings);
     action_new_game.connect_activate({
         let game_engine_command_emitter = game_engine_command_emitter.clone();
         move |_, _| {
-            let difficulty = settings_ref.borrow().difficulty;
-            game_engine_command_emitter.emit(GameEngineCommand::NewGame(difficulty, None));
+            game_engine_command_emitter.emit(GameEngineCommand::NewGame(None, None));
         }
     });
     window.add_action(&action_new_game);
@@ -386,12 +392,12 @@ pub fn build_ui(app: &Application) {
     let stats_manager_stats = Rc::clone(&stats_manager);
 
     action_statistics.connect_activate({
-        let settings = Rc::clone(&settings);
+        let settings = settings_projection.clone();
         let window = window.clone();
         move |_, _| {
             StatsDialog::show(
                 &window,
-                settings.borrow().difficulty,
+                settings.borrow().current_settings().difficulty,
                 &stats_manager_stats.borrow_mut(),
                 None,
                 || {},
@@ -426,8 +432,6 @@ pub fn build_ui(app: &Application) {
         window.clone(),
         scrolled_window.clone(),
         input_event_emitter.clone(),
-        global_event_observer.clone(),
-        &settings.borrow(),
     );
 
     // Initialize game with saved difficulty
@@ -437,12 +441,13 @@ pub fn build_ui(app: &Application) {
         }
         None => {
             game_engine_command_emitter.emit(GameEngineCommand::NewGame(
-                settings.borrow().difficulty,
+                Some(initial_settings.difficulty),
                 Settings::seed_from_env(),
             ));
         }
     }
-    global_event_emitter.emit(GlobalEvent::SettingsChanged(settings.borrow().clone()));
+    // delete me
+    // game_engine_command_emitter.emit(GameEngineCommand::ChangeSettings(settings.borrow().clone()));
 
     // Add seed action
     let action_seed = SimpleAction::new("seed", None);
@@ -464,8 +469,7 @@ pub fn build_ui(app: &Application) {
     let input_translator = InputTranslator::new(
         game_engine_command_emitter.clone(),
         input_event_observer.clone(),
-        global_event_observer.clone(),
-        &settings.borrow(),
+        settings_projection,
     );
 
     window.connect_close_request(move |_| {

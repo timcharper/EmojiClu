@@ -12,7 +12,7 @@ use crate::{
 };
 use crate::{
     events::{EventEmitter, EventObserver},
-    model::{ClueOrientation, ClueSet, GameEngineEvent, GlobalEvent, InputEvent},
+    model::{ClueOrientation, ClueSet, GameEngineEvent, LayoutManagerEvent, InputEvent},
 };
 use crate::{
     model::ClueWithAddress,
@@ -29,7 +29,7 @@ pub struct CluePanelsUI {
     input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
     game_state_subscription_id: Option<Unsubscriber<GameEngineEvent>>,
-    settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
+    settings_subscription_id: Option<Unsubscriber<LayoutManagerEvent>>,
     current_layout: LayoutConfiguration,
     tooltips_enabled: bool,
     current_spotlight_enabled: bool,
@@ -62,7 +62,7 @@ impl CluePanelsUI {
     pub fn new(
         input_event_emitter: EventEmitter<InputEvent>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
-        global_event_observer: EventObserver<GlobalEvent>,
+        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
         resources: &Rc<ImageSet>,
         layout: LayoutConfiguration,
         settings: &Settings,
@@ -104,7 +104,7 @@ impl CluePanelsUI {
         Self::connect_observers(
             clue_set_ui.clone(),
             game_engine_event_observer,
-            global_event_observer,
+            layout_manager_event_observer,
         );
 
         clue_set_ui
@@ -113,7 +113,7 @@ impl CluePanelsUI {
     fn connect_observers(
         clue_set_ui: Rc<RefCell<Self>>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
-        global_event_observer: EventObserver<GlobalEvent>,
+        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
     ) {
         let clue_set_ui_moved = clue_set_ui.clone();
         let game_state_subscription = game_engine_event_observer.subscribe(move |event| {
@@ -123,7 +123,7 @@ impl CluePanelsUI {
         });
 
         let clue_set_ui_moved = clue_set_ui.clone();
-        let settings_subscription = global_event_observer.subscribe(move |event| {
+        let settings_subscription = layout_manager_event_observer.subscribe(move |event| {
             clue_set_ui_moved.borrow_mut().handle_global_event(event);
         });
 
@@ -131,16 +131,12 @@ impl CluePanelsUI {
         clue_set_ui.borrow_mut().settings_subscription_id = Some(settings_subscription);
     }
 
-    fn handle_global_event(&mut self, event: &GlobalEvent) {
+    fn handle_global_event(&mut self, event: &LayoutManagerEvent) {
         match event {
-            GlobalEvent::SettingsChanged(settings) => {
-                self.update_tooltip_visibility(settings.clue_tooltips_enabled);
-                self.update_spotlight_enabled(settings.clue_spotlight_enabled);
-            }
-            GlobalEvent::LayoutChanged(new_layout) => {
+            LayoutManagerEvent::LayoutChanged(new_layout) => {
                 self.update_layout(new_layout);
             }
-            GlobalEvent::ImagesOptimized(new_image_set) => {
+            LayoutManagerEvent::ImagesOptimized(new_image_set) => {
                 self.resources = new_image_set.clone();
                 // propagate image set to all clue_uis
                 for clue_ui in &mut self.horizontal_clue_uis {
@@ -187,6 +183,10 @@ impl CluePanelsUI {
             }
             GameEngineEvent::ClueSelected(clue_selection) => {
                 self.set_clue_selected(&clue_selection);
+            }
+            GameEngineEvent::SettingsChanged(settings) => {
+                self.update_tooltip_visibility(settings.clue_tooltips_enabled);
+                self.update_spotlight_enabled(settings.clue_spotlight_enabled);
             }
             _ => {}
         }

@@ -138,8 +138,10 @@ impl SeedDialog {
                 if value_accepted.take() {
                     if let Ok(new_seed) = entry.text().as_str().parse::<u64>() {
                         if Some(new_seed) != current_seed {
-                            game_engine_command_emitter
-                                .emit(GameEngineCommand::NewGame(current_difficulty, Some(new_seed)));
+                            game_engine_command_emitter.emit(GameEngineCommand::NewGame(
+                                Some(current_difficulty),
+                                Some(new_seed),
+                            ));
                         }
                     }
                 }

@@ -1,14 +1,13 @@
 use fixed::types::I8F8;
 
-use crate::{game::settings::Settings, ui::ImageSet};
+use crate::ui::ImageSet;
 use std::rc::Rc;
 
 use super::LayoutConfiguration;
 
 /// Events that are not specific to any one component of the game.
 #[derive(Debug)]
-pub enum GlobalEvent {
-    SettingsChanged(Settings),
+pub enum LayoutManagerEvent {
     DimensionsChanged(Rc<ImageSet>),
     LayoutChanged(LayoutConfiguration),
     OptimizeImages {

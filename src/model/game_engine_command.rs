@@ -1,5 +1,13 @@
 use super::{ClueAddress, Difficulty, GameStateSnapshot};
 
+#[derive(Debug, Clone, Default)]
+
+pub struct SettingsChange {
+    pub clue_tooltips_enabled: Option<bool>,
+    pub clue_spotlight_enabled: Option<bool>,
+    pub touch_screen_controls: Option<bool>,
+}
+
 #[derive(Debug, Clone)]
 pub enum GameEngineCommand {
     CellSelect(usize, usize, Option<char>),
@@ -8,7 +16,7 @@ pub enum GameEngineCommand {
     ClueToggleSelectedComplete,
     ClueFocus(Option<ClueAddress>), // clue_idx when Some
     ClueFocusNext(i32),
-    NewGame(Difficulty, Option<u64>), // grid rows, grid columns
+    NewGame(Option<Difficulty>, Option<u64>), // grid rows, grid columns
     InitDisplay,
     CompletePuzzle,
     Solve,
@@ -23,4 +31,5 @@ pub enum GameEngineCommand {
     Submit,
     Restart,
     LoadState(GameStateSnapshot),
+    ChangeSettings(SettingsChange),
 }

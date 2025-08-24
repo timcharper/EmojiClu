@@ -10,7 +10,7 @@ use crate::{
     events::{EventEmitter, EventObserver, Unsubscriber},
     game::settings::Settings,
     model::{
-        ClueAddress, ClueWithAddress, Difficulty, GameEngineEvent, GlobalEvent, InputEvent,
+        ClueAddress, ClueWithAddress, Difficulty, GameEngineEvent, LayoutManagerEvent, InputEvent,
         LayoutConfiguration, Solution,
     },
 };
@@ -23,7 +23,7 @@ pub struct PuzzleGridUI {
     input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
     game_state_subscription_id: Option<Unsubscriber<GameEngineEvent>>,
-    settings_subscription_id: Option<Unsubscriber<GlobalEvent>>,
+    settings_subscription_id: Option<Unsubscriber<LayoutManagerEvent>>,
     current_layout: LayoutConfiguration,
     n_rows: usize,
     n_variants: usize,
@@ -52,7 +52,7 @@ impl PuzzleGridUI {
     pub fn new(
         input_event_emitter: EventEmitter<InputEvent>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
-        global_event_observer: EventObserver<GlobalEvent>,
+        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
         resources: Rc<ImageSet>,
         layout: LayoutConfiguration,
         settings: &Settings,
@@ -79,7 +79,7 @@ impl PuzzleGridUI {
         }));
 
         // Subscribe to layout changes
-        Self::connect_global_observer(puzzle_grid_ui.clone(), global_event_observer);
+        Self::connect_global_observer(puzzle_grid_ui.clone(), layout_manager_event_observer);
         Self::connect_game_engine_event_observer(
             puzzle_grid_ui.clone(),
             game_engine_event_observer,
@@ -115,10 +115,10 @@ impl PuzzleGridUI {
 
     fn connect_global_observer(
         puzzle_grid_ui: Rc<RefCell<Self>>,
-        global_event_observer: EventObserver<GlobalEvent>,
+        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
     ) {
         let puzzle_grid_ui_moved = puzzle_grid_ui.clone();
-        let layout_subscription_id = global_event_observer.subscribe(move |event| {
+        let layout_subscription_id = layout_manager_event_observer.subscribe(move |event| {
             puzzle_grid_ui_moved.borrow_mut().handle_global_event(event);
         });
 
@@ -138,10 +138,10 @@ impl PuzzleGridUI {
         puzzle_grid_ui.borrow_mut().game_state_subscription_id = Some(subscription_id);
     }
 
-    fn handle_global_event(&mut self, event: &GlobalEvent) {
+    fn handle_global_event(&mut self, event: &LayoutManagerEvent) {
         match event {
-            GlobalEvent::LayoutChanged(new_layout) => self.update_layout(new_layout),
-            GlobalEvent::ImagesOptimized(new_image_set) => {
+            LayoutManagerEvent::LayoutChanged(new_layout) => self.update_layout(new_layout),
+            LayoutManagerEvent::ImagesOptimized(new_image_set) => {
                 self.resources = new_image_set.clone();
                 // propagate image set to all cells
                 for row in &mut self.cells {
@@ -149,10 +149,6 @@ impl PuzzleGridUI {
                         cell.borrow_mut().set_image_set(self.resources.clone());
                     }
                 }
-            }
-            GlobalEvent::SettingsChanged(settings) => {
-                self.settings = settings.clone();
-                self.sync_clue_spotlight_enabled();
             }
             _ => (),
         }

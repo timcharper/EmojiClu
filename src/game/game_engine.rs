@@ -9,8 +9,8 @@ use crate::events::{EventEmitter, EventObserver, Unsubscriber};
 use crate::model::game_state_snapshot::GameStateSnapshot;
 use crate::model::{
     CandidateState, ClueAddress, ClueSelection, ClueSet, ClueWithAddress, Deduction, Difficulty,
-    GameBoard, GameEngineCommand, GameEngineEvent, GameStats, GlobalEvent, PuzzleCompletionState,
-    Solution, TimerState,
+    GameBoard, GameEngineCommand, GameEngineEvent, GameStats, PuzzleCompletionState, Solution,
+    TimerState,
 };
 use crate::solver::candidate_solver::{
     deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult,
@@ -62,7 +62,6 @@ pub struct GameEngine {
     is_paused: bool,
     timer_state: TimerState,
     subscription_id: Option<Unsubscriber<GameEngineCommand>>,
-    global_subscription_id: Option<Unsubscriber<GlobalEvent>>,
     game_engine_event_emitter: EventEmitter<GameEngineEvent>,
     settings: Settings,
     current_selected_clue: Option<ClueWithAddress>,
@@ -75,9 +74,6 @@ impl Destroyable for GameEngine {
         if let Some(subscription_id) = self.subscription_id.take() {
             subscription_id.unsubscribe();
         }
-        if let Some(subscription_id) = self.global_subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
     }
 }
 
@@ -85,7 +81,6 @@ impl GameEngine {
     pub fn new(
         game_engine_command_observer: EventObserver<GameEngineCommand>,
         game_engine_event_emitter: EventEmitter<GameEngineEvent>,
-        global_event_observer: EventObserver<GlobalEvent>,
         settings: Settings,
     ) -> Rc<RefCell<Self>> {
         let empty_board = Rc::new(GameBoard::default());
@@ -102,7 +97,6 @@ impl GameEngine {
             is_paused: false,
             timer_state: TimerState::default(),
             subscription_id: None,
-            global_subscription_id: None,
             game_engine_event_emitter,
             settings,
             current_selected_clue: None,
@@ -111,7 +105,6 @@ impl GameEngine {
         };
         let refcell = Rc::new(RefCell::new(game_state));
         GameEngine::wire_subscription(refcell.clone(), game_engine_command_observer);
-        GameEngine::wire_global_subscription(refcell.clone(), global_event_observer);
         refcell
     }
 
@@ -125,18 +118,6 @@ impl GameEngine {
             game_state.handle_command(event.clone());
         });
         game_state.borrow_mut().subscription_id = Some(subscription_id);
-    }
-
-    fn wire_global_subscription(
-        game_state: Rc<RefCell<Self>>,
-        global_event_observer: EventObserver<GlobalEvent>,
-    ) {
-        let game_state_handler = game_state.clone();
-        let subscription_id = global_event_observer.subscribe(move |event| {
-            let mut game_state = game_state_handler.borrow_mut();
-            game_state.handle_global_event(event);
-        });
-        game_state.borrow_mut().global_subscription_id = Some(subscription_id);
     }
 
     fn set_game_state(&mut self, game_state_snapshot: &GameStateSnapshot) {
@@ -279,7 +260,11 @@ impl GameEngine {
                 self.handle_cell_clear(row, col, variant)
             }
             GameEngineCommand::NewGame(difficulty, seed) => {
+                let difficulty = difficulty.unwrap_or(self.settings.difficulty);
                 self.set_game_state(&GameStateSnapshot::generate_new(difficulty, seed));
+
+                self.settings.difficulty = difficulty;
+                self.update_settings();
             }
             GameEngineCommand::LoadState(save_state) => {
                 trace!(target: "game_state", "Loading saved state {:?}", save_state);
@@ -320,6 +305,18 @@ impl GameEngine {
             }
             GameEngineCommand::ClueFocus(maybe_clue) => self.focus_clue(maybe_clue),
             GameEngineCommand::ClueFocusNext(direction) => self.focus_next_clue(direction),
+            GameEngineCommand::ChangeSettings(change) => {
+                if let Some(clue_spotlight_enabled) = change.clue_spotlight_enabled {
+                    self.settings.clue_spotlight_enabled = clue_spotlight_enabled;
+                }
+                if let Some(clue_tooltips_enabled) = change.clue_tooltips_enabled {
+                    self.settings.clue_tooltips_enabled = clue_tooltips_enabled;
+                }
+                if let Some(touch_screen_controls) = change.touch_screen_controls {
+                    self.settings.touch_screen_controls = touch_screen_controls;
+                }
+                self.update_settings();
+            }
         }
     }
     fn focus_next_clue(&mut self, direction: i32) {
@@ -670,15 +667,12 @@ impl GameEngine {
             })));
     }
 
-    fn update_settings(&mut self, settings: Settings) {
-        self.settings = settings;
-    }
-
-    fn handle_global_event(&mut self, event: &GlobalEvent) {
-        match event {
-            GlobalEvent::SettingsChanged(settings) => self.update_settings(settings.clone()),
-            _ => (),
-        }
+    fn update_settings(&mut self) {
+        self.settings
+            .save()
+            .unwrap_or_else(|e| log::error!(target: "settings", "Failed to save settings: {}", e));
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::SettingsChanged(self.settings.clone()));
     }
 
     pub fn get_game_save_state(&self) -> GameStateSnapshot {

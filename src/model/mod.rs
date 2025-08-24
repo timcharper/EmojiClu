@@ -11,10 +11,11 @@ mod game_engine_command;
 mod game_engine_event;
 pub mod game_state_snapshot;
 mod game_stats;
-mod global_event;
 mod input_event;
 mod layout;
+mod layout_manager_event;
 mod partial_solution;
+mod settings_projection;
 mod solution;
 mod tile;
 pub mod tile_assertion;
@@ -30,10 +31,10 @@ pub use deduction::{Deduction, DeductionKind};
 pub use difficulty::Difficulty;
 pub use game_board::GameBoard;
 pub use game_engine_command::GameEngineCommand;
+pub use game_engine_command::SettingsChange;
 pub use game_engine_event::{ClueSelection, GameEngineEvent, PuzzleCompletionState};
 pub use game_state_snapshot::GameStateSnapshot;
 pub use game_stats::{GameStats, GlobalStats};
-pub use global_event::GlobalEvent;
 pub use input_event::{
     CandidateCellTileData, Clickable, InputEvent, SolutionTileData, LONG_PRESS_DURATION,
 };
@@ -41,7 +42,9 @@ pub use layout::{
     CluesSizing, Dimensions, GridCellSizing, GridSizing, HorizontalCluePanelSizing,
     LayoutConfiguration, VerticalCluePanelSizing,
 };
+pub use layout_manager_event::LayoutManagerEvent;
 pub use partial_solution::PartialSolution;
+pub use settings_projection::SettingsProjection;
 pub use solution::Solution;
 pub use solution::MAX_GRID_SIZE;
 pub use tile::Tile;

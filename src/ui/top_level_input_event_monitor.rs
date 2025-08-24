@@ -4,9 +4,8 @@ use gtk4::{gdk, prelude::*, ApplicationWindow, EventControllerKey, GestureClick,
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventEmitter, EventObserver, Unsubscriber},
-    game::settings::Settings,
-    model::{Clickable, GlobalEvent, InputEvent},
+    events::{EventEmitter, Unsubscriber},
+    model::{Clickable, LayoutManagerEvent, InputEvent},
 };
 
 pub struct TopLevelInputEventMonitor {
@@ -15,8 +14,7 @@ pub struct TopLevelInputEventMonitor {
     key_controller: Option<EventControllerKey>,
     click_controller: Option<GestureClick>,
     input_event_emitter: EventEmitter<InputEvent>,
-    settings: Settings,
-    global_subscription: Option<Unsubscriber<GlobalEvent>>,
+    global_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
 }
 
 impl Destroyable for TopLevelInputEventMonitor {
@@ -41,8 +39,6 @@ impl TopLevelInputEventMonitor {
         window: Rc<ApplicationWindow>,
         scrolled_window: ScrolledWindow,
         input_event_emitter: EventEmitter<InputEvent>,
-        global_event_observer: EventObserver<GlobalEvent>,
-        settings: &Settings,
     ) -> Rc<RefCell<Self>> {
         let game_controls = Rc::new(RefCell::new(Self {
             window: window.clone(),
@@ -50,17 +46,11 @@ impl TopLevelInputEventMonitor {
             key_controller: None,
             click_controller: None,
             input_event_emitter,
-            settings: settings.clone(),
             global_subscription: None,
         }));
 
         TopLevelInputEventMonitor::bind_key_press_handler(game_controls.clone());
         TopLevelInputEventMonitor::bind_click_handler(game_controls.clone());
-        TopLevelInputEventMonitor::bind_global_observer(
-            game_controls.clone(),
-            global_event_observer,
-        );
-
         game_controls
     }
 
@@ -115,29 +105,6 @@ impl TopLevelInputEventMonitor {
         game_controls
             .scrolled_window
             .add_controller(click_controller);
-    }
-
-    fn bind_global_observer(
-        game_controls: Rc<RefCell<Self>>,
-        global_event_observer: EventObserver<GlobalEvent>,
-    ) {
-        let subscription = {
-            let game_controls = game_controls.clone();
-            global_event_observer.subscribe(move |event| {
-                game_controls.borrow_mut().handle_global_event(event);
-            })
-        };
-
-        game_controls.borrow_mut().global_subscription = Some(subscription);
-    }
-
-    fn handle_global_event(&mut self, event: &GlobalEvent) {
-        match event {
-            GlobalEvent::SettingsChanged(settings) => {
-                self.settings = settings.clone();
-            }
-            _ => (),
-        }
     }
 
     fn bind_key_press_handler(game_controls: Rc<RefCell<Self>>) {

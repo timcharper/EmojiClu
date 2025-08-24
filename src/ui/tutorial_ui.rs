@@ -13,7 +13,7 @@ use crate::{
     helpers::Capitalize,
     model::{
         ClueWithAddress, Deduction, DeductionKind, Difficulty, Dimensions, GameBoard,
-        GameEngineCommand, GameEngineEvent, GlobalEvent, LayoutConfiguration,
+        GameEngineCommand, GameEngineEvent, LayoutConfiguration, LayoutManagerEvent,
     },
     solver::{
         clue_completion_evaluator::is_clue_fully_completed, deduce_clue, simplify_deductions,
@@ -59,7 +59,7 @@ pub struct TutorialUI {
     pub scrolled_window: ScrolledWindow,
     game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
     game_action_subscription: Option<Unsubscriber<GameEngineCommand>>,
-    global_event_subscription: Option<Unsubscriber<GlobalEvent>>,
+    global_event_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     current_step: TutorialStep,
     buffer: TextBuffer,
@@ -87,7 +87,7 @@ impl TutorialUI {
     pub fn new(
         game_engine_event_observer: EventObserver<GameEngineEvent>,
         game_engine_command_observer: EventObserver<GameEngineCommand>,
-        global_event_observer: EventObserver<GlobalEvent>,
+        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
         game_engine_command_emitter: EventEmitter<GameEngineCommand>,
         window: &Rc<ApplicationWindow>,
         resources: &Rc<ImageSet>,
@@ -138,7 +138,7 @@ impl TutorialUI {
             Rc::clone(&tutorial_ui),
             game_engine_event_observer,
             game_engine_command_observer,
-            global_event_observer,
+            layout_manager_event_observer,
         );
         tutorial_ui.borrow_mut().sync_tutorial_text();
 
@@ -149,7 +149,7 @@ impl TutorialUI {
         tutorial_ui: Rc<RefCell<Self>>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
         game_engine_command_observer: EventObserver<GameEngineCommand>,
-        global_event_observer: EventObserver<GlobalEvent>,
+        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
     ) {
         let game_state_subscription = {
             let tutorial_ui = tutorial_ui.clone();
@@ -167,7 +167,7 @@ impl TutorialUI {
 
         let global_event_subscription = {
             let tutorial_ui = tutorial_ui.clone();
-            global_event_observer.subscribe(move |event| {
+            layout_manager_event_observer.subscribe(move |event| {
                 tutorial_ui.borrow_mut().handle_global_event(event);
             })
         };
@@ -264,6 +264,10 @@ impl TutorialUI {
                 }
                 _ => {}
             },
+            GameEngineEvent::SettingsChanged(settings) => {
+                self.settings = settings.clone();
+                self.sync_tutorial_text();
+            }
             _ => {}
         }
     }
@@ -272,7 +276,8 @@ impl TutorialUI {
         // TODO - GameEngineEvent::NewGameStarted(difficulty)
         match event {
             GameEngineCommand::NewGame(difficulty, _) => {
-                if *difficulty == Difficulty::Tutorial {
+                let difficulty = difficulty.unwrap_or(self.settings.difficulty);
+                if difficulty == Difficulty::Tutorial {
                     self.reset_tutorial();
                 } else {
                     self.current_step = TutorialStep::Disabled;
@@ -284,17 +289,13 @@ impl TutorialUI {
         // Handle game action events and update tutorial text
     }
 
-    fn handle_global_event(&mut self, event: &GlobalEvent) {
+    fn handle_global_event(&mut self, event: &LayoutManagerEvent) {
         match event {
-            GlobalEvent::LayoutChanged(layout) => {
+            LayoutManagerEvent::LayoutChanged(layout) => {
                 self.layout = layout.tutorial.clone();
                 self.sync_layout();
             }
-            GlobalEvent::SettingsChanged(settings) => {
-                self.settings = settings.clone();
-                self.sync_tutorial_text();
-            }
-            GlobalEvent::ImagesOptimized(image_set) => {
+            LayoutManagerEvent::ImagesOptimized(image_set) => {
                 self.resources = image_set.clone();
                 self.sync_tutorial_text();
             }

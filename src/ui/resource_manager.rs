@@ -5,7 +5,7 @@ use log::trace;
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
-    model::GlobalEvent,
+    model::LayoutManagerEvent,
 };
 
 use super::{audio_set::AudioSet, image_set::ImageSet};
@@ -13,8 +13,8 @@ use super::{audio_set::AudioSet, image_set::ImageSet};
 pub struct ResourceManager {
     image_set: Rc<ImageSet>,
     audio_set: Rc<AudioSet>,
-    global_event_subscription: Option<Unsubscriber<GlobalEvent>>,
-    global_event_emitter: EventEmitter<GlobalEvent>,
+    global_event_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
+    layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
 }
 
 impl Destroyable for ResourceManager {
@@ -27,8 +27,8 @@ impl Destroyable for ResourceManager {
 
 impl ResourceManager {
     pub fn new(
-        global_event_observer: EventObserver<GlobalEvent>,
-        global_event_emitter: EventEmitter<GlobalEvent>,
+        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
+        layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
     ) -> Rc<RefCell<Self>> {
         let image_set = Rc::new(ImageSet::new());
         let audio_set = Rc::new(AudioSet::new());
@@ -36,13 +36,13 @@ impl ResourceManager {
             image_set: image_set.clone(),
             audio_set: audio_set.clone(),
             global_event_subscription: None,
-            global_event_emitter,
+            layout_manager_event_emitter,
         }));
 
         // Set up event subscription
         {
             let manager_weak = Rc::downgrade(&manager);
-            let subscription = global_event_observer.subscribe(move |event| {
+            let subscription = layout_manager_event_observer.subscribe(move |event| {
                 trace!(target: "resource_manager", "Received global event: {:?}", event);
                 if let Some(manager) = manager_weak.upgrade() {
                     manager.borrow_mut().handle_global_event(event);
@@ -54,9 +54,9 @@ impl ResourceManager {
         manager
     }
 
-    fn handle_global_event(&mut self, event: &GlobalEvent) {
+    fn handle_global_event(&mut self, event: &LayoutManagerEvent) {
         match event {
-            GlobalEvent::OptimizeImages {
+            LayoutManagerEvent::OptimizeImages {
                 candidate_tile_size,
                 solution_tile_size,
                 scale_factor,
@@ -69,8 +69,8 @@ impl ResourceManager {
                 );
                 self.image_set = Rc::new(new_image_set);
                 trace!(target: "resource_manager", "Emitting images optimized event");
-                self.global_event_emitter
-                    .emit(GlobalEvent::ImagesOptimized(self.image_set.clone()));
+                self.layout_manager_event_emitter
+                    .emit(LayoutManagerEvent::ImagesOptimized(self.image_set.clone()));
             }
             _ => (),
         }

@@ -18,8 +18,8 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventObserver, Unsubscriber},
     model::{
-        ClueSet, CluesSizing, Difficulty, Dimensions, GameEngineCommand, GameEngineEvent,
-        GlobalEvent, GridCellSizing, GridSizing, HorizontalCluePanelSizing, LayoutConfiguration,
+        ClueSet, CluesSizing, Difficulty, Dimensions, GameEngineEvent, GridCellSizing, GridSizing,
+        HorizontalCluePanelSizing, LayoutConfiguration, LayoutManagerEvent,
         VerticalCluePanelSizing, MAX_GRID_SIZE,
     },
     solver::clue_generator_state::MAX_HORIZ_CLUES,
@@ -64,11 +64,10 @@ struct VertCluePanelSizingInputs {
 }
 
 pub struct LayoutManager {
-    global_event_emitter: EventEmitter<GlobalEvent>,
+    layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
     window: Rc<ApplicationWindow>,
     handle_surface_enter_monitor: Option<SignalHandlerId>,
     handle_surface_layout: Option<SignalHandlerId>,
-    game_action_subscription: Option<Unsubscriber<GameEngineCommand>>,
     game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
     current_difficulty: Difficulty,
     scrolled_window: gtk4::ScrolledWindow,
@@ -82,9 +81,6 @@ pub struct LayoutManager {
 
 impl Destroyable for LayoutManager {
     fn destroy(&mut self) {
-        if let Some(subscription_id) = self.game_action_subscription.take() {
-            subscription_id.unsubscribe();
-        }
         if let Some(source_id) = self.layout_monitor_source.take() {
             source_id.remove();
         }
@@ -109,20 +105,18 @@ impl Drop for LayoutManager {
 impl LayoutManager {
     pub fn new(
         window: Rc<ApplicationWindow>,
-        global_event_emitter: EventEmitter<GlobalEvent>,
-        game_engine_command_observer: EventObserver<GameEngineCommand>,
+        layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
         scrolled_window: gtk4::ScrolledWindow,
         current_difficulty: Difficulty,
     ) -> Rc<RefCell<Self>> {
         let dw = Rc::new(RefCell::new(Self {
-            global_event_emitter,
+            layout_manager_event_emitter,
             window: window.clone(),
             handle_surface_enter_monitor: None,
             handle_surface_layout: None,
             scrolled_window,
             current_difficulty,
-            game_action_subscription: None,
             game_state_subscription: None,
             container_dimensions: None,
             clue_stats: ClueStats::default(),
@@ -131,13 +125,6 @@ impl LayoutManager {
             layout_monitor_source: None,
             scale_factor: I8F8::from_num(1),
         }));
-
-        let game_action_handle = game_engine_command_observer.subscribe({
-            let dw = dw.clone();
-            move |event| {
-                dw.borrow_mut().handle_game_action_command(event);
-            }
-        });
 
         let game_state_handle = game_engine_event_observer.subscribe({
             let dw = dw.clone();
@@ -188,23 +175,18 @@ impl LayoutManager {
             }
         });
         dw.borrow_mut().layout_monitor_source = Some(source_id);
-        dw.borrow_mut().game_action_subscription = Some(game_action_handle);
         dw.borrow_mut().game_state_subscription = Some(game_state_handle);
 
         dw
-    }
-
-    fn handle_game_action_command(&mut self, event: &GameEngineCommand) {
-        match event {
-            GameEngineCommand::NewGame(difficulty, _) => self.update_difficulty(*difficulty),
-            _ => (),
-        }
     }
 
     fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         match event {
             GameEngineEvent::ClueSetUpdated(clue_set, _, _) => {
                 self.update_clue_stats(clue_set.as_ref())
+            }
+            GameEngineEvent::SettingsChanged(settings) => {
+                self.update_difficulty(settings.difficulty);
             }
             _ => (),
         }
@@ -260,11 +242,12 @@ impl LayoutManager {
             if last_change.elapsed() >= Duration::from_secs(1) {
                 // Layout has been stable for 3 seconds
                 if let Some(layout) = &self.last_layout {
-                    self.global_event_emitter.emit(GlobalEvent::OptimizeImages {
-                        candidate_tile_size: layout.grid.cell.candidate_image.width,
-                        solution_tile_size: layout.grid.cell.solution_image.width,
-                        scale_factor: self.scale_factor,
-                    });
+                    self.layout_manager_event_emitter
+                        .emit(LayoutManagerEvent::OptimizeImages {
+                            candidate_tile_size: layout.grid.cell.candidate_image.width,
+                            solution_tile_size: layout.grid.cell.solution_image.width,
+                            scale_factor: self.scale_factor,
+                        });
                 }
                 self.last_layout_change = None;
             }
@@ -275,8 +258,8 @@ impl LayoutManager {
         let layout_changed = !self.last_layout.iter().contains(&new_layout);
         if layout_changed {
             trace!(target: "layout_manager", "layout changed");
-            self.global_event_emitter
-                .emit(GlobalEvent::LayoutChanged(new_layout.clone()));
+            self.layout_manager_event_emitter
+                .emit(LayoutManagerEvent::LayoutChanged(new_layout.clone()));
             self.last_layout = Some(new_layout);
             self.last_layout_change = Some(Instant::now());
         } else {

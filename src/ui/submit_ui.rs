@@ -105,7 +105,8 @@ impl SubmitUI {
                     &stats_manager,
                     Some(stats),
                     move || {
-                        game_engine_command_emitter.emit(GameEngineCommand::NewGame(difficulty, None));
+                        game_engine_command_emitter
+                            .emit(GameEngineCommand::NewGame(Some(difficulty), None));
                     },
                 );
             }
@@ -116,7 +117,8 @@ impl SubmitUI {
                 let media = self.audio_set.random_lose_sound();
                 media.play();
 
-                NotQuiteRightDialog::new(&self.window, self.game_engine_command_emitter.clone()).show();
+                NotQuiteRightDialog::new(&self.window, self.game_engine_command_emitter.clone())
+                    .show();
             }
         }
     }

@@ -11,7 +11,7 @@ use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, Unsubscriber},
     game::settings::Settings,
-    model::{GameEngineEvent, GlobalEvent},
+    model::{GameEngineCommand, GameEngineEvent, SettingsChange},
 };
 use fluent_i18n::t;
 
@@ -22,8 +22,7 @@ pub struct SettingsMenuUI {
     action_toggle_spotlight: SimpleAction,
     action_toggle_touch_controls: SimpleAction,
     game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
-    settings_ref: Rc<RefCell<Settings>>,
-    global_event_emitter: EventEmitter<GlobalEvent>,
+    game_engine_command_emitter: EventEmitter<GameEngineCommand>,
 }
 
 impl Destroyable for SettingsMenuUI {
@@ -44,8 +43,8 @@ impl Destroyable for SettingsMenuUI {
 impl SettingsMenuUI {
     pub fn new(
         window: Rc<ApplicationWindow>,
-        global_event_emitter: EventEmitter<GlobalEvent>,
-        settings_ref: Rc<RefCell<Settings>>,
+        game_engine_command_emitter: EventEmitter<GameEngineCommand>,
+        settings: Settings,
     ) -> Rc<RefCell<Self>> {
         let settings_menu = Menu::new();
         settings_menu.append(
@@ -66,7 +65,6 @@ impl SettingsMenuUI {
         let action_toggle_touch_controls: SimpleAction;
 
         {
-            let settings = settings_ref.borrow();
             action_toggle_tooltips = SimpleAction::new_stateful(
                 "toggle-tooltips",
                 None,
@@ -93,8 +91,7 @@ impl SettingsMenuUI {
             action_toggle_spotlight,
             action_toggle_touch_controls,
             game_state_subscription: None,
-            settings_ref: settings_ref,
-            global_event_emitter: global_event_emitter.clone(),
+            game_engine_command_emitter: game_engine_command_emitter.clone(),
         }));
 
         // Connect actions
@@ -163,39 +160,24 @@ impl SettingsMenuUI {
     }
 
     fn set_tooltips_enabled(&mut self, enabled: bool) {
-        let mut settings = self.settings_ref.borrow_mut();
-        settings.clue_tooltips_enabled = enabled;
-        if !settings.save().is_ok() {
-            log::error!("Failed to save settings");
-        }
-
-        let settings = settings.clone();
-        self.global_event_emitter
-            .emit(GlobalEvent::SettingsChanged(settings));
+        let mut settings_change = SettingsChange::default();
+        settings_change.clue_spotlight_enabled = Some(enabled);
+        self.game_engine_command_emitter
+            .emit(GameEngineCommand::ChangeSettings(settings_change));
     }
 
     fn set_clue_spotlight_enabled(&mut self, enabled: bool) {
-        let mut settings = self.settings_ref.borrow_mut();
-        settings.clue_spotlight_enabled = enabled;
-        if !settings.save().is_ok() {
-            log::error!("Failed to save settings");
-        }
-
-        let settings = settings.clone();
-        self.global_event_emitter
-            .emit(GlobalEvent::SettingsChanged(settings));
+        let mut settings_change = SettingsChange::default();
+        settings_change.clue_spotlight_enabled = Some(enabled);
+        self.game_engine_command_emitter
+            .emit(GameEngineCommand::ChangeSettings(settings_change));
     }
 
     fn set_touch_screen_controls(&mut self, enabled: bool) {
-        let mut settings = self.settings_ref.borrow_mut();
-        settings.touch_screen_controls = enabled;
-        if !settings.save().is_ok() {
-            log::error!("Failed to save settings");
-        }
-
-        let settings = settings.clone();
-        self.global_event_emitter
-            .emit(GlobalEvent::SettingsChanged(settings));
+        let mut settings_change = SettingsChange::default();
+        settings_change.touch_screen_controls = Some(enabled);
+        self.game_engine_command_emitter
+            .emit(GameEngineCommand::ChangeSettings(settings_change));
     }
 
     pub fn get_menu(&self) -> &Menu {

@@ -1,4 +1,5 @@
 use super::{ClueSet, ClueWithAddress, Deduction, Difficulty, TimerState};
+use crate::game::settings::Settings;
 use crate::model::{ClueAddress, GameBoard, GameStats};
 use std::{collections::HashSet, rc::Rc};
 
@@ -34,6 +35,7 @@ pub enum GameEngineEvent {
     TimerStateChanged(TimerState),
     PuzzleSubmissionReadyChanged(bool),
     PuzzleCompleted(PuzzleCompletionState),
+    SettingsChanged(Settings),
 }
 
 impl GameEngineEvent {}
