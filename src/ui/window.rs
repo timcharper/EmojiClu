@@ -29,29 +29,12 @@ use super::game_info_ui::GameInfoUI;
 use super::hint_button_ui::HintButtonUI;
 use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
+use super::pause_screen_ui::PauseScreenUI;
 use super::puzzle_grid_ui::PuzzleGridUI;
 use super::resource_manager::ResourceManager;
 use super::tutorial_ui::TutorialUI;
 
 const APP_VERSION: &str = env!("APP_VERSION");
-
-fn pause_screen() -> Rc<gtk4::Box> {
-    let pause_label = Label::builder()
-        .name("pause-label")
-        .label(&t!("paused"))
-        .css_classes(["pause-label"])
-        .visible(true)
-        .hexpand(true)
-        .vexpand(true)
-        .build();
-    let pause_screen_box = gtk4::Box::builder()
-        .name("pause-screen")
-        .orientation(Orientation::Vertical)
-        .visible(false)
-        .build();
-    pause_screen_box.append(&pause_label);
-    Rc::new(pause_screen_box)
-}
 
 pub fn build_ui(app: &Application) {
     let (game_action_emitter, game_action_observer) = Channel::<GameActionEvent>::new();
@@ -104,7 +87,8 @@ pub fn build_ui(app: &Application) {
         .vexpand_set(true)
         .build();
 
-    let pause_screen = pause_screen();
+    // Create pause screen UI
+    let pause_screen_ui = PauseScreenUI::new(game_state_observer.clone());
     // Create game area with puzzle and horizontal clues side by side
     let game_box = Rc::new(
         gtk4::Box::builder()
@@ -202,7 +186,7 @@ pub fn build_ui(app: &Application) {
     let game_info_ui = GameInfoUI::new(
         game_state_observer.clone(),
         game_box.clone(),
-        pause_screen.clone(),
+        Rc::new(pause_screen_ui.borrow().pause_screen_box.clone()),
     );
 
     let solve_button = Button::with_label(&t!("solve-button"));
@@ -362,7 +346,7 @@ pub fn build_ui(app: &Application) {
         .build();
 
     top_level_box.append(game_box.as_ref());
-    top_level_box.append(pause_screen.as_ref());
+    top_level_box.append(&pause_screen_ui.borrow().pause_screen_box);
 
     scrolled_window.set_child(Some(&top_level_box));
     // window.set_child(Some(&top_level_box));
@@ -492,6 +476,7 @@ pub fn build_ui(app: &Application) {
         game_state.borrow_mut().destroy();
         game_info_ui.borrow_mut().destroy();
         hint_button_ui.borrow_mut().destroy();
+        pause_screen_ui.borrow_mut().destroy();
         submit_ui.borrow_mut().destroy();
         puzzle_grid_ui.borrow_mut().destroy();
         clue_set_ui.borrow_mut().destroy();
