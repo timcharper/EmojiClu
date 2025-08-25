@@ -1,11 +1,17 @@
-use std::{cell::Cell, rc::Rc, time::Instant};
-
 use gtk4::{prelude::*, GestureClick};
+use std::{cell::Cell, rc::Rc, time::Instant};
 
 use crate::{
     events::EventEmitter,
     model::{Clickable, InputEvent, LONG_PRESS_DURATION},
 };
+
+/// GTK4 workaround: Force layout recalculation for dynamic text content
+pub fn deferred_size_reallocation<W: gtk4::prelude::WidgetExt + Clone + 'static>(widget: &W) {
+    widget.queue_resize();
+    let widget = widget.clone();
+    glib::idle_add_local_once(move || widget.queue_allocate());
+}
 
 pub fn register_left_click_handler<
     F: Fn(&GestureClick, i32, f64, f64) -> Option<Clickable> + 'static,

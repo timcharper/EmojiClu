@@ -20,7 +20,7 @@ use crate::{
         clue_completion_evaluator::is_clue_fully_completed, deduce_clue, simplify_deductions,
         ConstraintSolver,
     },
-    ui::ImageSet,
+    ui::{deferred_size_reallocation, ImageSet},
 };
 
 use super::template::TemplateParser;
@@ -104,10 +104,11 @@ impl TutorialUI {
             .buffer(&buffer)
             .editable(false)
             .cursor_visible(false)
-            .halign(Align::Start)
+            .halign(Align::Fill)
             .valign(Align::Start)
             .css_classes(["tutorial-text"])
             .vexpand(true)
+            .hexpand(true)
             .wrap_mode(WrapMode::Word)
             .build();
 
@@ -116,6 +117,8 @@ impl TutorialUI {
             .child(&tutorial_text)
             .hexpand(true)
             .vexpand(true)
+            .hscrollbar_policy(gtk4::PolicyType::Never)
+            .vscrollbar_policy(gtk4::PolicyType::Automatic)
             .build();
 
         let tutorial_ui = Rc::new(RefCell::new(Self {
@@ -316,7 +319,6 @@ impl TutorialUI {
         } else {
             self.scrolled_window.set_visible(false);
         }
-        self.tutorial_text.set_width_request(self.layout.width);
         self.scrolled_window.set_height_request(self.layout.height);
         self.scrolled_window.set_width_request(self.layout.width);
     }
@@ -406,6 +408,8 @@ impl TutorialUI {
             let theme = IconTheme::for_display(&display);
             let parser = TemplateParser::new(self.resources.clone(), Some(Rc::new(theme)));
             parser.append_to_text_buffer(&self.tutorial_text, &mut end, &template);
+
+            deferred_size_reallocation(&self.tutorial_text);
         }
 
         info!("Tutorial step: {:?}", self.current_step);
