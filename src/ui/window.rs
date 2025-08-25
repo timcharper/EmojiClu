@@ -31,6 +31,7 @@ use super::hint_button_ui::HintButtonUI;
 use super::history_controls_ui::HistoryControlsUI;
 use super::layout_manager::{ClueStats, LayoutManager};
 use super::pause_screen_ui::PauseScreenUI;
+use super::puzzle_generation_dialog::PuzzleGenerationDialog;
 use super::puzzle_grid_ui::PuzzleGridUI;
 use super::resource_manager::ResourceManager;
 use super::tutorial_ui::TutorialUI;
@@ -428,6 +429,11 @@ pub fn build_ui(app: &Application) {
         game_engine_event_observer.clone(),
     );
 
+    let puzzle_generation_dialog = PuzzleGenerationDialog::new(
+        &window,
+        game_engine_event_observer.clone(),
+    );
+
     // Initialize game controls
     let game_controls = TopLevelInputEventMonitor::new(
         window.clone(),
@@ -489,6 +495,7 @@ pub fn build_ui(app: &Application) {
         timer_button.borrow_mut().destroy();
         layout_manager.borrow_mut().destroy();
         seed_dialog.borrow_mut().destroy();
+        puzzle_generation_dialog.borrow_mut().destroy();
         settings_menu_ui.borrow_mut().destroy();
         game_controls.borrow_mut().destroy();
         input_translator.borrow_mut().destroy();

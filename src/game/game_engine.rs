@@ -255,6 +255,10 @@ impl GameEngine {
                 self.settings.difficulty = difficulty;
                 self.update_settings();
 
+                // Emit puzzle generation started event
+                self.game_engine_event_emitter
+                    .emit(GameEngineEvent::PuzzleGenerationStarted);
+
                 // Option 2: True background thread with callback
                 // This is more complex but shows the full pattern:
                 let (sender, receiver) = mpsc::channel::<GameStateSnapshot>();

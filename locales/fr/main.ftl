@@ -34,6 +34,7 @@ game-seed = Graine du Jeu
 game-statistics = Statistiques du Jeu
 best-times = Meilleurs Temps
 global-statistics = Statistiques Globales
+generating-puzzle = Génération du puzzle...
 
 # About dialog
 about-author = Tim Harper

@@ -34,6 +34,7 @@ game-seed = Game Seed
 game-statistics = Game Statistics
 best-times = Best Times
 global-statistics = Global Statistics
+generating-puzzle = Generating puzzle...
 
 # About dialog
 about-author = Tim Harper

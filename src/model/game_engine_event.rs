@@ -48,6 +48,7 @@ pub enum GameEngineEvent {
     PuzzleSubmissionReadyChanged(bool),
     PuzzleCompleted(PuzzleCompletionState),
     SettingsChanged(Settings),
+    PuzzleGenerationStarted,
 }
 
 impl GameEngineEvent {}
