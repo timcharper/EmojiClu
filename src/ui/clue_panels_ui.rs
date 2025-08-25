@@ -29,8 +29,8 @@ pub struct CluePanelsUI {
     vertical_clue_uis: Vec<Rc<RefCell<ClueUI>>>,
     input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
-    game_state_subscription_id: Option<Unsubscriber<GameEngineEvent>>,
-    settings_subscription_id: Option<Unsubscriber<LayoutManagerEvent>>,
+    game_engine_event_subscription_id: Option<Unsubscriber<GameEngineEvent>>,
+    layout_subscription_id: Option<Unsubscriber<LayoutManagerEvent>>,
     current_layout: LayoutConfiguration,
     tooltips_enabled: bool,
     current_spotlight_enabled: bool,
@@ -41,10 +41,10 @@ impl Destroyable for CluePanelsUI {
         // Unparent all widgets
         self.horizontal_grid.unparent();
         self.vertical_grid.unparent();
-        if let Some(subscription_id) = self.game_state_subscription_id.take() {
+        if let Some(subscription_id) = self.game_engine_event_subscription_id.take() {
             subscription_id.unsubscribe();
         }
-        if let Some(subscription_id) = self.settings_subscription_id.take() {
+        if let Some(subscription_id) = self.layout_subscription_id.take() {
             subscription_id.unsubscribe();
         }
         for clue_ui in &mut self.horizontal_clue_uis {
@@ -97,8 +97,8 @@ impl CluePanelsUI {
             vertical_clue_uis: Vec::with_capacity(MAX_VERT_CLUES),
             input_event_emitter: input_event_emitter,
             resources: Rc::clone(resources),
-            game_state_subscription_id: None,
-            settings_subscription_id: None,
+            game_engine_event_subscription_id: None,
+            layout_subscription_id: None,
             current_layout: layout,
             tooltips_enabled: settings.clue_tooltips_enabled,
             current_spotlight_enabled: settings.clue_spotlight_enabled,
@@ -119,19 +119,20 @@ impl CluePanelsUI {
         layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
     ) {
         let clue_set_ui_moved = clue_set_ui.clone();
-        let game_state_subscription = game_engine_event_observer.subscribe(move |event| {
+        let game_engine_event_subscription = game_engine_event_observer.subscribe(move |event| {
             clue_set_ui_moved
                 .borrow_mut()
                 .handle_game_engine_event(event);
         });
 
         let clue_set_ui_moved = clue_set_ui.clone();
-        let settings_subscription = layout_manager_event_observer.subscribe(move |event| {
+        let layout_subscription = layout_manager_event_observer.subscribe(move |event| {
             clue_set_ui_moved.borrow_mut().handle_layout_event(event);
         });
 
-        clue_set_ui.borrow_mut().game_state_subscription_id = Some(game_state_subscription);
-        clue_set_ui.borrow_mut().settings_subscription_id = Some(settings_subscription);
+        clue_set_ui.borrow_mut().game_engine_event_subscription_id =
+            Some(game_engine_event_subscription);
+        clue_set_ui.borrow_mut().layout_subscription_id = Some(layout_subscription);
     }
 
     fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {

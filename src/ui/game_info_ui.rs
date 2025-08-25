@@ -19,7 +19,7 @@ pub struct GameInfoUI {
     timer: Option<SourceId>,
     game_box: Rc<Box>,
     pause_screen: Rc<Box>,
-    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
+    game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
 }
 
 impl Destroyable for GameInfoUI {
@@ -27,7 +27,7 @@ impl Destroyable for GameInfoUI {
         if let Some(timer) = self.timer.take() {
             timer.remove();
         }
-        if let Some(subscription) = self.game_state_subscription.take() {
+        if let Some(subscription) = self.game_engine_event_subscription.take() {
             subscription.unsubscribe();
         }
     }
@@ -58,7 +58,7 @@ impl GameInfoUI {
             timer: None,
             game_box,
             pause_screen,
-            game_state_subscription: None,
+            game_engine_event_subscription: None,
         }));
 
         game_info
@@ -73,7 +73,7 @@ impl GameInfoUI {
         game_info: Rc<RefCell<Self>>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) {
-        let game_state_subscription = {
+        let game_engine_event_subscription = {
             let game_info = game_info.clone();
             game_engine_event_observer.subscribe(move |event| {
                 game_info
@@ -82,7 +82,7 @@ impl GameInfoUI {
             })
         };
 
-        game_info.borrow_mut().game_state_subscription = Some(game_state_subscription);
+        game_info.borrow_mut().game_engine_event_subscription = Some(game_engine_event_subscription);
     }
 
     fn handle_game_engine_event(&mut self, game_info: Rc<RefCell<Self>>, event: &GameEngineEvent) {

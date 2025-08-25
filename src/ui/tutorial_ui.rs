@@ -58,7 +58,7 @@ pub struct TutorialUI {
     resources: Rc<ImageSet>,
     tutorial_text: TextView,
     pub scrolled_window: ScrolledWindow,
-    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
+    game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
     game_action_subscription: Option<Unsubscriber<GameEngineCommand>>,
     layout_event_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
@@ -72,7 +72,7 @@ pub struct TutorialUI {
 
 impl Destroyable for TutorialUI {
     fn destroy(&mut self) {
-        if let Some(subscription) = self.game_state_subscription.take() {
+        if let Some(subscription) = self.game_engine_event_subscription.take() {
             subscription.unsubscribe();
         }
         if let Some(subscription) = self.game_action_subscription.take() {
@@ -124,7 +124,7 @@ impl TutorialUI {
         let tutorial_ui = Rc::new(RefCell::new(Self {
             tutorial_text,
             scrolled_window,
-            game_state_subscription: None,
+            game_engine_event_subscription: None,
             game_action_subscription: None,
             layout_event_subscription: None,
             game_engine_command_emitter,
@@ -155,7 +155,7 @@ impl TutorialUI {
         game_engine_command_observer: EventObserver<GameEngineCommand>,
         layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
     ) {
-        let game_state_subscription = {
+        let game_engine_event_subscription = {
             let tutorial_ui = tutorial_ui.clone();
             game_engine_event_observer.subscribe(move |event| {
                 tutorial_ui.borrow_mut().handle_game_engine_event(event);
@@ -176,7 +176,7 @@ impl TutorialUI {
             })
         };
 
-        tutorial_ui.borrow_mut().game_state_subscription = Some(game_state_subscription);
+        tutorial_ui.borrow_mut().game_engine_event_subscription = Some(game_engine_event_subscription);
         tutorial_ui.borrow_mut().game_action_subscription = Some(game_action_subscription);
         tutorial_ui.borrow_mut().layout_event_subscription = Some(layout_event_subscription);
     }

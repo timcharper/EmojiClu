@@ -21,13 +21,13 @@ pub struct SettingsMenuUI {
     action_toggle_tooltips: SimpleAction,
     action_toggle_spotlight: SimpleAction,
     action_toggle_touch_controls: SimpleAction,
-    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
+    game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
 }
 
 impl Destroyable for SettingsMenuUI {
     fn destroy(&mut self) {
-        if let Some(subscription) = self.game_state_subscription.take() {
+        if let Some(subscription) = self.game_engine_event_subscription.take() {
             subscription.unsubscribe();
         }
         // Remove actions from window
@@ -90,7 +90,7 @@ impl SettingsMenuUI {
             action_toggle_tooltips,
             action_toggle_spotlight,
             action_toggle_touch_controls,
-            game_state_subscription: None,
+            game_engine_event_subscription: None,
             game_engine_command_emitter: game_engine_command_emitter.clone(),
         }));
 

@@ -5,7 +5,7 @@ use gtk4::{gdk, prelude::*, ApplicationWindow, EventControllerKey, GestureClick,
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, Unsubscriber},
-    model::{Clickable, LayoutManagerEvent, InputEvent},
+    model::{Clickable, InputEvent, LayoutManagerEvent},
 };
 
 pub struct TopLevelInputEventMonitor {
@@ -14,7 +14,7 @@ pub struct TopLevelInputEventMonitor {
     key_controller: Option<EventControllerKey>,
     click_controller: Option<GestureClick>,
     input_event_emitter: EventEmitter<InputEvent>,
-    global_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
+    layout_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
 }
 
 impl Destroyable for TopLevelInputEventMonitor {
@@ -28,7 +28,7 @@ impl Destroyable for TopLevelInputEventMonitor {
             self.scrolled_window.remove_controller(&click_controller);
         }
         // Clean up global subscription
-        if let Some(subscription) = self.global_subscription.take() {
+        if let Some(subscription) = self.layout_subscription.take() {
             subscription.unsubscribe();
         }
     }
@@ -46,7 +46,7 @@ impl TopLevelInputEventMonitor {
             key_controller: None,
             click_controller: None,
             input_event_emitter,
-            global_subscription: None,
+            layout_subscription: None,
         }));
 
         TopLevelInputEventMonitor::bind_key_press_handler(game_controls.clone());

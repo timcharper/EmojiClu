@@ -68,7 +68,7 @@ pub struct LayoutManager {
     window: Rc<ApplicationWindow>,
     handle_surface_enter_monitor: Option<SignalHandlerId>,
     handle_surface_layout: Option<SignalHandlerId>,
-    game_state_subscription: Option<Unsubscriber<GameEngineEvent>>,
+    game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
     current_difficulty: Difficulty,
     scrolled_window: gtk4::ScrolledWindow,
     container_dimensions: Option<Dimensions>,
@@ -117,7 +117,7 @@ impl LayoutManager {
             handle_surface_layout: None,
             scrolled_window,
             current_difficulty,
-            game_state_subscription: None,
+            game_engine_event_subscription: None,
             container_dimensions: None,
             clue_stats: ClueStats::default(),
             last_layout: None,
@@ -175,7 +175,7 @@ impl LayoutManager {
             }
         });
         dw.borrow_mut().layout_monitor_source = Some(source_id);
-        dw.borrow_mut().game_state_subscription = Some(game_state_handle);
+        dw.borrow_mut().game_engine_event_subscription = Some(game_state_handle);
 
         dw
     }
