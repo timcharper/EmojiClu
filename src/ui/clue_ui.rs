@@ -1,5 +1,9 @@
 use glib::SignalHandlerId;
-use gtk4::{prelude::*, Box, Frame, Grid, Label, Orientation, Widget};
+use gtk4::gdk::Rectangle;
+use gtk4::{
+    prelude::*, Align, ApplicationWindow, Box, Frame, Grid, IconTheme, Label, Orientation,
+    TextBuffer, TextTagTable, TextView, Widget, WrapMode,
+};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::destroyable::Destroyable;
@@ -9,9 +13,9 @@ use crate::model::LayoutConfiguration;
 use crate::model::{Clickable, ClueWithAddress, InputEvent};
 use crate::model::{Clue, ClueSelection, CluesSizing};
 use crate::ui::clue_tile_ui::ClueTileUI;
-use crate::ui::register_left_click_handler;
 use crate::ui::template::TemplateParser;
 use crate::ui::ImageSet;
+use crate::ui::{deferred_size_reallocation, register_left_click_handler};
 
 const NEW_GROUP_CSS_CLASS: &str = "new-group";
 
@@ -22,6 +26,7 @@ struct ClueTooltipData {
 
 pub struct ClueUI {
     pub frame: Frame,
+    window: Rc<ApplicationWindow>,
     grid: Grid,
     clue_tiles: Vec<ClueTileUI>,
     tooltip_data: Option<ClueTooltipData>,
@@ -36,9 +41,16 @@ pub struct ClueUI {
     clue_spotlight_enabled: bool,
 }
 
+fn tooltip_rect(layout: &CluesSizing) -> Rectangle {
+    let width = layout.horizontal_clue_panel.clue_dimensions.width * 2;
+    let height = width / 4;
+    Rectangle::new(0, 0, width, height)
+}
+
 impl ClueUI {
     pub fn new(
         resources: Rc<ImageSet>,
+        window: Rc<ApplicationWindow>,
         clue: ClueWithAddress,
         layout: CluesSizing,
         input_event_emitter: EventEmitter<InputEvent>,
@@ -80,6 +92,7 @@ impl ClueUI {
 
         let clue_ui = Self {
             frame,
+            window,
             grid,
             clue_tiles: cells,
             tooltip_data: None,
@@ -104,21 +117,21 @@ impl ClueUI {
 
     fn wire_tooltip_handlers(clue_ui: Rc<RefCell<Self>>) {
         let weak_clue_ui = Rc::downgrade(&clue_ui);
-        let mut clue_ui = clue_ui.borrow_mut();
 
-        let tooltip_signal =
-            clue_ui
-                .frame
-                .connect_query_tooltip(move |_frame, _x, _y, _keyboard_mode, tooltip| {
-                    if let Some(clue_ui) = weak_clue_ui.upgrade() {
-                        let clue_ui = clue_ui.borrow();
-                        if let Some(tooltip_widget) = &clue_ui.tooltip_widget {
-                            tooltip.set_custom(Some(tooltip_widget));
-                        }
+        let tooltip_signal = clue_ui.borrow().frame.connect_query_tooltip({
+            move |_frame, _x, _y, _keyboard_mode, tooltip| {
+                // tooltip.set_tip_area(&tooltip_rect(&clue_ui.borrow().layout));
+                if let Some(clue_ui) = weak_clue_ui.upgrade() {
+                    let clue_ui = clue_ui.borrow();
+                    if let Some(tooltip_widget) = &clue_ui.tooltip_widget {
+                        tooltip.set_custom(Some(tooltip_widget));
+                        deferred_size_reallocation(tooltip_widget);
                     }
-                    true
-                });
-        clue_ui.tooltip_signal = Some(tooltip_signal);
+                }
+                true
+            }
+        });
+        clue_ui.borrow_mut().tooltip_signal = Some(tooltip_signal);
     }
 
     pub fn set_tooltips_enabled(&mut self, enabled: bool) {
@@ -244,23 +257,26 @@ impl ClueUI {
         }
     }
 
-    fn parse_template(&self, template: &str) -> Box {
-        let parser = TemplateParser::new(self.resources.clone(), None);
-        parser.parse_as_box(template)
-    }
-
     fn create_tooltip_widget(&self) -> Box {
-        let tooltip_box = Box::new(Orientation::Vertical, 5);
+        let rect = tooltip_rect(&self.layout);
+        let tooltip_box = Box::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(5)
+            .margin_start(5)
+            .margin_end(5)
+            .margin_top(5)
+            .margin_bottom(5)
+            .hexpand(false)
+            .vexpand(false)
+            .width_request(rect.width())
+            .height_request(rect.height())
+            .build();
+
         if self.tooltip_data.is_none() {
             return tooltip_box;
         }
 
         let clue_data = self.tooltip_data.as_ref().unwrap();
-
-        tooltip_box.set_margin_start(5);
-        tooltip_box.set_margin_end(5);
-        tooltip_box.set_margin_top(5);
-        tooltip_box.set_margin_bottom(5);
 
         // Add title
         let title_box = Box::new(Orientation::Horizontal, 5);
@@ -269,12 +285,31 @@ impl ClueUI {
         title_box.append(&title);
         tooltip_box.append(&title_box);
 
-        // Add description with example
-        let desc_box = Box::new(Orientation::Horizontal, 5);
-        let template = self.clue.clue.description();
+        let display = WidgetExt::display(self.window.as_ref());
+        let theme = IconTheme::for_display(&display);
+        let parser = TemplateParser::new(self.resources.clone(), Some(Rc::new(theme)));
 
-        desc_box.append(&self.parse_template(&template));
-        tooltip_box.append(&desc_box);
+        let text_tag_table = TextTagTable::new();
+        let buffer = TextBuffer::builder().tag_table(&text_tag_table).build();
+        let mut end = buffer.end_iter();
+        let tutorial_text = TextView::builder()
+            .visible(true)
+            .buffer(&buffer)
+            .editable(false)
+            .cursor_visible(false)
+            .halign(Align::Fill)
+            .valign(Align::Start)
+            .css_classes(["tooltip"])
+            .vexpand(true)
+            .hexpand(true)
+            .wrap_mode(WrapMode::Word)
+            .build();
+        let template = self.clue.clue.description();
+        parser.append_to_text_buffer(&tutorial_text, &mut end, &template);
+
+        tooltip_box.append(&tutorial_text);
+        deferred_size_reallocation(&tutorial_text);
+        deferred_size_reallocation(&tooltip_box);
 
         tooltip_box
     }

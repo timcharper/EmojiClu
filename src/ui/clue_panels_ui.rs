@@ -1,6 +1,6 @@
 use gtk4::{
     prelude::{GridExt, WidgetExt},
-    Grid,
+    ApplicationWindow, Grid,
 };
 use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
@@ -22,6 +22,7 @@ use crate::{model::Difficulty, ui::ImageSet};
 use crate::{model::LayoutConfiguration, ui::clue_ui::ClueUI};
 
 pub struct CluePanelsUI {
+    window: Rc<ApplicationWindow>,
     pub horizontal_grid: Grid,
     pub vertical_grid: Grid,
     horizontal_clue_uis: Vec<Rc<RefCell<ClueUI>>>,
@@ -60,6 +61,7 @@ impl Destroyable for CluePanelsUI {
 // Parent widget for both horizontal clues and vertical clues
 impl CluePanelsUI {
     pub fn new(
+        window: Rc<ApplicationWindow>,
         input_event_emitter: EventEmitter<InputEvent>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
         layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
@@ -88,6 +90,7 @@ impl CluePanelsUI {
             .build();
 
         let clue_set_ui = Rc::new(RefCell::new(Self {
+            window,
             horizontal_grid: horizontal_clues_grid,
             vertical_grid: vertical_clues_grid,
             horizontal_clue_uis: Vec::with_capacity(MAX_HORIZ_CLUES),
@@ -203,6 +206,7 @@ impl CluePanelsUI {
 
             let clue_set = ClueUI::new(
                 Rc::clone(&self.resources),
+                self.window.clone(),
                 addressed_clue.clone(),
                 self.current_layout.clues.clone(),
                 self.input_event_emitter.clone(),
@@ -223,6 +227,7 @@ impl CluePanelsUI {
         for (col, addressed_clue) in clue_set.vertical_clues().iter().enumerate() {
             let clue_set = ClueUI::new(
                 Rc::clone(&self.resources),
+                self.window.clone(),
                 addressed_clue.clone(),
                 self.current_layout.clues.clone(),
                 self.input_event_emitter.clone(),

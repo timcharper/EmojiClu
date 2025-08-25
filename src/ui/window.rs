@@ -215,6 +215,7 @@ pub fn build_ui(app: &Application) {
     );
 
     let clue_set_ui = CluePanelsUI::new(
+        window.clone(),
         input_event_emitter.clone(),
         game_engine_event_observer.clone(),
         layout_manager_event_observer.clone(),

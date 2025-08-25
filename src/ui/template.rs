@@ -1,7 +1,6 @@
 use crate::model::Tile;
 use crate::ui::ImageSet;
 use gtk4::{prelude::*, IconTheme, TextIter, TextView};
-use gtk4::{Box, Label, Orientation, Widget};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -67,43 +66,6 @@ impl TemplateParser {
         }
 
         elements
-    }
-
-    pub fn parse_as_box(&self, template: &str) -> Box {
-        let box_container = Box::new(Orientation::Horizontal, 5);
-
-        TemplateParser::parse_template_elements(template)
-            .into_iter()
-            .flat_map(|element| match element {
-                TemplateElement::Label(text) => {
-                    let label = Label::new(None);
-                    label.set_markup(&text);
-                    label.set_wrap(true);
-                    label.set_max_width_chars(40);
-                    Some(label.upcast::<Widget>())
-                }
-                TemplateElement::Tile(tile) => {
-                    self.resources.get_candidate_icon(&tile).map(|paintable| {
-                        let image = gtk4::Image::from_paintable(Some(paintable.as_ref()));
-                        image.upcast::<Widget>()
-                    })
-                }
-                TemplateElement::Icon(icon_name) => {
-                    let icon = self.icon_theme.as_ref().unwrap().lookup_icon(
-                        &icon_name,
-                        &[],
-                        24,
-                        1,
-                        gtk4::TextDirection::Ltr,
-                        gtk4::IconLookupFlags::empty(),
-                    );
-                    let image = gtk4::Image::from_paintable(Some(&icon));
-                    Some(image.upcast::<Widget>())
-                }
-            })
-            .for_each(|widget| box_container.append(&widget));
-
-        box_container
     }
 
     pub fn append_to_text_buffer(
