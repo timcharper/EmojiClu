@@ -1,7 +1,8 @@
 use super::{ClueSet, ClueWithAddress, Deduction, Difficulty, TimerState};
 use crate::game::settings::Settings;
 use crate::model::{ClueAddress, GameBoard, GameStats};
-use std::{collections::HashSet, rc::Rc};
+use std::collections::HashSet;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClueSelection {
@@ -39,7 +40,7 @@ pub enum GameEngineEvent {
         vertical_hidden_tiles: Vec<usize>,
     },
     ClueHintHighlighted(Option<ClueWithAddress>),
-    ClueSetUpdated(Rc<ClueSet>, Difficulty, HashSet<ClueAddress>),
+    ClueSetUpdated(Arc<ClueSet>, Difficulty, HashSet<ClueAddress>),
     ClueSelected(Option<ClueSelection>),
     HintSuggested(Deduction),
     HintUsageChanged(u32),

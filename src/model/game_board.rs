@@ -4,15 +4,15 @@ use super::{
 };
 use crate::model::tile_assertion::TileAssertion;
 use crate::model::{Candidate, Deduction, PartialSolution, Tile};
-use std::{collections::HashSet, rc::Rc};
+use std::{collections::HashSet, sync::Arc};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct GameBoard {
     candidates: [[u8; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     resolved_candidates: [[u8; MAX_GRID_SIZE]; MAX_GRID_SIZE],
     selected: [[Option<char>; MAX_GRID_SIZE]; MAX_GRID_SIZE],
-    pub solution: Rc<Solution>,
-    pub clue_set: Rc<ClueSet>,
+    pub solution: Arc<Solution>,
+    pub clue_set: Arc<ClueSet>,
     pub completed_clues: HashSet<ClueAddress>,
 }
 
@@ -59,8 +59,8 @@ impl Default for GameBoard {
         let candidates = [[0xFF; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         let resolved_candidates = [[0x00; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         let selected = std::array::from_fn(|_| std::array::from_fn(|_| None));
-        let solution = Rc::new(Solution::default());
-        let clue_set = Rc::new(ClueSet::new(vec![]));
+        let solution = Arc::new(Solution::default());
+        let clue_set = Arc::new(ClueSet::new(vec![]));
         let completed_clues = HashSet::new();
 
         Self {
@@ -75,7 +75,7 @@ impl Default for GameBoard {
 }
 
 impl GameBoard {
-    pub fn new(solution: Rc<Solution>) -> Self {
+    pub fn new(solution: Arc<Solution>) -> Self {
         let candidates = [[0xFF; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         let resolved_candidates = [[0x00; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         let selected = std::array::from_fn(|_| std::array::from_fn(|_| None));
@@ -85,7 +85,7 @@ impl GameBoard {
             resolved_candidates,
             selected,
             solution,
-            clue_set: Rc::new(ClueSet::new(vec![])),
+            clue_set: Arc::new(ClueSet::new(vec![])),
             completed_clues: HashSet::new(),
         };
         board.recompute_resolved();
@@ -254,7 +254,7 @@ impl GameBoard {
     }
 
     #[cfg(test)]
-    pub fn parse(input: &str, solution: Rc<Solution>) -> Self {
+    pub fn parse(input: &str, solution: Arc<Solution>) -> Self {
         let mut selected: [[Option<char>; MAX_GRID_SIZE]; MAX_GRID_SIZE] =
             std::array::from_fn(|_| std::array::from_fn(|_| None));
         let mut candidates = [[0xFF; MAX_GRID_SIZE]; MAX_GRID_SIZE];
@@ -298,14 +298,14 @@ impl GameBoard {
             selected,
             candidates,
             resolved_candidates,
-            clue_set: Rc::new(ClueSet::new(vec![])),
+            clue_set: Arc::new(ClueSet::new(vec![])),
             completed_clues: HashSet::new(),
         };
         board.recompute_resolved();
         board
     }
 
-    pub fn set_clues(&mut self, clues: Rc<ClueSet>) {
+    pub fn set_clues(&mut self, clues: Arc<ClueSet>) {
         self.clue_set = clues;
     }
 
@@ -500,7 +500,7 @@ mod tests {
 
     use super::*;
 
-    fn create_test_solution() -> Rc<Solution> {
+    fn create_test_solution() -> Arc<Solution> {
         let mut grid = [['0'; MAX_GRID_SIZE]; MAX_GRID_SIZE];
         // Fill first 4x4 of grid with test data
         for row in 0..4 {
@@ -509,7 +509,7 @@ mod tests {
             }
         }
 
-        Rc::new(Solution {
+        Arc::new(Solution {
             variants: vec!['a', 'b', 'c', 'd'],
             grid,
             n_rows: 4,

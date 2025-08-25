@@ -5,7 +5,7 @@ use crate::solver::clue_generator::ClueGeneratorResult;
 use crate::solver::generate_clues;
 use std::path::PathBuf;
 use std::time::SystemTime;
-use std::{fs, rc::Rc};
+use std::{fs, sync::Arc};
 
 use super::{Difficulty, TimerState};
 
@@ -38,9 +38,9 @@ impl GameStateSnapshot {
     }
 
     pub fn generate_new(difficulty: Difficulty, seed: Option<u64>) -> Self {
-        let solution = Rc::new(Solution::new(difficulty, seed));
+        let solution = Arc::new(Solution::new(difficulty, seed));
         trace!(target: "game_state", "Generated solution: {:?}", solution);
-        let blank_board = GameBoard::new(Rc::clone(&solution));
+        let blank_board = GameBoard::new(Arc::clone(&solution));
         let ClueGeneratorResult {
             clues: _,
             board,

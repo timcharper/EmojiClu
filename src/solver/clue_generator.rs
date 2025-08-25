@@ -4,7 +4,7 @@ use super::{
 };
 
 use log::{info, trace, warn};
-use std::{collections::BTreeSet, rc::Rc};
+use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
     model::{Clue, ClueSet, Difficulty, GameBoard, Tile},
@@ -193,7 +193,7 @@ pub fn generate_clues(init_board: &GameBoard) -> ClueGeneratorResult {
         board_with_revealed_tiles.select_tile_from_solution(*tile);
     }
 
-    let clue_set = Rc::new(ClueSet::new(state.clues.clone()));
+    let clue_set = Arc::new(ClueSet::new(state.clues.clone()));
     board_with_revealed_tiles.set_clues(clue_set);
 
     ClueGeneratorResult {
@@ -224,8 +224,8 @@ mod tests {
         for i in 0..n_iterations {
             // we'd test Veteran if we had all day... needs compiler optimizations to run at reasonable speed
             // let solution = Solution::new(Difficulty::Veteran, Some(start_seed + i));
-            let solution = Solution::new(Difficulty::Hard, Some(start_seed + i));
-            let init_board = GameBoard::new(solution.into());
+            let solution = Arc::new(Solution::new(Difficulty::Hard, Some(start_seed + i)));
+            let init_board = GameBoard::new(solution);
             let result = generate_clues(&init_board);
             trace!(
                 target: "clue_generator",
@@ -266,8 +266,8 @@ mod tests {
     #[test_context(UsingLogger)]
     #[test]
     fn test_generate_clues_deterministic(_: &mut UsingLogger) {
-        let solution = Solution::new(Difficulty::Easy, Some(42));
-        let board = GameBoard::new(solution.into());
+        let solution = Arc::new(Solution::new(Difficulty::Easy, Some(42)));
+        let board = GameBoard::new(solution);
         println!("Board is {:?}", board);
 
         // Generate clues twice with same seed

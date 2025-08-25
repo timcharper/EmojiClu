@@ -1,5 +1,6 @@
 use log::{error, trace};
 use std::cell::RefCell;
+use std::sync::mpsc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -16,7 +17,7 @@ use crate::solver::candidate_solver::{
     deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult,
 };
 use crate::solver::{deduce_clue, simplify_deductions, ConstraintSolver};
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 const HINT_LEVEL_MAX: u8 = 1;
 
@@ -50,10 +51,10 @@ impl Default for HintStatus {
 }
 
 pub struct GameEngine {
-    clue_set: Rc<ClueSet>,
-    history: Vec<Rc<GameBoard>>,
-    pub current_board: Rc<GameBoard>,
-    solution: Rc<Solution>,
+    clue_set: Arc<ClueSet>,
+    history: Vec<Arc<GameBoard>>,
+    pub current_board: Arc<GameBoard>,
+    solution: Arc<Solution>,
     debug_mode: bool,
     history_index: usize,
     hints_used: u32,
@@ -83,7 +84,7 @@ impl GameEngine {
         game_engine_event_emitter: EventEmitter<GameEngineEvent>,
         settings: Settings,
     ) -> Rc<RefCell<Self>> {
-        let empty_board = Rc::new(GameBoard::default());
+        let empty_board = Arc::new(GameBoard::default());
         let game_state = Self {
             clue_set: empty_board.clue_set.clone(),
             history: vec![empty_board.clone()],
@@ -109,15 +110,19 @@ impl GameEngine {
     }
 
     fn wire_subscription(
-        game_state: Rc<RefCell<Self>>,
+        game_engine: Rc<RefCell<Self>>,
         game_engine_command_emitter: EventObserver<GameEngineCommand>,
     ) {
-        let game_state_handler = game_state.clone();
-        let subscription_id = game_engine_command_emitter.subscribe(move |event| {
-            let mut game_state = game_state_handler.borrow_mut();
-            game_state.handle_command(event.clone());
+        let game_state_handler = game_engine.clone();
+        let subscription_id = game_engine_command_emitter.subscribe({
+            let game_engine = game_engine.clone();
+
+            move |event| {
+                let mut game_state = game_state_handler.borrow_mut();
+                game_state.handle_command(&game_engine, event.clone());
+            }
         });
-        game_state.borrow_mut().subscription_id = Some(subscription_id);
+        game_engine.borrow_mut().subscription_id = Some(subscription_id);
     }
 
     fn set_game_state(
@@ -129,9 +134,9 @@ impl GameEngine {
             "New game; difficulty: {:?}; seed: {:?}",
             game_state_snapshot.board.solution.difficulty, game_state_snapshot.board.solution.seed
         );
-        self.current_board = Rc::new(game_state_snapshot.board.clone());
-        self.clue_set = Rc::clone(&self.current_board.clue_set);
-        self.solution = Rc::clone(&self.current_board.solution);
+        self.current_board = Arc::new(game_state_snapshot.board.clone());
+        self.clue_set = Arc::clone(&self.current_board.clue_set);
+        self.solution = Arc::clone(&self.current_board.solution);
         self.debug_mode = Settings::is_debug_mode();
         self.history.clear();
         self.history.push(self.current_board.clone());
@@ -182,12 +187,12 @@ impl GameEngine {
 
     /// moves the GameBoard into an Rc, sets it as the current state, pushes the history
     fn push_board(&mut self, board: GameBoard, change_reason: GameBoardChangeReason) {
-        self.current_board = Rc::new(board);
+        self.current_board = Arc::new(board);
         // if we're not at the end of the list, prune redo state
         if self.history_index < self.history.len() - 1 {
             self.history.truncate(self.history_index + 1);
         }
-        self.history.push(Rc::clone(&self.current_board));
+        self.history.push(Arc::clone(&self.current_board));
         self.history_index += 1;
 
         self.maybe_reset_clue_hint();
@@ -234,7 +239,7 @@ impl GameEngine {
         }
     }
 
-    fn handle_command(&mut self, event: GameEngineCommand) {
+    fn handle_command(&mut self, game_engine: &Rc<RefCell<Self>>, event: GameEngineCommand) {
         log::trace!(target: "game_state", "Handling event: {:?}", event);
         match event {
             GameEngineCommand::CellSelect(row, col, variant) => {
@@ -245,12 +250,37 @@ impl GameEngine {
             }
             GameEngineCommand::NewGame(difficulty, seed) => {
                 let difficulty = difficulty.unwrap_or(self.settings.difficulty);
-                self.set_game_state(
-                    &GameStateSnapshot::generate_new(difficulty, seed),
-                    GameBoardChangeReason::NewGame,
-                );
+
+                // Update settings immediately (this is fast)
                 self.settings.difficulty = difficulty;
                 self.update_settings();
+
+                // Option 2: True background thread with callback
+                // This is more complex but shows the full pattern:
+                let (sender, receiver) = mpsc::channel::<GameStateSnapshot>();
+
+                std::thread::spawn(move || {
+                    // Do expensive computation
+                    let _result = GameStateSnapshot::generate_new(difficulty, seed);
+                    let _ = sender.send(_result);
+                });
+
+                // Create a mechanism to send LoadState back to ourselves
+                glib::idle_add_local({
+                    let game_engine_ref = Rc::downgrade(&game_engine);
+                    move || {
+                        if let Ok(snapshot) = receiver.try_recv() {
+                            // Regenerate on main thread and apply
+                            game_engine_ref.upgrade().map(|ge| {
+                                ge.borrow_mut()
+                                    .set_game_state(&snapshot, GameBoardChangeReason::NewGame)
+                            });
+                            // Send LoadState command back to GameEngine
+                            return glib::ControlFlow::Break;
+                        }
+                        glib::ControlFlow::Continue
+                    }
+                });
             }
             GameEngineCommand::LoadState(save_state) => {
                 trace!(target: "game_state", "Loading saved state {:?}", save_state);
