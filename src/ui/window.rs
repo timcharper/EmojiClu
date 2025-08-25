@@ -1,5 +1,5 @@
 use crate::destroyable::Destroyable;
-use crate::events::Channel;
+use crate::events::{Channel, EventEmitter, EventHandler, EventObserver};
 use crate::game::game_engine::GameEngine;
 use crate::game::settings::Settings;
 use crate::game::stats_manager::StatsManager;
@@ -51,25 +51,246 @@ pub fn load_settings_and_game_state() -> (Settings, Option<GameStateSnapshot>) {
     (initial_settings, saved_game_state)
 }
 
+struct ChannelPair<T: std::fmt::Debug + 'static> {
+    emitter: EventEmitter<T>,
+    observer: EventObserver<T>,
+}
+impl<T: std::fmt::Debug + 'static> ChannelPair<T> {
+    fn new() -> Self {
+        let (emitter, observer) = Channel::<T>::new();
+        Self { emitter, observer }
+    }
+}
+
+struct Channels {
+    game_engine_command: ChannelPair<GameEngineCommand>,
+    game_engine_event: ChannelPair<GameEngineEvent>,
+    layout_manager: ChannelPair<LayoutManagerEvent>,
+    input: ChannelPair<InputEvent>,
+}
+
+impl Channels {
+    fn new() -> Self {
+        Self {
+            game_engine_command: ChannelPair::new(),
+            game_engine_event: ChannelPair::new(),
+            layout_manager: ChannelPair::new(),
+            input: ChannelPair::new(),
+        }
+    }
+}
+
+struct Components {
+    clue_panels_ui: Rc<RefCell<CluePanelsUI>>,
+    resource_manager: Rc<RefCell<ResourceManager>>,
+    puzzle_grid_ui: Rc<RefCell<PuzzleGridUI>>,
+    game_state: Rc<RefCell<GameEngine>>,
+    hint_button_ui: Rc<RefCell<HintButtonUI>>,
+    tutorial_ui: Rc<RefCell<TutorialUI>>,
+    layout_manager: Rc<RefCell<LayoutManager>>,
+    pause_screen_ui: Rc<RefCell<PauseScreenUI>>,
+    settings_menu_ui: Rc<RefCell<SettingsMenuUI>>,
+    game_info_ui: Rc<RefCell<GameInfoUI>>,
+    game_controls: Rc<RefCell<TopLevelInputEventMonitor>>,
+    history_controls_ui: Rc<RefCell<HistoryControlsUI>>,
+    stats_manager: Rc<RefCell<StatsManager>>,
+    submit_ui: Rc<RefCell<SubmitUI>>,
+    input_translator: Rc<RefCell<InputTranslator>>,
+    timer_button: Rc<RefCell<TimerButtonUI>>,
+    seed_dialog: Rc<RefCell<SeedDialog>>,
+    puzzle_generation_dialog: Rc<RefCell<PuzzleGenerationDialog>>,
+    settings_projection: Rc<RefCell<SettingsProjection>>,
+}
+
+impl Components {
+    fn new(
+        window: Rc<ApplicationWindow>,
+        channels: &Channels,
+        initial_settings: &Settings,
+        saved_game_state: &Option<GameStateSnapshot>,
+    ) -> Self {
+        let resource_manager = ResourceManager::new(
+            channels.layout_manager.observer.clone(),
+            channels.layout_manager.emitter.clone(),
+        );
+        let default_layout = LayoutManager::calculate_layout(
+            initial_settings.difficulty,
+            Some(ClueStats::default()),
+        );
+        let image_set = resource_manager.borrow().get_image_set();
+        let audio_set = resource_manager.borrow().get_audio_set();
+        let clue_panels_ui = CluePanelsUI::new(
+            window.clone(),
+            channels.input.emitter.clone(),
+            &image_set,
+            default_layout.clone(),
+            initial_settings,
+        );
+        // Create puzzle grid and clue set UI first
+        let puzzle_grid_ui = PuzzleGridUI::new(
+            channels.input.emitter.clone(),
+            channels.game_engine_event.observer.clone(),
+            channels.layout_manager.observer.clone(),
+            image_set.clone(),
+            default_layout.clone(),
+            initial_settings,
+        );
+
+        // Create game state with UI references
+        let game_state = GameEngine::new(
+            channels.game_engine_command.observer.clone(),
+            channels.game_engine_event.emitter.clone(),
+            initial_settings.clone(),
+        );
+
+        // Create hint button UI
+        let hint_button_ui = HintButtonUI::new(
+            channels.game_engine_command.emitter.clone(),
+            channels.game_engine_event.observer.clone(),
+            &game_state,
+            &audio_set,
+            &window,
+        );
+
+        // Instantiate TutorialUI
+        let tutorial_ui = TutorialUI::new(
+            channels.game_engine_event.observer.clone(),
+            channels.game_engine_command.observer.clone(),
+            channels.layout_manager.observer.clone(),
+            channels.game_engine_command.emitter.clone(),
+            &window,
+            &image_set,
+            initial_settings,
+            &default_layout,
+        );
+        let layout_manager = LayoutManager::new(
+            window.clone(),
+            channels.layout_manager.emitter.clone(),
+            channels.game_engine_event.observer.clone(),
+            initial_settings.difficulty,
+        );
+
+        // Create pause screen UI
+        let pause_screen_ui = PauseScreenUI::new(channels.game_engine_event.observer.clone());
+
+        // Create Settings submenu
+        let settings_menu_ui = SettingsMenuUI::new(
+            window.clone(),
+            channels.game_engine_command.emitter.clone(),
+            initial_settings.clone(),
+        );
+        let game_info_ui = GameInfoUI::new(
+            channels.game_engine_event.observer.clone(),
+            Rc::new(pause_screen_ui.borrow().pause_screen_box.clone()),
+        );
+        // Initialize game controls
+        let game_controls = TopLevelInputEventMonitor::new(
+            window.clone(),
+            layout_manager.borrow().scrolled_window.clone(),
+            channels.input.emitter.clone(),
+        );
+        let history_controls_ui =
+            HistoryControlsUI::new(channels.game_engine_event.observer.clone());
+
+        // Remove the old button_box since controls are now in header
+        let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
+
+        let submit_ui = SubmitUI::new(
+            channels.game_engine_event.observer.clone(),
+            channels.game_engine_command.emitter.clone(),
+            &stats_manager,
+            &audio_set,
+            &window,
+        );
+        let settings_projection =
+            SettingsProjection::new(&initial_settings, &channels.game_engine_event.observer);
+
+        // Initialize input translator
+        let input_translator = InputTranslator::new(
+            channels.game_engine_command.emitter.clone(),
+            channels.input.observer.clone(),
+            settings_projection.clone(),
+        );
+        let timer_button =
+            TimerButtonUI::new(&window, channels.game_engine_command.emitter.clone());
+
+        let seed_dialog = SeedDialog::new(
+            &window,
+            channels.game_engine_command.emitter.clone(),
+            channels.game_engine_event.observer.clone(),
+        );
+        let puzzle_generation_dialog =
+            PuzzleGenerationDialog::new(&window, channels.game_engine_event.observer.clone());
+
+        Self {
+            clue_panels_ui,
+            resource_manager,
+            puzzle_grid_ui,
+            game_state,
+            hint_button_ui,
+            tutorial_ui,
+            layout_manager,
+            pause_screen_ui,
+            settings_menu_ui,
+            game_info_ui,
+            game_controls,
+            history_controls_ui,
+            stats_manager,
+            submit_ui,
+            input_translator,
+            timer_button,
+            seed_dialog,
+            puzzle_generation_dialog,
+            settings_projection,
+        }
+    }
+}
+
+impl Destroyable for Components {
+    fn destroy(&mut self) {
+        self.history_controls_ui.borrow_mut().destroy();
+        self.game_state.borrow_mut().destroy();
+        self.game_info_ui.borrow_mut().destroy();
+        self.hint_button_ui.borrow_mut().destroy();
+        self.pause_screen_ui.borrow_mut().destroy();
+        self.submit_ui.borrow_mut().destroy();
+        self.puzzle_grid_ui.borrow_mut().destroy();
+        self.clue_panels_ui.borrow_mut().destroy();
+        self.timer_button.borrow_mut().destroy();
+        self.layout_manager.borrow_mut().destroy();
+        self.seed_dialog.borrow_mut().destroy();
+        self.puzzle_generation_dialog.borrow_mut().destroy();
+        self.settings_menu_ui.borrow_mut().destroy();
+        self.game_controls.borrow_mut().destroy();
+        self.input_translator.borrow_mut().destroy();
+        self.resource_manager.borrow_mut().destroy();
+    }
+}
+
+fn wire_event_observers(channels: &Channels, components: &Components) {
+    type EHGameEvent = Rc<RefCell<dyn EventHandler<GameEngineEvent>>>;
+    type EHLayoutEvent = Rc<RefCell<dyn EventHandler<LayoutManagerEvent>>>;
+
+    let game_engine_event_observer = &channels.game_engine_event.observer;
+    let layout_event_observer = &channels.layout_manager.observer;
+
+    game_engine_event_observer
+        .subscribe_component(&(components.clue_panels_ui.clone() as EHGameEvent));
+    layout_event_observer
+        .subscribe_component(&(components.clue_panels_ui.clone() as EHLayoutEvent));
+}
+
 pub fn build_ui(app: &Application) {
-    let (game_engine_command_emitter, game_engine_command_observer) =
-        Channel::<GameEngineCommand>::new();
-    let (game_engine_event_emitter, game_engine_event_observer) = Channel::<GameEngineEvent>::new();
-    let (layout_manager_event_emitter, layout_manager_event_observer) =
-        Channel::<LayoutManagerEvent>::new();
-    let (input_event_emitter, input_event_observer) = Channel::<InputEvent>::new();
+    // let (game_engine_command_emitter, game_engine_command_observer) =
+    //     Channel::<GameEngineCommand>::new();
+    // let (game_engine_event_emitter, game_engine_event_observer) = Channel::<GameEngineEvent>::new();
+    // let (layout_manager_event_emitter, layout_manager_event_observer) =
+    //     Channel::<LayoutManagerEvent>::new();
+    // let (input_event_emitter, input_event_observer) = Channel::<InputEvent>::new();
+
+    // TODO - remove
 
     let (initial_settings, saved_game_state) = load_settings_and_game_state();
-
-    let settings_projection =
-        SettingsProjection::new(&initial_settings, &game_engine_event_observer);
-
-    let resource_manager = ResourceManager::new(
-        layout_manager_event_observer.clone(),
-        layout_manager_event_emitter.clone(),
-    );
-    let image_set = resource_manager.borrow().get_image_set();
-    let audio_set = resource_manager.borrow().get_audio_set();
 
     let display = Display::default().expect("Could not connect to a display.");
     let monitor = display
@@ -95,34 +316,17 @@ pub fn build_ui(app: &Application) {
             .default_width(desired_width.min(max_desired_width) as i32)
             .build(),
     );
-
-    let scrolled_window = gtk4::ScrolledWindow::builder()
-        .hexpand_set(true)
-        .vexpand_set(true)
-        .build();
-
-    // Create pause screen UI
-    let pause_screen_ui = PauseScreenUI::new(game_engine_event_observer.clone());
-    // Create game area with puzzle and horizontal clues side by side
-    let game_box = Rc::new(
-        gtk4::Box::builder()
-            .name("game-box")
-            .orientation(Orientation::Horizontal)
-            .spacing(10)
-            .halign(gtk4::Align::Center)
-            .hexpand(true)
-            .margin_start(10)
-            .margin_end(10)
-            .build(),
-    );
-
-    let layout_manager = LayoutManager::new(
+    let channels = Channels::new();
+    let components = Components::new(
         window.clone(),
-        layout_manager_event_emitter.clone(),
-        game_engine_event_observer.clone(),
-        scrolled_window.clone(),
-        initial_settings.difficulty,
+        &channels,
+        &initial_settings,
+        &saved_game_state,
     );
+
+    wire_event_observers(&channels, &components);
+
+    let game_engine_command_emitter = channels.game_engine_command.emitter.clone();
 
     // Set up keyboard shortcuts
     app.set_accels_for_action("win.undo", &["<Control>z"]);
@@ -134,19 +338,15 @@ pub fn build_ui(app: &Application) {
     // Create menu model for hamburger menu
     let menu = Menu::new();
 
-    // Create Settings submenu
-    let settings_menu_ui = SettingsMenuUI::new(
-        window.clone(),
-        game_engine_command_emitter.clone(),
-        initial_settings.clone(),
-    );
-
     // Add all menu items
     menu.append(Some(&t!("menu-new-game")), Some("win.new-game"));
     menu.append(Some(&t!("menu-restart")), Some("win.restart"));
     menu.append(Some(&t!("menu-statistics")), Some("win.statistics"));
     menu.append(Some(&t!("menu-seed")), Some("win.seed"));
-    menu.append_submenu(Some("Settings"), settings_menu_ui.borrow().get_menu());
+    menu.append_submenu(
+        Some("Settings"),
+        components.settings_menu_ui.borrow().get_menu(),
+    );
     menu.append(Some(&t!("menu-about")), Some("win.about"));
 
     // Add menu button to header bar
@@ -192,65 +392,7 @@ pub fn build_ui(app: &Application) {
 
     header_bar.pack_start(&difficulty_box);
 
-    let history_controls_ui = HistoryControlsUI::new(game_engine_event_observer.clone());
-
-    let game_info_ui = GameInfoUI::new(
-        game_engine_event_observer.clone(),
-        game_box.clone(),
-        Rc::new(pause_screen_ui.borrow().pause_screen_box.clone()),
-    );
-
     let solve_button = Button::with_label(&t!("solve-button"));
-
-    let default_layout =
-        LayoutManager::calculate_layout(initial_settings.difficulty, Some(ClueStats::default()));
-
-    // Create puzzle grid and clue set UI first
-    let puzzle_grid_ui = PuzzleGridUI::new(
-        input_event_emitter.clone(),
-        game_engine_event_observer.clone(),
-        layout_manager_event_observer.clone(),
-        image_set.clone(),
-        default_layout.clone(),
-        &initial_settings,
-    );
-
-    let clue_set_ui = CluePanelsUI::new(
-        window.clone(),
-        input_event_emitter.clone(),
-        game_engine_event_observer.clone(),
-        layout_manager_event_observer.clone(),
-        &image_set,
-        default_layout.clone(),
-        &initial_settings,
-    );
-
-    // Create game state with UI references
-    let game_state = GameEngine::new(
-        game_engine_command_observer.clone(),
-        game_engine_event_emitter.clone(),
-        initial_settings.clone(),
-    );
-
-    // Create hint button UI
-    let hint_button_ui = HintButtonUI::new(
-        game_engine_command_emitter.clone(),
-        game_engine_event_observer.clone(),
-        &game_state,
-        &audio_set,
-        &window,
-    );
-
-    // Remove the old button_box since controls are now in header
-    let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
-
-    let submit_ui = SubmitUI::new(
-        game_engine_event_observer.clone(),
-        game_engine_command_emitter.clone(),
-        &stats_manager,
-        &audio_set,
-        &window,
-    );
 
     // Create left side box for timer and hints
     let left_box = gtk4::Box::builder()
@@ -260,14 +402,13 @@ pub fn build_ui(app: &Application) {
         .build();
 
     // Create pause button
-    let timer_button = TimerButtonUI::new(&window, game_engine_command_emitter.clone());
-    left_box.append(&timer_button.borrow().button);
-    left_box.append(&game_info_ui.borrow().timer_label);
-    left_box.append(&hint_button_ui.borrow().hint_button);
+    left_box.append(&components.timer_button.borrow().button);
+    left_box.append(&components.game_info_ui.borrow().timer_label);
+    left_box.append(&components.hint_button_ui.borrow().hint_button);
     let hints_label = Label::new(Some(&t!("hints-label")));
     hints_label.set_css_classes(&["hints-label"]);
     left_box.append(&hints_label);
-    left_box.append(&game_info_ui.borrow().hints_label);
+    left_box.append(&components.game_info_ui.borrow().hints_label);
 
     header_bar.pack_start(&left_box);
 
@@ -280,8 +421,8 @@ pub fn build_ui(app: &Application) {
         .build();
 
     // Create buttons first
-    right_box.append(history_controls_ui.borrow().undo_button.as_ref());
-    right_box.append(history_controls_ui.borrow().redo_button.as_ref());
+    right_box.append(components.history_controls_ui.borrow().undo_button.as_ref());
+    right_box.append(components.history_controls_ui.borrow().redo_button.as_ref());
     if Settings::is_debug_mode() {
         right_box.append(&solve_button);
     }
@@ -321,29 +462,20 @@ pub fn build_ui(app: &Application) {
     let puzzle_background = gtk4::Frame::builder()
         .name("puzzle-mat-board")
         .css_classes(["puzzle-mat-board"])
-        .child(&puzzle_grid_ui.borrow().grid)
+        .child(&components.puzzle_grid_ui.borrow().grid)
         .build();
 
-    // Instantiate TutorialUI
-    let tutorial_ui = TutorialUI::new(
-        game_engine_event_observer.clone(),
-        game_engine_command_observer.clone(),
-        layout_manager_event_observer.clone(),
-        game_engine_command_emitter.clone(),
-        &window,
-        &image_set,
-        &initial_settings,
-        &default_layout,
-    );
+    let scrolled_window = components.layout_manager.borrow().scrolled_window.clone();
 
     // Assemble the UI
     puzzle_vertical_box.append(&puzzle_background);
-    puzzle_vertical_box.append(&tutorial_ui.borrow().scrolled_window);
-    puzzle_vertical_box.append(&clue_set_ui.borrow().vertical_grid);
+    puzzle_vertical_box.append(&components.tutorial_ui.borrow().scrolled_window);
+    puzzle_vertical_box.append(&components.clue_panels_ui.borrow().vertical_grid);
     puzzle_vertical_box.set_hexpand(false);
 
+    let game_box = components.game_info_ui.borrow().game_box.clone();
     game_box.append(&puzzle_vertical_box);
-    game_box.append(&clue_set_ui.borrow().horizontal_grid);
+    game_box.append(&components.clue_panels_ui.borrow().horizontal_grid);
 
     let top_level_box = gtk4::Box::builder()
         .name("top-level-box")
@@ -357,7 +489,7 @@ pub fn build_ui(app: &Application) {
         .build();
 
     top_level_box.append(game_box.as_ref());
-    top_level_box.append(&pause_screen_ui.borrow().pause_screen_box);
+    top_level_box.append(&components.pause_screen_ui.borrow().pause_screen_box);
 
     scrolled_window.set_child(Some(&top_level_box));
     // window.set_child(Some(&top_level_box));
@@ -391,10 +523,10 @@ pub fn build_ui(app: &Application) {
     window.add_action(&action_new_game);
 
     let action_statistics = SimpleAction::new("statistics", None);
-    let stats_manager_stats = Rc::clone(&stats_manager);
+    let stats_manager_stats = Rc::clone(&components.stats_manager);
 
     action_statistics.connect_activate({
-        let settings = settings_projection.clone();
+        let settings = components.settings_projection.clone();
         let window = window.clone();
         move |_, _| {
             StatsDialog::show(
@@ -422,25 +554,6 @@ pub fn build_ui(app: &Application) {
         dialog.present();
     });
     window.add_action(&action_about);
-
-    let seed_dialog = SeedDialog::new(
-        &window,
-        game_engine_command_emitter.clone(),
-        game_engine_event_observer.clone(),
-    );
-
-    let puzzle_generation_dialog = PuzzleGenerationDialog::new(
-        &window,
-        game_engine_event_observer.clone(),
-    );
-
-    // Initialize game controls
-    let game_controls = TopLevelInputEventMonitor::new(
-        window.clone(),
-        scrolled_window.clone(),
-        input_event_emitter.clone(),
-    );
-
     // Initialize game with saved difficulty
     match saved_game_state {
         Some(save_state) => {
@@ -458,50 +571,40 @@ pub fn build_ui(app: &Application) {
 
     // Add seed action
     let action_seed = SimpleAction::new("seed", None);
-    let seed_dialog_ref = seed_dialog.clone();
-    action_seed.connect_activate(move |_, _| {
-        seed_dialog_ref.borrow().show_seed();
+    action_seed.connect_activate({
+        let seed_dialog_ref = components.seed_dialog.clone();
+        move |_, _| {
+            seed_dialog_ref.borrow().show_seed();
+        }
     });
     window.add_action(&action_seed);
 
     // Add restart action
     let action_restart = SimpleAction::new("restart", None);
-    let game_engine_command_emitter_restart = game_engine_command_emitter.clone();
-    action_restart.connect_activate(move |_, _| {
-        game_engine_command_emitter_restart.emit(GameEngineCommand::Restart);
+    action_restart.connect_activate({
+        let game_engine_command_emitter = game_engine_command_emitter.clone();
+        move |_, _| {
+            game_engine_command_emitter.emit(GameEngineCommand::Restart);
+        }
     });
     window.add_action(&action_restart);
 
-    // Initialize input translator
-    let input_translator = InputTranslator::new(
-        game_engine_command_emitter.clone(),
-        input_event_observer.clone(),
-        settings_projection,
-    );
-
-    window.connect_close_request(move |_| {
-        log::info!(target: "window", "{}", t!("destroying-window"));
-        if !game_state.borrow_mut().get_game_save_state().save() {
-            log::error!(target: "window", "Failed to save game state");
+    window.connect_close_request({
+        let components = Rc::new(RefCell::new(components));
+        move |_| {
+            log::info!(target: "window", "{}", t!("destroying-window"));
+            if !components
+                .borrow()
+                .game_state
+                .borrow_mut()
+                .get_game_save_state()
+                .save()
+            {
+                log::error!(target: "window", "Failed to save game state");
+            }
+            components.borrow_mut().destroy();
+            // save game here
+            glib::signal::Propagation::Proceed
         }
-        history_controls_ui.borrow_mut().destroy();
-        game_state.borrow_mut().destroy();
-        game_info_ui.borrow_mut().destroy();
-        hint_button_ui.borrow_mut().destroy();
-        pause_screen_ui.borrow_mut().destroy();
-        submit_ui.borrow_mut().destroy();
-        puzzle_grid_ui.borrow_mut().destroy();
-        clue_set_ui.borrow_mut().destroy();
-        timer_button.borrow_mut().destroy();
-        layout_manager.borrow_mut().destroy();
-        seed_dialog.borrow_mut().destroy();
-        puzzle_generation_dialog.borrow_mut().destroy();
-        settings_menu_ui.borrow_mut().destroy();
-        game_controls.borrow_mut().destroy();
-        input_translator.borrow_mut().destroy();
-        resource_manager.borrow_mut().destroy();
-
-        // save game here
-        glib::signal::Propagation::Proceed
     });
 }

@@ -6,12 +6,12 @@ use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
 use crate::{
     destroyable::Destroyable,
-    events::Unsubscriber,
+    events::{EventHandler, Unsubscriber},
     game::settings::Settings,
     model::{ClueAddress, ClueSelection},
 };
 use crate::{
-    events::{EventEmitter, EventObserver},
+    events::EventEmitter,
     model::{ClueOrientation, ClueSet, GameEngineEvent, InputEvent, LayoutManagerEvent},
 };
 use crate::{
@@ -58,13 +58,23 @@ impl Destroyable for CluePanelsUI {
     }
 }
 
+impl EventHandler<GameEngineEvent> for CluePanelsUI {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        self.handle_game_engine_event(event);
+    }
+}
+
+impl EventHandler<LayoutManagerEvent> for CluePanelsUI {
+    fn handle_event(&mut self, event: &LayoutManagerEvent) {
+        self.handle_layout_event(event);
+    }
+}
+
 // Parent widget for both horizontal clues and vertical clues
 impl CluePanelsUI {
     pub fn new(
         window: Rc<ApplicationWindow>,
         input_event_emitter: EventEmitter<InputEvent>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
         resources: &Rc<ImageSet>,
         layout: LayoutConfiguration,
         settings: &Settings,
@@ -104,35 +114,7 @@ impl CluePanelsUI {
             current_spotlight_enabled: settings.clue_spotlight_enabled,
         }));
 
-        Self::connect_observers(
-            clue_set_ui.clone(),
-            game_engine_event_observer,
-            layout_manager_event_observer,
-        );
-
         clue_set_ui
-    }
-
-    fn connect_observers(
-        clue_set_ui: Rc<RefCell<Self>>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
-    ) {
-        let clue_set_ui_moved = clue_set_ui.clone();
-        let game_engine_event_subscription = game_engine_event_observer.subscribe(move |event| {
-            clue_set_ui_moved
-                .borrow_mut()
-                .handle_game_engine_event(event);
-        });
-
-        let clue_set_ui_moved = clue_set_ui.clone();
-        let layout_subscription = layout_manager_event_observer.subscribe(move |event| {
-            clue_set_ui_moved.borrow_mut().handle_layout_event(event);
-        });
-
-        clue_set_ui.borrow_mut().game_engine_event_subscription_id =
-            Some(game_engine_event_subscription);
-        clue_set_ui.borrow_mut().layout_subscription_id = Some(layout_subscription);
     }
 
     fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {

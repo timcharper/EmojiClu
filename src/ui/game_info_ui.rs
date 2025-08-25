@@ -3,7 +3,7 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use glib::{timeout_add_local, SourceId};
-use gtk4::{prelude::*, Box, Label};
+use gtk4::{prelude::*, Box, Label, Orientation};
 
 use crate::{
     destroyable::Destroyable,
@@ -17,7 +17,7 @@ pub struct GameInfoUI {
     pub timer_label: Label,
     pub hints_label: Label,
     timer: Option<SourceId>,
-    game_box: Rc<Box>,
+    pub game_box: Rc<Box>,
     pause_screen: Rc<Box>,
     game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
 }
@@ -36,7 +36,6 @@ impl Destroyable for GameInfoUI {
 impl GameInfoUI {
     pub fn new(
         game_engine_event_observer: EventObserver<GameEngineEvent>,
-        game_box: Rc<Box>,
         pause_screen: Rc<Box>,
     ) -> Rc<RefCell<Self>> {
         // Create timer label with monospace font
@@ -50,6 +49,18 @@ impl GameInfoUI {
         let timer_state = TimerState::default();
         GameInfoUI::update_timer_label(&timer_label, &timer_state);
 
+        // Create game area with puzzle and horizontal clues side by side
+        let game_box = Rc::new(
+            gtk4::Box::builder()
+                .name("game-box")
+                .orientation(Orientation::Horizontal)
+                .spacing(10)
+                .halign(gtk4::Align::Center)
+                .hexpand(true)
+                .margin_start(10)
+                .margin_end(10)
+                .build(),
+        );
         let game_info = Rc::new(RefCell::new(Self {
             hints_used: 0,
             timer_state,
@@ -82,7 +93,8 @@ impl GameInfoUI {
             })
         };
 
-        game_info.borrow_mut().game_engine_event_subscription = Some(game_engine_event_subscription);
+        game_info.borrow_mut().game_engine_event_subscription =
+            Some(game_engine_event_subscription);
     }
 
     fn handle_game_engine_event(&mut self, game_info: Rc<RefCell<Self>>, event: &GameEngineEvent) {

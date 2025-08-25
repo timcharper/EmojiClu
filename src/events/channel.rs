@@ -5,6 +5,9 @@ use std::rc::Rc;
 use glib;
 use log::trace;
 
+use crate::destroyable::Destroyable;
+use crate::events::EventHandler;
+
 pub type Callback<T> = Rc<dyn Fn(&T)>;
 type SubscriptionId = u64;
 
@@ -34,9 +37,16 @@ impl<T: std::fmt::Debug + 'static> Clone for EventObserver<T> {
     }
 }
 
+impl<T: std::fmt::Debug + 'static> Destroyable for EventObserver<T> {
+    fn destroy(&mut self) {
+        self.channel.clear();
+    }
+}
+
 pub struct Channel<T: std::fmt::Debug> {
     listeners: Rc<RefCell<HashMap<SubscriptionId, Callback<T>>>>,
     next_id: Rc<RefCell<SubscriptionId>>,
+    closed: Rc<RefCell<bool>>,
 }
 
 impl<T: std::fmt::Debug> Clone for Channel<T> {
@@ -44,6 +54,7 @@ impl<T: std::fmt::Debug> Clone for Channel<T> {
         Self {
             listeners: Rc::clone(&self.listeners),
             next_id: Rc::clone(&self.next_id),
+            closed: Rc::clone(&self.closed),
         }
     }
 }
@@ -68,6 +79,7 @@ impl<T: std::fmt::Debug + 'static> Channel<T> {
         let channel = Channel {
             listeners: Rc::clone(&listeners),
             next_id: Rc::clone(&next_id),
+            closed: Rc::new(RefCell::new(false)),
         };
 
         (
@@ -81,10 +93,35 @@ impl<T: std::fmt::Debug + 'static> Channel<T> {
         )
     }
 
+    pub fn subscribe_component(&self, component: &Rc<RefCell<dyn EventHandler<T>>>) {
+        let unsubscriber: Rc<RefCell<Option<Unsubscriber<T>>>> = Rc::new(RefCell::new(None));
+        let id = self.subscribe({
+            let component_weak = Rc::downgrade(component);
+            let unsubscriber = Rc::clone(&unsubscriber);
+
+            move |event| {
+                if let Some(component) = component_weak.upgrade() {
+                    component.borrow_mut().handle_event(event);
+                } else {
+                    log::warn!(target: "events", "Event emitted for dropped component: {:?}", event);
+                    // If the component is dropped, we can unsubscribe it
+                    unsubscriber.borrow_mut().take().and_then(|unsub| {
+                        unsub.unsubscribe();
+                        Some(())
+                    });
+                }
+            }
+        });
+        unsubscriber.borrow_mut().replace(id);
+    }
+
     pub fn subscribe<F>(&self, callback: F) -> Unsubscriber<T>
     where
         F: Fn(&T) + 'static,
     {
+        if *self.closed.borrow() {
+            panic!("attempted to subscribe to a closed Channel");
+        }
         let id = {
             let mut next_id = self.next_id.borrow_mut();
             let id = *next_id;
@@ -144,6 +181,10 @@ impl<T: std::fmt::Debug + 'static> EventObserver<T> {
         F: Fn(&T) + 'static,
     {
         self.channel.subscribe(callback)
+    }
+
+    pub fn subscribe_component(&self, component: &Rc<RefCell<dyn EventHandler<T>>>) {
+        self.channel.subscribe_component(component);
     }
 }
 

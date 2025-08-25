@@ -70,7 +70,7 @@ pub struct LayoutManager {
     handle_surface_layout: Option<SignalHandlerId>,
     game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
     current_difficulty: Difficulty,
-    scrolled_window: gtk4::ScrolledWindow,
+    pub scrolled_window: gtk4::ScrolledWindow,
     container_dimensions: Option<Dimensions>,
     clue_stats: ClueStats,
     last_layout: Option<LayoutConfiguration>,
@@ -107,9 +107,13 @@ impl LayoutManager {
         window: Rc<ApplicationWindow>,
         layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
         game_engine_event_observer: EventObserver<GameEngineEvent>,
-        scrolled_window: gtk4::ScrolledWindow,
         current_difficulty: Difficulty,
     ) -> Rc<RefCell<Self>> {
+        let scrolled_window = gtk4::ScrolledWindow::builder()
+            .hexpand_set(true)
+            .vexpand_set(true)
+            .build();
+
         let dw = Rc::new(RefCell::new(Self {
             layout_manager_event_emitter,
             window: window.clone(),
