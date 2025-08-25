@@ -3,6 +3,7 @@
 ## Dependencies
 
 - `pip install flatpak-cargo-generator`
+- `cargo install cargo-edit`
 
 ## Process
 
@@ -12,7 +13,12 @@ Make sure it builds and tests pass
 cargo test
 ```
 
-Bump version in Cargo.toml (hand edit)
+Bump version in Cargo.toml
+
+```sh
+version=1.1.1
+cargo set-version "$version"
+```
 
 Update artifacts, commit, tag, push:
 
