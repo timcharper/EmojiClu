@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use super::settings::Settings;
 use crate::destroyable::Destroyable;
-use crate::events::{EventEmitter, EventObserver, Unsubscriber};
+use crate::events::{EventEmitter, EventHandler};
 use crate::model::game_state_snapshot::GameStateSnapshot;
 use crate::model::{
     CandidateState, ClueAddress, ClueSelection, ClueSet, ClueWithAddress, Deduction, Difficulty,
@@ -17,6 +17,7 @@ use crate::solver::candidate_solver::{
     deduce_hidden_sets, perform_evaluation_step, EvaluationStepResult,
 };
 use crate::solver::{deduce_clue, simplify_deductions, ConstraintSolver};
+use std::rc::Weak;
 use std::{rc::Rc, sync::Arc};
 
 const HINT_LEVEL_MAX: u8 = 1;
@@ -62,25 +63,22 @@ pub struct GameEngine {
     current_playthrough_id: Uuid,
     is_paused: bool,
     timer_state: TimerState,
-    subscription_id: Option<Unsubscriber<GameEngineCommand>>,
     game_engine_event_emitter: EventEmitter<GameEngineEvent>,
     settings: Settings,
     current_selected_clue: Option<ClueWithAddress>,
     clue_focused: bool,
     current_clue_hint: Option<ClueWithAddress>,
+    self_ref: Weak<RefCell<Self>>,
 }
 
 impl Destroyable for GameEngine {
     fn destroy(&mut self) {
-        if let Some(subscription_id) = self.subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
+        // Subscription cleanup is handled automatically by weak references
     }
 }
 
 impl GameEngine {
     pub fn new(
-        game_engine_command_observer: EventObserver<GameEngineCommand>,
         game_engine_event_emitter: EventEmitter<GameEngineEvent>,
         settings: Settings,
     ) -> Rc<RefCell<Self>> {
@@ -97,34 +95,34 @@ impl GameEngine {
             current_playthrough_id: Uuid::new_v4(),
             is_paused: false,
             timer_state: TimerState::default(),
-            subscription_id: None,
             game_engine_event_emitter,
             settings,
             current_selected_clue: None,
             clue_focused: false,
             current_clue_hint: None,
+            self_ref: Weak::new(),
         };
         let refcell = Rc::new(RefCell::new(game_state));
-        GameEngine::wire_subscription(refcell.clone(), game_engine_command_observer);
+
+        // Set the weak reference to self
+        refcell.borrow_mut().self_ref = Rc::downgrade(&refcell);
+
         refcell
     }
+}
 
-    fn wire_subscription(
-        game_engine: Rc<RefCell<Self>>,
-        game_engine_command_emitter: EventObserver<GameEngineCommand>,
-    ) {
-        let game_state_handler = game_engine.clone();
-        let subscription_id = game_engine_command_emitter.subscribe({
-            let game_engine = game_engine.clone();
-
-            move |event| {
-                let mut game_state = game_state_handler.borrow_mut();
-                game_state.handle_command(&game_engine, event.clone());
-            }
-        });
-        game_engine.borrow_mut().subscription_id = Some(subscription_id);
+impl EventHandler<GameEngineCommand> for GameEngine {
+    fn handle_event(&mut self, event: &GameEngineCommand) {
+        // For operations that need access to Rc<RefCell<Self>>, we use self_ref
+        if let Some(game_engine_ref) = self.self_ref.upgrade() {
+            self.handle_command(&game_engine_ref, event.clone());
+        } else {
+            log::error!(target: "game_state", "GameEngine self-reference is no longer valid");
+        }
     }
+}
 
+impl GameEngine {
     fn set_game_state(
         &mut self,
         game_state_snapshot: &GameStateSnapshot,

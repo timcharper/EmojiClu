@@ -7,8 +7,7 @@ use std::rc::Rc;
 
 use crate::destroyable::Destroyable;
 use crate::events::EventEmitter;
-use crate::events::EventObserver;
-use crate::events::Unsubscriber;
+use crate::events::EventHandler;
 use crate::game::stats_manager::StatsManager;
 use crate::model::GameEngineEvent;
 use crate::model::{GameEngineCommand, PuzzleCompletionState};
@@ -19,7 +18,6 @@ use super::audio_set::AudioSet;
 use super::NotQuiteRightDialog;
 
 pub struct SubmitUI {
-    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
     stats_manager: Rc<RefCell<StatsManager>>,
     audio_set: Rc<AudioSet>,
     window: Rc<ApplicationWindow>,
@@ -29,15 +27,12 @@ pub struct SubmitUI {
 
 impl Destroyable for SubmitUI {
     fn destroy(&mut self) {
-        if let Some(subscription_id) = self.subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
+        // Subscriptions are handled centrally via `subscribe_component`.
     }
 }
 
 impl SubmitUI {
     pub fn new(
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
         game_engine_command_emitter: EventEmitter<GameEngineCommand>,
         stats_manager: &Rc<RefCell<StatsManager>>,
         audio_set: &Rc<AudioSet>,
@@ -67,17 +62,12 @@ impl SubmitUI {
         );
 
         let submit_ui = Rc::new(RefCell::new(Self {
-            subscription_id: None,
             stats_manager: Rc::clone(stats_manager),
             audio_set: Rc::clone(audio_set),
             window: Rc::clone(window),
             game_engine_command_emitter: game_engine_command_emitter,
             submit_dialog,
         }));
-
-        // Connect observer
-        SubmitUI::connect_observer(submit_ui.clone(), game_engine_event_observer);
-
         submit_ui
     }
 
@@ -122,24 +112,21 @@ impl SubmitUI {
             }
         }
     }
+}
 
-    fn connect_observer(
-        submit_ui: Rc<RefCell<Self>>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-    ) {
-        let submit_ui_moved = submit_ui.clone();
-        let subscription_id = game_engine_event_observer.subscribe(move |event| match event {
+impl EventHandler<GameEngineEvent> for SubmitUI {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        match event {
             GameEngineEvent::PuzzleSubmissionReadyChanged(all_cells_filled) => {
                 if *all_cells_filled {
-                    CompletionDialog::show(submit_ui_moved.borrow().submit_dialog.clone());
+                    CompletionDialog::show(self.submit_dialog.clone());
                 }
             }
             GameEngineEvent::PuzzleCompleted(state) => {
-                submit_ui_moved.borrow().handle_game_completion(state);
+                self.handle_game_completion(state);
             }
             _ => (),
-        });
-        submit_ui.borrow_mut().subscription_id = Some(subscription_id);
+        }
     }
 }
 

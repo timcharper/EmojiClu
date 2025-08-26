@@ -8,7 +8,7 @@ use gtk4::{prelude::*, ApplicationWindow, Entry};
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventEmitter, EventObserver, Unsubscriber},
+    events::{EventEmitter, EventHandler},
     model::{Difficulty, GameEngineCommand, GameEngineEvent},
 };
 use fluent_i18n::t;
@@ -16,44 +16,25 @@ use fluent_i18n::t;
 pub struct SeedDialog {
     window: Rc<ApplicationWindow>,
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
-    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
     current_seed: Option<u64>,
     current_difficulty: Difficulty,
 }
 
 impl Destroyable for SeedDialog {
-    fn destroy(&mut self) {
-        if let Some(subscription_id) = self.subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
-    }
+    fn destroy(&mut self) {}
 }
 
 impl SeedDialog {
     pub fn new(
         window: &Rc<ApplicationWindow>,
         game_engine_command_emitter: EventEmitter<GameEngineCommand>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
     ) -> Rc<RefCell<Self>> {
         let dialog = Rc::new(RefCell::new(Self {
             window: window.clone(),
             game_engine_command_emitter,
-            subscription_id: None,
             current_seed: None,
             current_difficulty: Difficulty::Easy, // Default value, will be updated by observer
         }));
-
-        // Connect observer to track current seed and difficulty
-        let dialog_clone = dialog.clone();
-        let subscription_id = game_engine_event_observer.subscribe(move |event| {
-            if let GameEngineEvent::GameBoardUpdated { board, .. } = event {
-                let mut dialog = dialog_clone.borrow_mut();
-                dialog.current_seed = Some(board.solution.seed);
-                dialog.current_difficulty = board.solution.difficulty;
-            }
-        });
-        dialog.borrow_mut().subscription_id = Some(subscription_id);
-
         dialog
     }
 
@@ -150,5 +131,14 @@ impl SeedDialog {
         });
         dialog.add_controller(key_controller);
         dialog.present();
+    }
+}
+
+impl EventHandler<GameEngineEvent> for SeedDialog {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        if let GameEngineEvent::GameBoardUpdated { board, .. } = event {
+            self.current_seed = Some(board.solution.seed);
+            self.current_difficulty = board.solution.difficulty;
+        }
     }
 }

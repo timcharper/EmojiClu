@@ -7,30 +7,26 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::destroyable::Destroyable;
-use crate::events::{EventEmitter, EventObserver, Unsubscriber};
+use crate::events::EventEmitter;
 use crate::game::game_engine::GameEngine;
-use crate::model::{GameEngineCommand, GameEngineEvent};
+use crate::model::GameEngineCommand;
 use crate::ui::audio_set::AudioSet;
 use crate::ui::NotQuiteRightDialog;
 use fluent_i18n::t;
 
 pub struct HintButtonUI {
     pub hint_button: Button,
-    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
 }
 
 impl Destroyable for HintButtonUI {
     fn destroy(&mut self) {
-        if let Some(subscription_id) = self.subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
+        // Subscriptions are handled centrally via subscribe_component (weak refs)
     }
 }
 
 impl HintButtonUI {
     pub fn new(
         game_engine_command_emitter: EventEmitter<GameEngineCommand>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
         game_state: &Rc<RefCell<GameEngine>>,
         audio_set: &Rc<AudioSet>,
         window: &Rc<ApplicationWindow>,
@@ -48,13 +44,7 @@ impl HintButtonUI {
             window,
         );
 
-        let hint_button_ui = Rc::new(RefCell::new(Self {
-            hint_button: hint_button,
-            subscription_id: None,
-        }));
-
-        // Connect to game state observer for any future state-based updates
-        Self::connect_observer(hint_button_ui.clone(), game_engine_event_observer);
+        let hint_button_ui = Rc::new(RefCell::new(Self { hint_button }));
 
         hint_button_ui
     }
@@ -89,17 +79,5 @@ impl HintButtonUI {
                 });
             }
         });
-    }
-
-    fn connect_observer(
-        hint_button_ui: Rc<RefCell<Self>>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-    ) {
-        // For now, we don't need to listen to specific game state events for the hint button
-        // But we keep the subscription infrastructure in case it's needed later
-        let subscription_id = game_engine_event_observer.subscribe(move |_event| {
-            // Future: Add any game state event handling here if needed
-        });
-        hint_button_ui.borrow_mut().subscription_id = Some(subscription_id);
     }
 }

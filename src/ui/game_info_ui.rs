@@ -1,13 +1,17 @@
 // handles stats and things about the game
 
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+    time::Duration,
+};
 
 use glib::{timeout_add_local, SourceId};
 use gtk4::{prelude::*, Box, Label, Orientation};
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventObserver, Unsubscriber},
+    events::EventHandler,
     model::{GameEngineEvent, TimerState},
 };
 
@@ -19,7 +23,7 @@ pub struct GameInfoUI {
     timer: Option<SourceId>,
     pub game_box: Rc<Box>,
     pause_screen: Rc<Box>,
-    game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
+    self_weak: Option<Weak<RefCell<GameInfoUI>>>,
 }
 
 impl Destroyable for GameInfoUI {
@@ -27,17 +31,11 @@ impl Destroyable for GameInfoUI {
         if let Some(timer) = self.timer.take() {
             timer.remove();
         }
-        if let Some(subscription) = self.game_engine_event_subscription.take() {
-            subscription.unsubscribe();
-        }
     }
 }
 
 impl GameInfoUI {
-    pub fn new(
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-        pause_screen: Rc<Box>,
-    ) -> Rc<RefCell<Self>> {
+    pub fn new(pause_screen: Rc<Box>) -> Rc<RefCell<Self>> {
         // Create timer label with monospace font
         let timer_label = Label::new(None);
         timer_label.set_css_classes(&["timer"]);
@@ -69,38 +67,20 @@ impl GameInfoUI {
             timer: None,
             game_box,
             pause_screen,
-            game_engine_event_subscription: None,
+            self_weak: None,
         }));
 
-        game_info
-            .borrow_mut()
-            .start_timer_label_handler(game_info.clone());
-        GameInfoUI::bind_observer(Rc::clone(&game_info), game_engine_event_observer);
+        // store a weak reference to self so timer handler can upgrade when needed
+        game_info.borrow_mut().self_weak = Some(Rc::downgrade(&game_info));
+        game_info.borrow_mut().start_timer_label_handler();
 
         game_info
     }
 
-    fn bind_observer(
-        game_info: Rc<RefCell<Self>>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-    ) {
-        let game_engine_event_subscription = {
-            let game_info = game_info.clone();
-            game_engine_event_observer.subscribe(move |event| {
-                game_info
-                    .borrow_mut()
-                    .handle_game_engine_event(game_info.clone(), event);
-            })
-        };
-
-        game_info.borrow_mut().game_engine_event_subscription =
-            Some(game_engine_event_subscription);
-    }
-
-    fn handle_game_engine_event(&mut self, game_info: Rc<RefCell<Self>>, event: &GameEngineEvent) {
+    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         match event {
             GameEngineEvent::TimerStateChanged(timer_state) => {
-                self.update_timer_state(game_info.clone(), &timer_state);
+                self.update_timer_state(&timer_state);
             }
             GameEngineEvent::HintUsageChanged(hints_used) => {
                 self.update_hints_used(*hints_used);
@@ -114,11 +94,7 @@ impl GameInfoUI {
         self.hints_label.set_text(&format!("{}", hints_used));
     }
 
-    pub fn update_timer_state(
-        &mut self,
-        game_info: Rc<RefCell<Self>>,
-        new_timer_state: &TimerState,
-    ) {
+    pub fn update_timer_state(&mut self, new_timer_state: &TimerState) {
         self.timer_state = new_timer_state.clone();
         GameInfoUI::update_timer_label(&self.timer_label, &self.timer_state);
         let is_paused = self.timer_state.paused_timestamp.is_some();
@@ -131,7 +107,7 @@ impl GameInfoUI {
             // show the pause screen
             self.pause_screen.set_visible(true);
         } else {
-            self.start_timer_label_handler(game_info.clone());
+            self.start_timer_label_handler();
             // show the game
             self.game_box.set_visible(true);
             // hide the pause screen
@@ -145,20 +121,25 @@ impl GameInfoUI {
         }
     }
 
-    fn start_timer_label_handler(&mut self, game_info: Rc<RefCell<Self>>) {
+    fn start_timer_label_handler(&mut self) {
         // time running? Do nothing.
         if self.timer.is_none() {
-            let game_info_weak = Rc::downgrade(&game_info);
-            let timer = timeout_add_local(Duration::from_secs(1), move || {
-                if let Some(game_info) = game_info_weak.upgrade() {
-                    let game_info = game_info.borrow();
-                    GameInfoUI::update_timer_label(&game_info.timer_label, &game_info.timer_state);
-                    glib::ControlFlow::Continue
-                } else {
-                    glib::ControlFlow::Break
-                }
-            });
-            self.timer = Some(timer);
+            if let Some(self_weak) = &self.self_weak {
+                let game_info_weak = self_weak.clone();
+                let timer = timeout_add_local(Duration::from_secs(1), move || {
+                    if let Some(game_info) = game_info_weak.upgrade() {
+                        let game_info = game_info.borrow();
+                        GameInfoUI::update_timer_label(
+                            &game_info.timer_label,
+                            &game_info.timer_state,
+                        );
+                        glib::ControlFlow::Continue
+                    } else {
+                        glib::ControlFlow::Break
+                    }
+                });
+                self.timer = Some(timer);
+            }
         }
     }
 
@@ -177,5 +158,11 @@ impl Drop for GameInfoUI {
         if let Some(timer) = self.timer.take() {
             timer.remove();
         }
+    }
+}
+
+impl EventHandler<GameEngineEvent> for GameInfoUI {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        self.handle_game_engine_event(event);
     }
 }

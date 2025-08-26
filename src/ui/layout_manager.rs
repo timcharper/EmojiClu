@@ -16,7 +16,7 @@ use log::trace;
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventEmitter, EventObserver, Unsubscriber},
+    events::{EventEmitter, EventHandler},
     model::{
         ClueSet, CluesSizing, Difficulty, Dimensions, GameEngineEvent, GridCellSizing, GridSizing,
         HorizontalCluePanelSizing, LayoutConfiguration, LayoutManagerEvent,
@@ -68,7 +68,6 @@ pub struct LayoutManager {
     window: Rc<ApplicationWindow>,
     handle_surface_enter_monitor: Option<SignalHandlerId>,
     handle_surface_layout: Option<SignalHandlerId>,
-    game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
     current_difficulty: Difficulty,
     pub scrolled_window: gtk4::ScrolledWindow,
     container_dimensions: Option<Dimensions>,
@@ -84,6 +83,12 @@ impl Destroyable for LayoutManager {
         if let Some(source_id) = self.layout_monitor_source.take() {
             source_id.remove();
         }
+    }
+}
+
+impl EventHandler<GameEngineEvent> for LayoutManager {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        self.handle_game_engine_event(event);
     }
 }
 
@@ -106,7 +111,6 @@ impl LayoutManager {
     pub fn new(
         window: Rc<ApplicationWindow>,
         layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
         current_difficulty: Difficulty,
     ) -> Rc<RefCell<Self>> {
         let scrolled_window = gtk4::ScrolledWindow::builder()
@@ -121,7 +125,6 @@ impl LayoutManager {
             handle_surface_layout: None,
             scrolled_window,
             current_difficulty,
-            game_engine_event_subscription: None,
             container_dimensions: None,
             clue_stats: ClueStats::default(),
             last_layout: None,
@@ -129,13 +132,6 @@ impl LayoutManager {
             layout_monitor_source: None,
             scale_factor: I8F8::from_num(1),
         }));
-
-        let game_state_handle = game_engine_event_observer.subscribe({
-            let dw = dw.clone();
-            move |event| {
-                dw.borrow_mut().handle_game_engine_event(event);
-            }
-        });
 
         window.connect_realize({
             let dw = dw.clone();
@@ -179,7 +175,6 @@ impl LayoutManager {
             }
         });
         dw.borrow_mut().layout_monitor_source = Some(source_id);
-        dw.borrow_mut().game_engine_event_subscription = Some(game_state_handle);
 
         dw
     }

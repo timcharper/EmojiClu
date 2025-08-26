@@ -7,26 +7,22 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::destroyable::Destroyable;
-use crate::events::EventObserver;
-use crate::events::Unsubscriber;
+use crate::events::EventHandler;
 use crate::model::GameEngineEvent;
 
 pub struct HistoryControlsUI {
     pub undo_button: Rc<Button>,
     pub redo_button: Rc<Button>,
-    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
 }
 
 impl Destroyable for HistoryControlsUI {
     fn destroy(&mut self) {
-        if let Some(subscription_id) = self.subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
+        // Subscriptions are handled centrally via EventHandler/subscribe_component
     }
 }
 
 impl HistoryControlsUI {
-    pub fn new(game_engine_event_observer: EventObserver<GameEngineEvent>) -> Rc<RefCell<Self>> {
+    pub fn new() -> Rc<RefCell<Self>> {
         // Create buttons first
         let undo_button = Rc::new(Button::from_icon_name("edit-undo-symbolic"));
         let redo_button = Rc::new(Button::from_icon_name("edit-redo-symbolic"));
@@ -50,7 +46,6 @@ impl HistoryControlsUI {
         let history_controls_ui = Rc::new(RefCell::new(Self {
             undo_button,
             redo_button,
-            subscription_id: None,
         }));
 
         timeout_add_local_once(
@@ -58,30 +53,9 @@ impl HistoryControlsUI {
             Self::idle_add_handler(history_controls_ui.clone()),
         );
 
-        HistoryControlsUI::connect_observer(
-            history_controls_ui.clone(),
-            game_engine_event_observer,
-        );
+        // Subscriptions are handled centrally via `wire_event_observers`
 
         history_controls_ui
-    }
-
-    fn connect_observer(
-        history_controls_ui: Rc<RefCell<Self>>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-    ) {
-        let history_controls_ui_moved = history_controls_ui.clone();
-        let subscription_id = game_engine_event_observer.subscribe(move |event| match event {
-            GameEngineEvent::GameBoardUpdated {
-                history_index,
-                history_length,
-                ..
-            } => history_controls_ui_moved
-                .borrow()
-                .update_buttons(*history_index, *history_length),
-            _ => (),
-        });
-        history_controls_ui.borrow_mut().subscription_id = Some(subscription_id);
     }
 
     fn idle_add_handler(history_controls_ui: Rc<RefCell<Self>>) -> impl Fn() {
@@ -102,5 +76,18 @@ impl HistoryControlsUI {
         self.undo_button.set_sensitive(history_index > 0);
         self.redo_button
             .set_sensitive(history_index + 1 < history_length);
+    }
+}
+
+impl EventHandler<GameEngineEvent> for HistoryControlsUI {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        match event {
+            GameEngineEvent::GameBoardUpdated {
+                history_index,
+                history_length,
+                ..
+            } => self.update_buttons(*history_index, *history_length),
+            _ => (),
+        }
     }
 }

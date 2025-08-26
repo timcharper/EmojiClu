@@ -4,55 +4,35 @@ use gtk4::gdk;
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventEmitter, EventObserver, Unsubscriber},
+    events::{EventEmitter, EventHandler},
     model::{Clickable, GameEngineCommand, InputEvent, SettingsProjection, LONG_PRESS_DURATION},
 };
 
 pub struct InputTranslator {
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     settings_projection: Rc<RefCell<SettingsProjection>>,
-    input_subscription: Option<Unsubscriber<InputEvent>>,
 }
 
 impl Destroyable for InputTranslator {
     fn destroy(&mut self) {
-        // Clean up subscriptions
-        if let Some(subscription) = self.input_subscription.take() {
-            subscription.unsubscribe();
-        }
+        // No-op: subscriptions are handled centrally via EventHandler
     }
 }
 
 impl InputTranslator {
     pub fn new(
         game_engine_command_emitter: EventEmitter<GameEngineCommand>,
-        input_event_observer: EventObserver<InputEvent>,
         settings_projection: Rc<RefCell<SettingsProjection>>,
     ) -> Rc<RefCell<Self>> {
         let input_translator = Rc::new(RefCell::new(Self {
             game_engine_command_emitter,
             settings_projection: settings_projection.clone(),
-            input_subscription: None,
         }));
-
-        InputTranslator::bind_input_observer(input_translator.clone(), input_event_observer);
 
         input_translator
     }
 
-    fn bind_input_observer(
-        input_translator: Rc<RefCell<Self>>,
-        input_event_observer: EventObserver<InputEvent>,
-    ) {
-        let subscription = {
-            let input_translator = input_translator.clone();
-            input_event_observer.subscribe(move |event| {
-                input_translator.borrow().handle_input_event(event);
-            })
-        };
-
-        input_translator.borrow_mut().input_subscription = Some(subscription);
-    }
+    // InputTranslator now implements EventHandler<InputEvent> and is centrally subscribed.
 
     fn handle_input_event(&self, event: &InputEvent) {
         match event {
@@ -208,5 +188,11 @@ impl InputTranslator {
             }
             _ => {} // Ignore other keys
         }
+    }
+}
+
+impl EventHandler<InputEvent> for InputTranslator {
+    fn handle_event(&mut self, event: &InputEvent) {
+        self.handle_input_event(event);
     }
 }

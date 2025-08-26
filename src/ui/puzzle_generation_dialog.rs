@@ -7,52 +7,23 @@ use gtk4::{
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventObserver, Unsubscriber},
+    events::EventHandler,
     model::{GameBoardChangeReason, GameEngineEvent},
 };
 use fluent_i18n::t;
 
 pub struct PuzzleGenerationDialog {
     window: Rc<ApplicationWindow>,
-    subscription_id: Option<Unsubscriber<GameEngineEvent>>,
     dialog: Option<gtk4::Window>,
 }
 
 impl PuzzleGenerationDialog {
-    pub fn new(
-        window: &Rc<ApplicationWindow>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-    ) -> Rc<std::cell::RefCell<Self>> {
+    pub fn new(window: &Rc<ApplicationWindow>) -> Rc<std::cell::RefCell<Self>> {
         let dialog = Rc::new(std::cell::RefCell::new(Self {
             window: window.clone(),
-            subscription_id: None,
             dialog: None,
         }));
-
-        // Subscribe to events
-        let dialog_weak = Rc::downgrade(&dialog);
-        let subscription_id = game_engine_event_observer.subscribe(move |event| {
-            if let Some(dialog) = dialog_weak.upgrade() {
-                dialog.borrow_mut().handle_event(event);
-            }
-        });
-
-        dialog.borrow_mut().subscription_id = Some(subscription_id);
         dialog
-    }
-
-    fn handle_event(&mut self, event: &GameEngineEvent) {
-        match event {
-            GameEngineEvent::PuzzleGenerationStarted => {
-                self.show_dialog();
-            }
-            GameEngineEvent::GameBoardUpdated { change_reason, .. } => {
-                if *change_reason == GameBoardChangeReason::NewGame {
-                    self.hide_dialog();
-                }
-            }
-            _ => {}
-        }
     }
 
     fn show_dialog(&mut self) {
@@ -104,9 +75,21 @@ impl PuzzleGenerationDialog {
 
 impl Destroyable for PuzzleGenerationDialog {
     fn destroy(&mut self) {
-        if let Some(subscription_id) = self.subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
         self.hide_dialog();
+    }
+}
+
+impl EventHandler<GameEngineEvent> for PuzzleGenerationDialog {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        // delegate to the existing handler method
+        match event {
+            GameEngineEvent::PuzzleGenerationStarted => self.show_dialog(),
+            GameEngineEvent::GameBoardUpdated { change_reason, .. } => {
+                if *change_reason == GameBoardChangeReason::NewGame {
+                    self.hide_dialog();
+                }
+            }
+            _ => {}
+        }
     }
 }

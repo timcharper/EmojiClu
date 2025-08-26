@@ -4,7 +4,7 @@ use log::trace;
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventEmitter, EventObserver, Unsubscriber},
+    events::{EventEmitter, EventHandler},
     model::LayoutManagerEvent,
 };
 
@@ -13,21 +13,23 @@ use super::{audio_set::AudioSet, image_set::ImageSet};
 pub struct ResourceManager {
     image_set: Rc<ImageSet>,
     audio_set: Rc<AudioSet>,
-    layout_event_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
     layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
 }
 
 impl Destroyable for ResourceManager {
     fn destroy(&mut self) {
-        if let Some(subscription) = self.layout_event_subscription.take() {
-            subscription.unsubscribe();
-        }
+        // Subscription cleanup handled automatically by subscribe_component
+    }
+}
+
+impl EventHandler<LayoutManagerEvent> for ResourceManager {
+    fn handle_event(&mut self, event: &LayoutManagerEvent) {
+        self.handle_layout_event(event);
     }
 }
 
 impl ResourceManager {
     pub fn new(
-        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
         layout_manager_event_emitter: EventEmitter<LayoutManagerEvent>,
     ) -> Rc<RefCell<Self>> {
         let image_set = Rc::new(ImageSet::new());
@@ -35,21 +37,8 @@ impl ResourceManager {
         let manager = Rc::new(RefCell::new(Self {
             image_set: image_set.clone(),
             audio_set: audio_set.clone(),
-            layout_event_subscription: None,
             layout_manager_event_emitter,
         }));
-
-        // Set up event subscription
-        {
-            let manager_weak = Rc::downgrade(&manager);
-            let subscription = layout_manager_event_observer.subscribe(move |event| {
-                trace!(target: "resource_manager", "Received global event: {:?}", event);
-                if let Some(manager) = manager_weak.upgrade() {
-                    manager.borrow_mut().handle_layout_event(event);
-                }
-            });
-            manager.borrow_mut().layout_event_subscription = Some(subscription);
-        }
 
         manager
     }

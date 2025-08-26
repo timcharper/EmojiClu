@@ -107,12 +107,8 @@ impl Components {
         window: Rc<ApplicationWindow>,
         channels: &Channels,
         initial_settings: &Settings,
-        saved_game_state: &Option<GameStateSnapshot>,
     ) -> Self {
-        let resource_manager = ResourceManager::new(
-            channels.layout_manager.observer.clone(),
-            channels.layout_manager.emitter.clone(),
-        );
+        let resource_manager = ResourceManager::new(channels.layout_manager.emitter.clone());
         let default_layout = LayoutManager::calculate_layout(
             initial_settings.difficulty,
             Some(ClueStats::default()),
@@ -129,8 +125,6 @@ impl Components {
         // Create puzzle grid and clue set UI first
         let puzzle_grid_ui = PuzzleGridUI::new(
             channels.input.emitter.clone(),
-            channels.game_engine_event.observer.clone(),
-            channels.layout_manager.observer.clone(),
             image_set.clone(),
             default_layout.clone(),
             initial_settings,
@@ -138,7 +132,6 @@ impl Components {
 
         // Create game state with UI references
         let game_state = GameEngine::new(
-            channels.game_engine_command.observer.clone(),
             channels.game_engine_event.emitter.clone(),
             initial_settings.clone(),
         );
@@ -146,7 +139,6 @@ impl Components {
         // Create hint button UI
         let hint_button_ui = HintButtonUI::new(
             channels.game_engine_command.emitter.clone(),
-            channels.game_engine_event.observer.clone(),
             &game_state,
             &audio_set,
             &window,
@@ -154,24 +146,21 @@ impl Components {
 
         // Instantiate TutorialUI
         let tutorial_ui = TutorialUI::new(
-            channels.game_engine_event.observer.clone(),
-            channels.game_engine_command.observer.clone(),
-            channels.layout_manager.observer.clone(),
             channels.game_engine_command.emitter.clone(),
             &window,
             &image_set,
             initial_settings,
             &default_layout,
         );
+
         let layout_manager = LayoutManager::new(
             window.clone(),
             channels.layout_manager.emitter.clone(),
-            channels.game_engine_event.observer.clone(),
             initial_settings.difficulty,
         );
 
         // Create pause screen UI
-        let pause_screen_ui = PauseScreenUI::new(channels.game_engine_event.observer.clone());
+        let pause_screen_ui = PauseScreenUI::new();
 
         // Create Settings submenu
         let settings_menu_ui = SettingsMenuUI::new(
@@ -179,48 +168,37 @@ impl Components {
             channels.game_engine_command.emitter.clone(),
             initial_settings.clone(),
         );
-        let game_info_ui = GameInfoUI::new(
-            channels.game_engine_event.observer.clone(),
-            Rc::new(pause_screen_ui.borrow().pause_screen_box.clone()),
-        );
+        let game_info_ui =
+            GameInfoUI::new(Rc::new(pause_screen_ui.borrow().pause_screen_box.clone()));
         // Initialize game controls
         let game_controls = TopLevelInputEventMonitor::new(
             window.clone(),
             layout_manager.borrow().scrolled_window.clone(),
             channels.input.emitter.clone(),
         );
-        let history_controls_ui =
-            HistoryControlsUI::new(channels.game_engine_event.observer.clone());
+        let history_controls_ui = HistoryControlsUI::new();
 
         // Remove the old button_box since controls are now in header
         let stats_manager = Rc::new(RefCell::new(StatsManager::new()));
 
         let submit_ui = SubmitUI::new(
-            channels.game_engine_event.observer.clone(),
             channels.game_engine_command.emitter.clone(),
             &stats_manager,
             &audio_set,
             &window,
         );
-        let settings_projection =
-            SettingsProjection::new(&initial_settings, &channels.game_engine_event.observer);
+        let settings_projection = SettingsProjection::new(&initial_settings);
 
         // Initialize input translator
         let input_translator = InputTranslator::new(
             channels.game_engine_command.emitter.clone(),
-            channels.input.observer.clone(),
             settings_projection.clone(),
         );
         let timer_button =
             TimerButtonUI::new(&window, channels.game_engine_command.emitter.clone());
 
-        let seed_dialog = SeedDialog::new(
-            &window,
-            channels.game_engine_command.emitter.clone(),
-            channels.game_engine_event.observer.clone(),
-        );
-        let puzzle_generation_dialog =
-            PuzzleGenerationDialog::new(&window, channels.game_engine_event.observer.clone());
+        let seed_dialog = SeedDialog::new(&window, channels.game_engine_command.emitter.clone());
+        let puzzle_generation_dialog = PuzzleGenerationDialog::new(&window);
 
         Self {
             clue_panels_ui,
@@ -270,26 +248,70 @@ impl Destroyable for Components {
 fn wire_event_observers(channels: &Channels, components: &Components) {
     type EHGameEvent = Rc<RefCell<dyn EventHandler<GameEngineEvent>>>;
     type EHLayoutEvent = Rc<RefCell<dyn EventHandler<LayoutManagerEvent>>>;
+    type EHGameCommand = Rc<RefCell<dyn EventHandler<GameEngineCommand>>>;
 
     let game_engine_event_observer = &channels.game_engine_event.observer;
     let layout_event_observer = &channels.layout_manager.observer;
+    let game_engine_command_observer = &channels.game_engine_command.observer;
+
+    // Subscribe GameEngine to its own commands
+    game_engine_command_observer
+        .subscribe_component(&(components.game_state.clone() as EHGameCommand));
 
     game_engine_event_observer
         .subscribe_component(&(components.clue_panels_ui.clone() as EHGameEvent));
     layout_event_observer
         .subscribe_component(&(components.clue_panels_ui.clone() as EHLayoutEvent));
+
+    game_engine_event_observer
+        .subscribe_component(&(components.puzzle_grid_ui.clone() as EHGameEvent));
+    layout_event_observer
+        .subscribe_component(&(components.puzzle_grid_ui.clone() as EHLayoutEvent));
+
+    game_engine_event_observer
+        .subscribe_component(&(components.tutorial_ui.clone() as EHGameEvent));
+    layout_event_observer.subscribe_component(&(components.tutorial_ui.clone() as EHLayoutEvent));
+
+    // Subscribe layout manager to GameEngineEvent
+    game_engine_event_observer
+        .subscribe_component(&(components.layout_manager.clone() as EHGameEvent));
+
+    // Subscribe GameInfoUI (uses EventHandler<GameEngineEvent>) via centralized subscription
+    game_engine_event_observer
+        .subscribe_component(&(components.game_info_ui.clone() as EHGameEvent));
+
+    // Subscribe PauseScreenUI to GameEngineEvent
+    game_engine_event_observer
+        .subscribe_component(&(components.pause_screen_ui.clone() as EHGameEvent));
+
+    // Subscribe HistoryControlsUI to GameEngineEvent
+    game_engine_event_observer
+        .subscribe_component(&(components.history_controls_ui.clone() as EHGameEvent));
+
+    layout_event_observer
+        .subscribe_component(&(components.resource_manager.clone() as EHLayoutEvent));
+
+    // Subscribe SubmitUI to GameEngineEvent via centralized subscription
+    game_engine_event_observer.subscribe_component(&(components.submit_ui.clone() as EHGameEvent));
+
+    // New centralized subscriptions for components refactored to EventHandler
+    game_engine_event_observer
+        .subscribe_component(&(components.seed_dialog.clone() as EHGameEvent));
+    game_engine_event_observer
+        .subscribe_component(&(components.puzzle_generation_dialog.clone() as EHGameEvent));
+
+    // InputTranslator handles InputEvent
+    type EHInputEvent = Rc<RefCell<dyn EventHandler<InputEvent>>>;
+    let input_event_observer = &channels.input.observer;
+    input_event_observer
+        .subscribe_component(&(components.input_translator.clone() as EHInputEvent));
+
+    // SettingsProjection listens for GameEngineEvent (SettingsChanged)
+    game_engine_event_observer
+        .subscribe_component(&(components.settings_projection.clone() as EHGameEvent));
 }
 
 pub fn build_ui(app: &Application) {
-    // let (game_engine_command_emitter, game_engine_command_observer) =
-    //     Channel::<GameEngineCommand>::new();
-    // let (game_engine_event_emitter, game_engine_event_observer) = Channel::<GameEngineEvent>::new();
-    // let (layout_manager_event_emitter, layout_manager_event_observer) =
-    //     Channel::<LayoutManagerEvent>::new();
-    // let (input_event_emitter, input_event_observer) = Channel::<InputEvent>::new();
-
-    // TODO - remove
-
     let (initial_settings, saved_game_state) = load_settings_and_game_state();
 
     let display = Display::default().expect("Could not connect to a display.");
@@ -317,12 +339,7 @@ pub fn build_ui(app: &Application) {
             .build(),
     );
     let channels = Channels::new();
-    let components = Components::new(
-        window.clone(),
-        &channels,
-        &initial_settings,
-        &saved_game_state,
-    );
+    let components = Components::new(window.clone(), &channels, &initial_settings);
 
     wire_event_observers(&channels, &components);
 

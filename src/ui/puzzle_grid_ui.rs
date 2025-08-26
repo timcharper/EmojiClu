@@ -7,7 +7,7 @@ use std::{cell::RefCell, collections::HashSet, rc::Rc, time::Duration};
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventEmitter, EventObserver, Unsubscriber},
+    events::{EventEmitter, EventHandler},
     game::settings::Settings,
     model::{
         ClueAddress, ClueWithAddress, Difficulty, GameEngineEvent, InputEvent, LayoutConfiguration,
@@ -22,8 +22,6 @@ pub struct PuzzleGridUI {
     cells: Vec<Vec<Rc<RefCell<PuzzleCellUI>>>>,
     input_event_emitter: EventEmitter<InputEvent>,
     resources: Rc<ImageSet>,
-    game_engine_event_subscription_id: Option<Unsubscriber<GameEngineEvent>>,
-    layout_subscription_id: Option<Unsubscriber<LayoutManagerEvent>>,
     current_layout: LayoutConfiguration,
     n_rows: usize,
     n_variants: usize,
@@ -39,20 +37,24 @@ impl Destroyable for PuzzleGridUI {
     fn destroy(&mut self) {
         // Unparent all widgets
         self.grid.unparent();
-        if let Some(subscription_id) = self.game_engine_event_subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
-        if let Some(subscription_id) = self.layout_subscription_id.take() {
-            subscription_id.unsubscribe();
-        }
+    }
+}
+
+impl EventHandler<GameEngineEvent> for PuzzleGridUI {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        self.handle_game_engine_event(event);
+    }
+}
+
+impl EventHandler<LayoutManagerEvent> for PuzzleGridUI {
+    fn handle_event(&mut self, event: &LayoutManagerEvent) {
+        self.handle_layout_event(event);
     }
 }
 
 impl PuzzleGridUI {
     pub fn new(
         input_event_emitter: EventEmitter<InputEvent>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
         resources: Rc<ImageSet>,
         layout: LayoutConfiguration,
         settings: &Settings,
@@ -65,8 +67,6 @@ impl PuzzleGridUI {
             cells: vec![],
             input_event_emitter,
             resources,
-            game_engine_event_subscription_id: None,
-            layout_subscription_id: None,
             current_layout: layout.clone(),
             n_rows: 0,
             n_variants: 0,
@@ -77,13 +77,6 @@ impl PuzzleGridUI {
             current_difficulty: settings.difficulty,
             settings: settings.clone(),
         }));
-
-        // Subscribe to layout changes
-        Self::connect_layout_observer(puzzle_grid_ui.clone(), layout_manager_event_observer);
-        Self::connect_game_engine_event_observer(
-            puzzle_grid_ui.clone(),
-            game_engine_event_observer,
-        );
 
         puzzle_grid_ui
             .borrow_mut()
@@ -111,33 +104,6 @@ impl PuzzleGridUI {
                 cell.borrow_mut().update_layout(&layout.grid);
             }
         }
-    }
-
-    fn connect_layout_observer(
-        puzzle_grid_ui: Rc<RefCell<Self>>,
-        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
-    ) {
-        let puzzle_grid_ui_moved = puzzle_grid_ui.clone();
-        let layout_subscription_id = layout_manager_event_observer.subscribe(move |event| {
-            puzzle_grid_ui_moved.borrow_mut().handle_layout_event(event);
-        });
-
-        puzzle_grid_ui.borrow_mut().layout_subscription_id = Some(layout_subscription_id);
-    }
-
-    fn connect_game_engine_event_observer(
-        puzzle_grid_ui: Rc<RefCell<Self>>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-    ) {
-        let puzzle_grid_ui_moved = puzzle_grid_ui.clone();
-        let subscription_id = game_engine_event_observer.subscribe(move |event| {
-            puzzle_grid_ui_moved
-                .borrow_mut()
-                .handle_game_engine_event(event);
-        });
-        puzzle_grid_ui
-            .borrow_mut()
-            .game_engine_event_subscription_id = Some(subscription_id);
     }
 
     fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {

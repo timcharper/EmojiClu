@@ -8,13 +8,12 @@ use log::info;
 
 use crate::{
     destroyable::Destroyable,
-    events::{EventEmitter, EventObserver, Unsubscriber},
+    events::{EventEmitter, EventHandler},
     game::settings::Settings,
     helpers::Capitalize,
     model::{
-        ClueWithAddress, Deduction, DeductionKind, Difficulty, Dimensions, GameBoard,
-        GameBoardChangeReason, GameEngineCommand, GameEngineEvent, LayoutConfiguration,
-        LayoutManagerEvent,
+        ClueWithAddress, Deduction, DeductionKind, Dimensions, GameBoard, GameBoardChangeReason,
+        GameEngineCommand, GameEngineEvent, LayoutConfiguration, LayoutManagerEvent,
     },
     solver::{
         clue_completion_evaluator::is_clue_fully_completed, deduce_clue, simplify_deductions,
@@ -38,6 +37,18 @@ enum TutorialStep {
     PlayToEnd,
 }
 
+impl EventHandler<GameEngineEvent> for TutorialUI {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        self.handle_game_engine_event(event);
+    }
+}
+
+impl EventHandler<LayoutManagerEvent> for TutorialUI {
+    fn handle_event(&mut self, event: &LayoutManagerEvent) {
+        self.handle_layout_event(event);
+    }
+}
+
 impl Default for TutorialStep {
     fn default() -> Self {
         if TutorialStep::skip_beginning() {
@@ -58,9 +69,6 @@ pub struct TutorialUI {
     resources: Rc<ImageSet>,
     tutorial_text: TextView,
     pub scrolled_window: ScrolledWindow,
-    game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
-    game_action_subscription: Option<Unsubscriber<GameEngineCommand>>,
-    layout_event_subscription: Option<Unsubscriber<LayoutManagerEvent>>,
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
     current_step: TutorialStep,
     buffer: TextBuffer,
@@ -72,23 +80,13 @@ pub struct TutorialUI {
 
 impl Destroyable for TutorialUI {
     fn destroy(&mut self) {
-        if let Some(subscription) = self.game_engine_event_subscription.take() {
-            subscription.unsubscribe();
-        }
-        if let Some(subscription) = self.game_action_subscription.take() {
-            subscription.unsubscribe();
-        }
-        if let Some(subscription) = self.layout_event_subscription.take() {
-            subscription.unsubscribe();
-        }
+        // Subscriptions are handled centrally via `subscribe_component` and
+        // weak references; nothing to clean up here.
     }
 }
 
 impl TutorialUI {
     pub fn new(
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-        game_engine_command_observer: EventObserver<GameEngineCommand>,
-        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
         game_engine_command_emitter: EventEmitter<GameEngineCommand>,
         window: &Rc<ApplicationWindow>,
         resources: &Rc<ImageSet>,
@@ -124,9 +122,6 @@ impl TutorialUI {
         let tutorial_ui = Rc::new(RefCell::new(Self {
             tutorial_text,
             scrolled_window,
-            game_engine_event_subscription: None,
-            game_action_subscription: None,
-            layout_event_subscription: None,
             game_engine_command_emitter,
             current_step: TutorialStep::default(),
             buffer,
@@ -138,48 +133,15 @@ impl TutorialUI {
             layout: layout.tutorial.clone(),
         }));
 
-        TutorialUI::bind_observers(
-            Rc::clone(&tutorial_ui),
-            game_engine_event_observer,
-            game_engine_command_observer,
-            layout_manager_event_observer,
-        );
+        // Subscriptions are wired centrally in `wire_event_observers` using
+        // the `EventHandler` trait.
         tutorial_ui.borrow_mut().sync_tutorial_text();
 
         tutorial_ui
     }
 
-    fn bind_observers(
-        tutorial_ui: Rc<RefCell<Self>>,
-        game_engine_event_observer: EventObserver<GameEngineEvent>,
-        game_engine_command_observer: EventObserver<GameEngineCommand>,
-        layout_manager_event_observer: EventObserver<LayoutManagerEvent>,
-    ) {
-        let game_engine_event_subscription = {
-            let tutorial_ui = tutorial_ui.clone();
-            game_engine_event_observer.subscribe(move |event| {
-                tutorial_ui.borrow_mut().handle_game_engine_event(event);
-            })
-        };
-
-        let game_action_subscription = {
-            let tutorial_ui = tutorial_ui.clone();
-            game_engine_command_observer.subscribe(move |event| {
-                tutorial_ui.borrow_mut().handle_game_action_command(event);
-            })
-        };
-
-        let layout_event_subscription = {
-            let tutorial_ui = tutorial_ui.clone();
-            layout_manager_event_observer.subscribe(move |event| {
-                tutorial_ui.borrow_mut().handle_layout_event(event);
-            })
-        };
-
-        tutorial_ui.borrow_mut().game_engine_event_subscription = Some(game_engine_event_subscription);
-        tutorial_ui.borrow_mut().game_action_subscription = Some(game_action_subscription);
-        tutorial_ui.borrow_mut().layout_event_subscription = Some(layout_event_subscription);
-    }
+    // Observers are handled centrally; components implement EventHandler for
+    // the events they care about and are subscribed in `wire_event_observers`.
 
     fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
         if self.current_step == TutorialStep::Disabled {
@@ -224,6 +186,11 @@ impl TutorialUI {
                 }
                 _ => {}
             },
+            GameEngineEvent::GameBoardUpdated { change_reason, .. }
+                if change_reason == &GameBoardChangeReason::NewGame =>
+            {
+                self.reset_tutorial();
+            }
             GameEngineEvent::GameBoardUpdated {
                 board,
                 history_index,
@@ -280,23 +247,6 @@ impl TutorialUI {
             }
             _ => {}
         }
-    }
-
-    fn handle_game_action_command(&mut self, event: &GameEngineCommand) {
-        // TODO - GameEngineEvent::NewGameStarted(difficulty)
-        match event {
-            GameEngineCommand::NewGame(difficulty, _) => {
-                let difficulty = difficulty.unwrap_or(self.settings.difficulty);
-                if difficulty == Difficulty::Tutorial {
-                    self.reset_tutorial();
-                } else {
-                    self.current_step = TutorialStep::Disabled;
-                    self.sync_tutorial_text();
-                }
-            }
-            _ => {}
-        }
-        // Handle game action events and update tutorial text
     }
 
     fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {
