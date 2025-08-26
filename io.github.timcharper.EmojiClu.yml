@@ -22,8 +22,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/timcharper/EmojiClu.git
-        tag: v1.1.1
-        commit: 997a9279fc9fff5940bdbf6f5777b0004a1065be
+        tag: v1.1.2
+        commit: 36cb3ae6cdf18f02c30c1e9c8e594b91a46f988b
       - cargo-sources.json
     build-commands:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose

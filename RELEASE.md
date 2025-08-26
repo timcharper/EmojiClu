@@ -69,7 +69,8 @@ cp cargo-sources.json ../io.github.timcharper.EmojiClu/
 cp io.github.timcharper.EmojiClu.yml ../io.github.timcharper.EmojiClu/
 cd ../io.github.timcharper.EmojiClu/
 VERSION_TAG="$(yq e '.modules[0].sources[0].tag' io.github.timcharper.EmojiClu.yml)"
-git checkout -b release/${VERSION_TAG}
+git fetch
+git checkout -b release/${VERSION_TAG} origin/master
 git add .
 git commit -m "release emojiClu ${VERSION_TAG}"
 git push
