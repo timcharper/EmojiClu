@@ -6,6 +6,7 @@ use std::rc::Rc;
 use crate::destroyable::Destroyable;
 use crate::events::EventHandler;
 use crate::model::GameEngineEvent;
+use crate::model::TimerState;
 use fluent_i18n::t;
 
 pub struct PauseScreenUI {
@@ -47,17 +48,21 @@ impl PauseScreenUI {
 
         pause_screen_ui
     }
+
+    fn handle_timer_state_changed(&mut self, timer_state: &TimerState) {
+        if timer_state.is_paused() {
+            self.pause_screen_box.set_visible(true);
+        } else {
+            self.pause_screen_box.set_visible(false);
+        }
+    }
 }
 
 impl EventHandler<GameEngineEvent> for PauseScreenUI {
     fn handle_event(&mut self, event: &GameEngineEvent) {
         match event {
             GameEngineEvent::TimerStateChanged(timer_state) => {
-                if timer_state.is_paused() {
-                    self.pause_screen_box.set_visible(true);
-                } else {
-                    self.pause_screen_box.set_visible(false);
-                }
+                self.handle_timer_state_changed(timer_state);
             }
             _ => (),
         }

@@ -32,46 +32,6 @@ impl InputTranslator {
         input_translator
     }
 
-    // InputTranslator now implements EventHandler<InputEvent> and is centrally subscribed.
-
-    fn handle_input_event(&self, event: &InputEvent) {
-        match event {
-            InputEvent::LeftClick(clickable) => {
-                // In touch mode, we wait for LeftClickUp to determine the action
-                if !self
-                    .settings_projection
-                    .borrow()
-                    .current_settings()
-                    .touch_screen_controls
-                {
-                    self.handle_left_click(clickable);
-                }
-            }
-            InputEvent::RightClick(clickable) => {
-                // Ignore right clicks in touch mode
-                if !self
-                    .settings_projection
-                    .borrow()
-                    .current_settings()
-                    .touch_screen_controls
-                {
-                    self.handle_right_click(clickable);
-                }
-            }
-            InputEvent::TouchEvent(clickable, duration) => {
-                if self
-                    .settings_projection
-                    .borrow()
-                    .current_settings()
-                    .touch_screen_controls
-                {
-                    self.handle_touch_click(clickable, *duration);
-                }
-            }
-            InputEvent::KeyPressed(key) => self.handle_key_press(*key),
-        }
-    }
-
     fn handle_touch_click(&self, clickable: &Clickable, duration: std::time::Duration) {
         let is_long_press = duration >= LONG_PRESS_DURATION;
         match clickable {
@@ -189,10 +149,58 @@ impl InputTranslator {
             _ => {} // Ignore other keys
         }
     }
+
+    // Extracted wrappers for the match branches in EventHandler::handle_event.
+    // These contain the touch-mode checks and delegate to the existing handlers.
+    fn handle_left_click_event(&self, clickable: &Clickable) {
+        if !self
+            .settings_projection
+            .borrow()
+            .current_settings()
+            .touch_screen_controls
+        {
+            self.handle_left_click(clickable);
+        }
+    }
+
+    fn handle_right_click_event(&self, clickable: &Clickable) {
+        if !self
+            .settings_projection
+            .borrow()
+            .current_settings()
+            .touch_screen_controls
+        {
+            self.handle_right_click(clickable);
+        }
+    }
+
+    fn handle_touch_event(&self, clickable: &Clickable, duration: std::time::Duration) {
+        if self
+            .settings_projection
+            .borrow()
+            .current_settings()
+            .touch_screen_controls
+        {
+            self.handle_touch_click(clickable, duration);
+        }
+    }
 }
 
 impl EventHandler<InputEvent> for InputTranslator {
     fn handle_event(&mut self, event: &InputEvent) {
-        self.handle_input_event(event);
+        match event {
+            InputEvent::LeftClick(clickable) => {
+                // In touch mode, we wait for LeftClickUp to determine the action
+                self.handle_left_click_event(clickable);
+            }
+            InputEvent::RightClick(clickable) => {
+                // Ignore right clicks in touch mode
+                self.handle_right_click_event(clickable);
+            }
+            InputEvent::TouchEvent(clickable, duration) => {
+                self.handle_touch_event(clickable, *duration);
+            }
+            InputEvent::KeyPressed(key) => self.handle_key_press(*key),
+        }
     }
 }

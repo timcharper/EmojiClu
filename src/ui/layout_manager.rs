@@ -88,7 +88,15 @@ impl Destroyable for LayoutManager {
 
 impl EventHandler<GameEngineEvent> for LayoutManager {
     fn handle_event(&mut self, event: &GameEngineEvent) {
-        self.handle_game_engine_event(event);
+        match event {
+            GameEngineEvent::ClueSetUpdated(clue_set, _, _) => {
+                self.update_clue_stats(clue_set.as_ref())
+            }
+            GameEngineEvent::SettingsChanged(settings) => {
+                self.update_difficulty(settings.difficulty);
+            }
+            _ => (),
+        }
     }
 }
 
@@ -177,18 +185,6 @@ impl LayoutManager {
         dw.borrow_mut().layout_monitor_source = Some(source_id);
 
         dw
-    }
-
-    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
-        match event {
-            GameEngineEvent::ClueSetUpdated(clue_set, _, _) => {
-                self.update_clue_stats(clue_set.as_ref())
-            }
-            GameEngineEvent::SettingsChanged(settings) => {
-                self.update_difficulty(settings.difficulty);
-            }
-            _ => (),
-        }
     }
 
     fn update_scale_factor(&mut self, scale_factor: f64) {

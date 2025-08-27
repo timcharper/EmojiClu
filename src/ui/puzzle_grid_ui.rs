@@ -10,8 +10,8 @@ use crate::{
     events::{EventEmitter, EventHandler},
     game::settings::Settings,
     model::{
-        ClueAddress, ClueWithAddress, Difficulty, GameEngineEvent, InputEvent, LayoutConfiguration,
-        LayoutManagerEvent, Solution,
+        ClueAddress, ClueSelection, ClueWithAddress, Difficulty, GameBoard, GameEngineEvent,
+        InputEvent, LayoutConfiguration, LayoutManagerEvent, Solution,
     },
 };
 
@@ -42,13 +42,39 @@ impl Destroyable for PuzzleGridUI {
 
 impl EventHandler<GameEngineEvent> for PuzzleGridUI {
     fn handle_event(&mut self, event: &GameEngineEvent) {
-        self.handle_game_engine_event(event);
+        match event {
+            GameEngineEvent::GameBoardUpdated { board, .. } => {
+                self.handle_game_board_updated(board);
+            }
+            GameEngineEvent::HintSuggested(deduction) => {
+                self.highlight_candidate(
+                    deduction.tile_assertion.tile.row,
+                    deduction.column,
+                    deduction.tile_assertion.tile.variant,
+                );
+            }
+            GameEngineEvent::ClueSelected(clue_selection) => {
+                self.handle_clue_selected(clue_selection);
+            }
+            GameEngineEvent::ClueHintHighlighted(addressed_clue) => {
+                self.current_clue_hint = addressed_clue.clone();
+                self.sync_spotlight();
+            }
+
+            _ => {}
+        }
     }
 }
 
 impl EventHandler<LayoutManagerEvent> for PuzzleGridUI {
     fn handle_event(&mut self, event: &LayoutManagerEvent) {
-        self.handle_layout_event(event);
+        match event {
+            LayoutManagerEvent::LayoutChanged(new_layout) => self.update_layout(new_layout),
+            LayoutManagerEvent::ImagesOptimized(new_image_set) => {
+                self.handle_images_optimized(new_image_set.clone());
+            }
+            _ => (),
+        }
     }
 }
 
@@ -103,79 +129,6 @@ impl PuzzleGridUI {
             for cell in row {
                 cell.borrow_mut().update_layout(&layout.grid);
             }
-        }
-    }
-
-    fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {
-        match event {
-            LayoutManagerEvent::LayoutChanged(new_layout) => self.update_layout(new_layout),
-            LayoutManagerEvent::ImagesOptimized(new_image_set) => {
-                self.resources = new_image_set.clone();
-                // propagate image set to all cells
-                for row in &mut self.cells {
-                    for cell in row {
-                        cell.borrow_mut().set_image_set(self.resources.clone());
-                    }
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
-        match event {
-            GameEngineEvent::GameBoardUpdated { board, .. } => {
-                self.current_difficulty = board.solution.difficulty;
-                self.set_grid_size(board.solution.n_rows, board.solution.n_variants);
-                for row in 0..board.solution.n_rows {
-                    for col in 0..board.solution.n_variants {
-                        if let Some(cell) = self.cells.get(row).and_then(|row| row.get(col)) {
-                            let mut cell = cell.borrow_mut();
-                            // If there's a solution, show it
-                            if let Some(tile) = board.get_selection(row, col) {
-                                cell.set_solution(Some(&tile));
-                            } else {
-                                // Otherwise show candidates
-                                cell.set_solution(None);
-                                cell.set_candidates(
-                                    board
-                                        .solution
-                                        .variants
-                                        .iter()
-                                        .map(|v| board.get_candidate(row, col, *v))
-                                        .collect::<Vec<_>>(),
-                                );
-                            }
-                        }
-                    }
-                }
-                self.completed_clues = board.completed_clues().clone();
-                self.sync_clue_spotlight_enabled();
-            }
-            GameEngineEvent::HintSuggested(deduction) => {
-                self.highlight_candidate(
-                    deduction.tile_assertion.tile.row,
-                    deduction.column,
-                    deduction.tile_assertion.tile.variant,
-                );
-            }
-            GameEngineEvent::ClueSelected(clue_selection) => {
-                if let Some(clue_selection) = clue_selection {
-                    if clue_selection.is_focused {
-                        self.set_current_clue(&Some(clue_selection.clue.clone()));
-                    } else {
-                        self.set_current_clue(&None);
-                    }
-                } else {
-                    self.set_current_clue(&None);
-                }
-            }
-            GameEngineEvent::ClueHintHighlighted(addressed_clue) => {
-                self.current_clue_hint = addressed_clue.clone();
-                self.sync_spotlight();
-            }
-
-            _ => {}
         }
     }
 
@@ -272,5 +225,56 @@ impl PuzzleGridUI {
         self.cells[row][column]
             .borrow()
             .hint_highlight_candidate_for(Duration::from_secs(4), variant);
+    }
+
+    fn handle_game_board_updated(&mut self, board: &GameBoard) {
+        self.current_difficulty = board.solution.difficulty;
+        self.set_grid_size(board.solution.n_rows, board.solution.n_variants);
+        for row in 0..board.solution.n_rows {
+            for col in 0..board.solution.n_variants {
+                if let Some(cell) = self.cells.get(row).and_then(|row| row.get(col)) {
+                    let mut cell = cell.borrow_mut();
+                    // If there's a solution, show it
+                    if let Some(tile) = board.get_selection(row, col) {
+                        cell.set_solution(Some(&tile));
+                    } else {
+                        // Otherwise show candidates
+                        cell.set_solution(None);
+                        cell.set_candidates(
+                            board
+                                .solution
+                                .variants
+                                .iter()
+                                .map(|v| board.get_candidate(row, col, *v))
+                                .collect::<Vec<_>>(),
+                        );
+                    }
+                }
+            }
+        }
+        self.completed_clues = board.completed_clues().clone();
+        self.sync_clue_spotlight_enabled();
+    }
+
+    fn handle_clue_selected(&mut self, clue_selection: &Option<ClueSelection>) {
+        if let Some(clue_selection) = clue_selection {
+            if clue_selection.is_focused {
+                self.set_current_clue(&Some(clue_selection.clue.clone()));
+            } else {
+                self.set_current_clue(&None);
+            }
+        } else {
+            self.set_current_clue(&None);
+        }
+    }
+
+    fn handle_images_optimized(&mut self, new_image_set: Rc<ImageSet>) {
+        self.resources = new_image_set.clone();
+        // propagate image set to all cells
+        for row in &mut self.cells {
+            for cell in row {
+                cell.borrow_mut().set_image_set(self.resources.clone());
+            }
+        }
     }
 }

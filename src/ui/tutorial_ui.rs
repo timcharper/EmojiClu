@@ -12,8 +12,9 @@ use crate::{
     game::settings::Settings,
     helpers::Capitalize,
     model::{
-        ClueWithAddress, Deduction, DeductionKind, Dimensions, GameBoard, GameBoardChangeReason,
-        GameEngineCommand, GameEngineEvent, LayoutConfiguration, LayoutManagerEvent,
+        ClueSelection, ClueWithAddress, Deduction, DeductionKind, Dimensions, GameBoard,
+        GameBoardChangeReason, GameEngineCommand, GameEngineEvent, LayoutConfiguration,
+        LayoutManagerEvent,
     },
     solver::{
         clue_completion_evaluator::is_clue_fully_completed, deduce_clue, simplify_deductions,
@@ -39,13 +40,143 @@ enum TutorialStep {
 
 impl EventHandler<GameEngineEvent> for TutorialUI {
     fn handle_event(&mut self, event: &GameEngineEvent) {
-        self.handle_game_engine_event(event);
+        if self.current_step == TutorialStep::Disabled {
+            return;
+        }
+        match event {
+            GameEngineEvent::ClueSelected(clue_selection) => {
+                self.handle_clue_selected(clue_selection);
+            }
+            GameEngineEvent::ClueHintHighlighted(clue_with_address) => {
+                self.handle_clue_hint_highlighted(clue_with_address);
+            }
+            GameEngineEvent::HintSuggested(deduction) => {
+                self.handle_hint_suggested(deduction);
+            }
+            GameEngineEvent::GameBoardUpdated { change_reason, .. }
+                if change_reason == &GameBoardChangeReason::NewGame =>
+            {
+                self.reset_tutorial();
+            }
+            GameEngineEvent::GameBoardUpdated {
+                board,
+                history_index,
+                change_reason,
+                ..
+            } => {
+                self.handle_game_board_updated(board, *history_index, change_reason);
+            }
+            GameEngineEvent::SettingsChanged(settings) => {
+                self.settings = settings.clone();
+                self.sync_tutorial_text();
+            }
+            _ => {}
+        }
     }
 }
 
 impl EventHandler<LayoutManagerEvent> for TutorialUI {
     fn handle_event(&mut self, event: &LayoutManagerEvent) {
-        self.handle_layout_event(event);
+        match event {
+            LayoutManagerEvent::LayoutChanged(layout) => {
+                self.handle_layout_changed(layout);
+            }
+            LayoutManagerEvent::ImagesOptimized(image_set) => {
+                self.handle_images_optimized(image_set);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl TutorialUI {
+    fn handle_clue_selected(&mut self, clue_selection: &Option<ClueSelection>) {
+        self.current_clue = clue_selection
+            .as_ref()
+            .map(|clue_selection| clue_selection.clue.clone());
+        let is_focused = clue_selection
+            .as_ref()
+            .map(|cs| cs.is_focused)
+            .unwrap_or(false);
+        match &self.current_step {
+            TutorialStep::SelectAClue if is_focused => {
+                self.current_step = TutorialStep::PlayToEnd;
+                self.sync_tutorial_text();
+            }
+            TutorialStep::PlayToEnd => {
+                self.sync_tutorial_text();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_clue_hint_highlighted(&mut self, clue_with_address: &Option<ClueWithAddress>) {
+        if let Some(cwa) = clue_with_address {
+            match &self.current_step {
+                TutorialStep::HintUsagePhase1 => {
+                    self.current_step = TutorialStep::HintUsagePhase2(cwa.clone());
+                }
+                _ => {}
+            }
+            self.sync_tutorial_text();
+        }
+    }
+
+    fn handle_hint_suggested(&mut self, deduction: &Deduction) {
+        match &self.current_step {
+            TutorialStep::HintUsagePhase2(cwa) => {
+                self.current_step = TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
+                self.sync_tutorial_text();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_game_board_updated(
+        &mut self,
+        board: &GameBoard,
+        history_index: usize,
+        change_reason: &GameBoardChangeReason,
+    ) {
+        self.current_board = Some(board.clone());
+        match &self.current_step {
+            TutorialStep::HintUsagePhase3Oops(cwa, deduction)
+                if history_index == 0 && *change_reason == GameBoardChangeReason::Undo =>
+            {
+                self.current_step = TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
+                self.sync_tutorial_text();
+            }
+            TutorialStep::Undo
+                if history_index == 0 && *change_reason == GameBoardChangeReason::Undo =>
+            {
+                self.game_engine_command_emitter
+                    .emit(GameEngineCommand::ClueFocus(None));
+                self.current_step = TutorialStep::SelectAClue;
+                self.sync_tutorial_text();
+            }
+            TutorialStep::HintUsagePhase3(cwa, deduction) => {
+                let task_completed = if deduction.is_positive() {
+                    board.is_selected_in_column(&deduction.tile_assertion.tile, deduction.column)
+                } else {
+                    !board.is_candidate_available(
+                        deduction.tile_assertion.tile.row,
+                        deduction.column,
+                        deduction.tile_assertion.tile.variant,
+                    )
+                };
+                if task_completed {
+                    self.current_step = TutorialStep::Undo;
+                } else {
+                    self.current_step =
+                        TutorialStep::HintUsagePhase3Oops(cwa.clone(), deduction.clone());
+                }
+                self.sync_tutorial_text();
+            }
+            TutorialStep::PlayToEnd => {
+                self.sync_tutorial_text();
+            }
+            _ => {}
+        }
     }
 }
 
@@ -138,129 +269,6 @@ impl TutorialUI {
         tutorial_ui.borrow_mut().sync_tutorial_text();
 
         tutorial_ui
-    }
-
-    // Observers are handled centrally; components implement EventHandler for
-    // the events they care about and are subscribed in `wire_event_observers`.
-
-    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
-        if self.current_step == TutorialStep::Disabled {
-            return;
-        }
-        match event {
-            GameEngineEvent::ClueSelected(clue_selection) => {
-                self.current_clue = clue_selection
-                    .as_ref()
-                    .map(|clue_selection| clue_selection.clue.clone());
-                let is_focused = clue_selection
-                    .as_ref()
-                    .map(|cs| cs.is_focused)
-                    .unwrap_or(false);
-                match &self.current_step {
-                    TutorialStep::SelectAClue if is_focused => {
-                        self.current_step = TutorialStep::PlayToEnd;
-                        self.sync_tutorial_text();
-                    }
-                    TutorialStep::PlayToEnd => {
-                        self.sync_tutorial_text();
-                    }
-                    _ => {}
-                }
-            }
-            GameEngineEvent::ClueHintHighlighted(clue_with_address) => {
-                if let Some(cwa) = clue_with_address {
-                    match &self.current_step {
-                        TutorialStep::HintUsagePhase1 => {
-                            self.current_step = TutorialStep::HintUsagePhase2(cwa.clone());
-                        }
-                        _ => {}
-                    }
-                    self.sync_tutorial_text();
-                }
-            }
-            GameEngineEvent::HintSuggested(deduction) => match &self.current_step {
-                TutorialStep::HintUsagePhase2(cwa) => {
-                    self.current_step =
-                        TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
-                    self.sync_tutorial_text();
-                }
-                _ => {}
-            },
-            GameEngineEvent::GameBoardUpdated { change_reason, .. }
-                if change_reason == &GameBoardChangeReason::NewGame =>
-            {
-                self.reset_tutorial();
-            }
-            GameEngineEvent::GameBoardUpdated {
-                board,
-                history_index,
-                change_reason,
-                ..
-            } => {
-                self.current_board = Some(board.clone());
-                match &self.current_step {
-                    TutorialStep::HintUsagePhase3Oops(cwa, deduction)
-                        if *history_index == 0 && *change_reason == GameBoardChangeReason::Undo =>
-                    {
-                        self.current_step =
-                            TutorialStep::HintUsagePhase3(cwa.clone(), deduction.clone());
-                        self.sync_tutorial_text();
-                    }
-                    TutorialStep::Undo
-                        if *history_index == 0 && *change_reason == GameBoardChangeReason::Undo =>
-                    {
-                        self.game_engine_command_emitter
-                            .emit(GameEngineCommand::ClueFocus(None));
-                        self.current_step = TutorialStep::SelectAClue;
-                        self.sync_tutorial_text();
-                    }
-                    TutorialStep::HintUsagePhase3(cwa, deduction) => {
-                        let task_completed = if deduction.is_positive() {
-                            board.is_selected_in_column(
-                                &deduction.tile_assertion.tile,
-                                deduction.column,
-                            )
-                        } else {
-                            !board.is_candidate_available(
-                                deduction.tile_assertion.tile.row,
-                                deduction.column,
-                                deduction.tile_assertion.tile.variant,
-                            )
-                        };
-                        if task_completed {
-                            self.current_step = TutorialStep::Undo;
-                        } else {
-                            self.current_step =
-                                TutorialStep::HintUsagePhase3Oops(cwa.clone(), deduction.clone());
-                        }
-                        self.sync_tutorial_text();
-                    }
-                    TutorialStep::PlayToEnd => {
-                        self.sync_tutorial_text();
-                    }
-                    _ => {}
-                }
-            }
-            GameEngineEvent::SettingsChanged(settings) => {
-                self.settings = settings.clone();
-                self.sync_tutorial_text();
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {
-        match event {
-            LayoutManagerEvent::LayoutChanged(layout) => {
-                self.layout = layout.tutorial.clone();
-                self.sync_layout();
-            }
-            LayoutManagerEvent::ImagesOptimized(image_set) => {
-                self.resources = image_set.clone();
-                self.sync_tutorial_text();
-            }
-            _ => {}
-        }
     }
 
     fn sync_layout(&mut self) {
@@ -363,6 +371,16 @@ impl TutorialUI {
         }
 
         info!("Tutorial step: {:?}", self.current_step);
+    }
+
+    fn handle_layout_changed(&mut self, layout: &LayoutConfiguration) {
+        self.layout = layout.tutorial.clone();
+        self.sync_layout();
+    }
+
+    fn handle_images_optimized(&mut self, image_set: &Rc<ImageSet>) {
+        self.resources = image_set.clone();
+        self.sync_tutorial_text();
     }
 
     fn play_to_end_template(&self) -> String {

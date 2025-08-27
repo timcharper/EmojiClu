@@ -113,16 +113,79 @@ impl GameEngine {
 
 impl EventHandler<GameEngineCommand> for GameEngine {
     fn handle_event(&mut self, event: &GameEngineCommand) {
-        // For operations that need access to Rc<RefCell<Self>>, we use self_ref
-        if let Some(game_engine_ref) = self.self_ref.upgrade() {
-            self.handle_command(&game_engine_ref, event.clone());
-        } else {
-            log::error!(target: "game_state", "GameEngine self-reference is no longer valid");
+        log::trace!(target: "game_state", "Handling event: {:?}", event);
+        match event {
+            GameEngineCommand::CellSelect(row, col, variant) => {
+                self.handle_cell_select(*row, *col, *variant)
+            }
+            GameEngineCommand::CellClear(row, col, variant) => {
+                self.handle_cell_clear(*row, *col, *variant)
+            }
+            GameEngineCommand::NewGame(difficulty, seed) => self.new_game(*difficulty, *seed),
+            GameEngineCommand::LoadState(save_state) => {
+                trace!(target: "game_state", "Loading saved state {:?}", save_state);
+                self.set_game_state(&save_state, GameBoardChangeReason::GameLoaded);
+            }
+            GameEngineCommand::Solve => self.try_solve(),
+            GameEngineCommand::RewindLastGood => self.rewind_last_good(),
+            GameEngineCommand::IncrementHintsUsed => self.increment_hints_used(),
+            GameEngineCommand::ShowHint => {
+                self.show_hint();
+            }
+            GameEngineCommand::Undo => self.undo(),
+            GameEngineCommand::Redo => self.redo(),
+            GameEngineCommand::Pause => self.pause_game(),
+            GameEngineCommand::Resume => self.resume_game(),
+            GameEngineCommand::Quit => (),
+            GameEngineCommand::Submit => todo!(),
+            GameEngineCommand::CompletePuzzle => self.complete_puzzle(),
+            GameEngineCommand::Restart => {
+                self.restart_game();
+            }
+            GameEngineCommand::ClueToggleComplete(clue_address) => {
+                self.handle_clue_toggle_complete(*clue_address)
+            }
+            GameEngineCommand::ClueToggleSelectedComplete => {
+                self.toggle_selected_clue_complete();
+            }
+            GameEngineCommand::ClueFocus(maybe_clue) => self.focus_clue(*maybe_clue),
+            GameEngineCommand::ClueFocusNext(direction) => self.focus_next_clue(*direction),
+            GameEngineCommand::ChangeSettings(change) => {
+                self.change_settings(change);
+            }
         }
     }
 }
 
 impl GameEngine {
+    fn restart_game(&mut self) {
+        // Start a new game with current difficulty and seed
+        let current_seed = self.current_board.solution.seed;
+        let current_difficulty = self.current_board.solution.difficulty;
+        self.set_game_state(
+            &GameStateSnapshot::generate_new(current_difficulty, Some(current_seed)),
+            GameBoardChangeReason::NewGame,
+        );
+    }
+
+    fn toggle_selected_clue_complete(&mut self) {
+        if let Some(addressed_clue) = &self.current_selected_clue {
+            self.handle_clue_toggle_complete(addressed_clue.address())
+        }
+    }
+
+    fn change_settings(&mut self, change: &crate::model::SettingsChange) {
+        if let Some(clue_spotlight_enabled) = change.clue_spotlight_enabled {
+            self.settings.clue_spotlight_enabled = clue_spotlight_enabled;
+        }
+        if let Some(clue_tooltips_enabled) = change.clue_tooltips_enabled {
+            self.settings.clue_tooltips_enabled = clue_tooltips_enabled;
+        }
+        if let Some(touch_screen_controls) = change.touch_screen_controls {
+            self.settings.touch_screen_controls = touch_screen_controls;
+        }
+        self.update_settings();
+    }
     fn set_game_state(
         &mut self,
         game_state_snapshot: &GameStateSnapshot,
@@ -237,103 +300,45 @@ impl GameEngine {
         }
     }
 
-    fn handle_command(&mut self, game_engine: &Rc<RefCell<Self>>, event: GameEngineCommand) {
-        log::trace!(target: "game_state", "Handling event: {:?}", event);
-        match event {
-            GameEngineCommand::CellSelect(row, col, variant) => {
-                self.handle_cell_select(row, col, variant)
-            }
-            GameEngineCommand::CellClear(row, col, variant) => {
-                self.handle_cell_clear(row, col, variant)
-            }
-            GameEngineCommand::NewGame(difficulty, seed) => {
-                let difficulty = difficulty.unwrap_or(self.settings.difficulty);
+    fn new_game(&mut self, difficulty: Option<Difficulty>, seed: Option<u64>) {
+        let difficulty = difficulty.unwrap_or(self.settings.difficulty);
 
-                // Update settings immediately (this is fast)
-                self.settings.difficulty = difficulty;
-                self.update_settings();
+        // Update settings immediately (this is fast)
+        self.settings.difficulty = difficulty;
+        self.update_settings();
 
-                // Emit puzzle generation started event
-                self.game_engine_event_emitter
-                    .emit(GameEngineEvent::PuzzleGenerationStarted);
+        // Emit puzzle generation started event
+        self.game_engine_event_emitter
+            .emit(GameEngineEvent::PuzzleGenerationStarted);
 
-                // Option 2: True background thread with callback
-                // This is more complex but shows the full pattern:
-                let (sender, receiver) = mpsc::channel::<GameStateSnapshot>();
+        // Option 2: True background thread with callback
+        // This is more complex but shows the full pattern:
+        let (sender, receiver) = mpsc::channel::<GameStateSnapshot>();
 
-                std::thread::spawn(move || {
-                    // Do expensive computation
-                    let _result = GameStateSnapshot::generate_new(difficulty, seed);
-                    let _ = sender.send(_result);
-                });
+        std::thread::spawn(move || {
+            // Do expensive computation
+            let _result = GameStateSnapshot::generate_new(difficulty, seed);
+            let _ = sender.send(_result);
+        });
 
-                // Create a mechanism to send LoadState back to ourselves
-                glib::idle_add_local({
-                    let game_engine_ref = Rc::downgrade(&game_engine);
-                    move || {
-                        if let Ok(snapshot) = receiver.try_recv() {
-                            // Regenerate on main thread and apply
-                            game_engine_ref.upgrade().map(|ge| {
-                                ge.borrow_mut()
-                                    .set_game_state(&snapshot, GameBoardChangeReason::NewGame)
-                            });
-                            // Send LoadState command back to GameEngine
-                            return glib::ControlFlow::Break;
-                        }
-                        glib::ControlFlow::Continue
-                    }
-                });
-            }
-            GameEngineCommand::LoadState(save_state) => {
-                trace!(target: "game_state", "Loading saved state {:?}", save_state);
-                self.set_game_state(&save_state, GameBoardChangeReason::GameLoaded);
-            }
-            GameEngineCommand::Solve => self.try_solve(),
-            GameEngineCommand::RewindLastGood => self.rewind_last_good(),
-            GameEngineCommand::IncrementHintsUsed => self.increment_hints_used(),
-            GameEngineCommand::ShowHint => {
-                self.show_hint();
-            }
-            GameEngineCommand::Undo => self.undo(),
-            GameEngineCommand::Redo => self.redo(),
-            GameEngineCommand::Pause => self.pause_game(),
-            GameEngineCommand::Resume => self.resume_game(),
-            GameEngineCommand::Quit => (),
-            GameEngineCommand::Submit => todo!(),
-            GameEngineCommand::CompletePuzzle => self.complete_puzzle(),
-            GameEngineCommand::Restart => {
-                // Start a new game with current difficulty and seed
-                let current_seed = self.current_board.solution.seed;
-                let current_difficulty = self.current_board.solution.difficulty;
-                self.set_game_state(
-                    &GameStateSnapshot::generate_new(current_difficulty, Some(current_seed)),
-                    GameBoardChangeReason::NewGame,
-                );
-            }
-            GameEngineCommand::ClueToggleComplete(clue_address) => {
-                self.handle_clue_toggle_complete(clue_address)
-            }
-            GameEngineCommand::ClueToggleSelectedComplete => {
-                if let Some(addressed_clue) = &self.current_selected_clue {
-                    self.handle_clue_toggle_complete(addressed_clue.address())
+        // Create a mechanism to send LoadState back to ourselves
+        glib::idle_add_local({
+            let game_engine_ref = self.self_ref.clone();
+            move || {
+                if let Ok(snapshot) = receiver.try_recv() {
+                    // Regenerate on main thread and apply
+                    game_engine_ref.upgrade().map(|ge| {
+                        ge.borrow_mut()
+                            .set_game_state(&snapshot, GameBoardChangeReason::NewGame)
+                    });
+                    // Send LoadState command back to GameEngine
+                    return glib::ControlFlow::Break;
                 }
+                glib::ControlFlow::Continue
             }
-            GameEngineCommand::ClueFocus(maybe_clue) => self.focus_clue(maybe_clue),
-            GameEngineCommand::ClueFocusNext(direction) => self.focus_next_clue(direction),
-            GameEngineCommand::ChangeSettings(change) => {
-                if let Some(clue_spotlight_enabled) = change.clue_spotlight_enabled {
-                    self.settings.clue_spotlight_enabled = clue_spotlight_enabled;
-                }
-                if let Some(clue_tooltips_enabled) = change.clue_tooltips_enabled {
-                    self.settings.clue_tooltips_enabled = clue_tooltips_enabled;
-                }
-                if let Some(touch_screen_controls) = change.touch_screen_controls {
-                    self.settings.touch_screen_controls = touch_screen_controls;
-                }
-                self.update_settings();
-            }
-        }
+        });
     }
+
     fn focus_next_clue(&mut self, direction: i32) {
         match &self.current_selected_clue {
             Some(addressed_clue) => {

@@ -6,6 +6,7 @@ use gtk4::gdk;
 use gtk4::EventControllerKey;
 use gtk4::{prelude::*, ApplicationWindow, Entry};
 
+use crate::model::GameBoard;
 use crate::{
     destroyable::Destroyable,
     events::{EventEmitter, EventHandler},
@@ -22,6 +23,14 @@ pub struct SeedDialog {
 
 impl Destroyable for SeedDialog {
     fn destroy(&mut self) {}
+}
+
+impl EventHandler<GameEngineEvent> for SeedDialog {
+    fn handle_event(&mut self, event: &GameEngineEvent) {
+        if let GameEngineEvent::GameBoardUpdated { board, .. } = event {
+            self.handle_game_board_updated(board);
+        }
+    }
 }
 
 impl SeedDialog {
@@ -132,13 +141,9 @@ impl SeedDialog {
         dialog.add_controller(key_controller);
         dialog.present();
     }
-}
 
-impl EventHandler<GameEngineEvent> for SeedDialog {
-    fn handle_event(&mut self, event: &GameEngineEvent) {
-        if let GameEngineEvent::GameBoardUpdated { board, .. } = event {
-            self.current_seed = Some(board.solution.seed);
-            self.current_difficulty = board.solution.difficulty;
-        }
+    fn handle_game_board_updated(&mut self, board: &GameBoard) {
+        self.current_seed = Some(board.solution.seed);
+        self.current_difficulty = board.solution.difficulty;
     }
 }

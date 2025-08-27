@@ -60,13 +60,41 @@ impl Destroyable for CluePanelsUI {
 
 impl EventHandler<GameEngineEvent> for CluePanelsUI {
     fn handle_event(&mut self, event: &GameEngineEvent) {
-        self.handle_game_engine_event(event);
+        log::trace!(target: "game_state", "Handling GameEngineEvent: {:?}", event);
+        match event {
+            GameEngineEvent::ClueSetUpdated(clue_set, difficulty, completed_clues) => {
+                self.update_clue_set(clue_set, *difficulty, completed_clues);
+            }
+            GameEngineEvent::ClueHintHighlighted(Some(clue_with_address)) => {
+                self.highlight_clue(clue_with_address.address(), Duration::from_secs(4));
+            }
+            GameEngineEvent::GameBoardUpdated { board, .. } => {
+                self.set_clue_completion(&board.completed_clues);
+            }
+            GameEngineEvent::ClueSelected(clue_selection) => {
+                self.set_clue_selected(&clue_selection);
+            }
+            GameEngineEvent::SettingsChanged(settings) => {
+                self.update_tooltip_visibility(settings.clue_tooltips_enabled);
+                self.update_spotlight_enabled(settings.clue_spotlight_enabled);
+            }
+            _ => {}
+        }
     }
 }
 
 impl EventHandler<LayoutManagerEvent> for CluePanelsUI {
     fn handle_event(&mut self, event: &LayoutManagerEvent) {
-        self.handle_layout_event(event);
+        log::trace!(target: "layout", "Handling LayoutManagerEvent: {:?}", event);
+        match event {
+            LayoutManagerEvent::LayoutChanged(new_layout) => {
+                self.update_layout(new_layout);
+            }
+            LayoutManagerEvent::ImagesOptimized(new_image_set) => {
+                self.update_image_set(new_image_set);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -117,25 +145,6 @@ impl CluePanelsUI {
         clue_set_ui
     }
 
-    fn handle_layout_event(&mut self, event: &LayoutManagerEvent) {
-        match event {
-            LayoutManagerEvent::LayoutChanged(new_layout) => {
-                self.update_layout(new_layout);
-            }
-            LayoutManagerEvent::ImagesOptimized(new_image_set) => {
-                self.resources = new_image_set.clone();
-                // propagate image set to all clue_uis
-                for clue_ui in &mut self.horizontal_clue_uis {
-                    clue_ui.borrow_mut().set_image_set(self.resources.clone());
-                }
-                for clue_ui in &mut self.vertical_clue_uis {
-                    clue_ui.borrow_mut().set_image_set(self.resources.clone());
-                }
-            }
-            _ => {}
-        }
-    }
-
     fn update_spotlight_enabled(&mut self, enabled: bool) {
         self.current_spotlight_enabled = enabled;
         self.sync_spotlight_enabled();
@@ -152,29 +161,6 @@ impl CluePanelsUI {
             clue_ui
                 .borrow_mut()
                 .update_spotlight_enabled(self.current_spotlight_enabled);
-        }
-    }
-
-    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
-        match event {
-            GameEngineEvent::ClueSetUpdated(clue_set, difficulty, completed_clues) => {
-                self.set_clues(clue_set, *difficulty);
-                self.set_clue_completion(completed_clues);
-            }
-            GameEngineEvent::ClueHintHighlighted(Some(clue_with_address)) => {
-                self.highlight_clue(clue_with_address.address(), Duration::from_secs(4));
-            }
-            GameEngineEvent::GameBoardUpdated { board, .. } => {
-                self.set_clue_completion(&board.completed_clues);
-            }
-            GameEngineEvent::ClueSelected(clue_selection) => {
-                self.set_clue_selected(&clue_selection);
-            }
-            GameEngineEvent::SettingsChanged(settings) => {
-                self.update_tooltip_visibility(settings.clue_tooltips_enabled);
-                self.update_spotlight_enabled(settings.clue_spotlight_enabled);
-            }
-            _ => {}
         }
     }
 
@@ -220,6 +206,27 @@ impl CluePanelsUI {
             self.vertical_grid
                 .attach(&clue_set.borrow().frame, col as i32, 0, 1, 1);
             self.vertical_clue_uis.push(clue_set);
+        }
+    }
+
+    fn update_clue_set(
+        &mut self,
+        clue_set: &ClueSet,
+        difficulty: Difficulty,
+        completed_clues: &HashSet<ClueAddress>,
+    ) {
+        self.set_clues(clue_set, difficulty);
+        self.set_clue_completion(completed_clues);
+    }
+
+    fn update_image_set(&mut self, new_image_set: &Rc<ImageSet>) {
+        self.resources = new_image_set.clone();
+        // propagate image set to all clue_uis
+        for clue_ui in &mut self.horizontal_clue_uis {
+            clue_ui.borrow_mut().set_image_set(self.resources.clone());
+        }
+        for clue_ui in &mut self.vertical_clue_uis {
+            clue_ui.borrow_mut().set_image_set(self.resources.clone());
         }
     }
 

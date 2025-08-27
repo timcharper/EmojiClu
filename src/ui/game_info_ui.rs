@@ -77,18 +77,6 @@ impl GameInfoUI {
         game_info
     }
 
-    fn handle_game_engine_event(&mut self, event: &GameEngineEvent) {
-        match event {
-            GameEngineEvent::TimerStateChanged(timer_state) => {
-                self.update_timer_state(&timer_state);
-            }
-            GameEngineEvent::HintUsageChanged(hints_used) => {
-                self.update_hints_used(*hints_used);
-            }
-            _ => {}
-        }
-    }
-
     pub fn update_hints_used(&mut self, hints_used: u32) {
         self.hints_used = hints_used;
         self.hints_label.set_text(&format!("{}", hints_used));
@@ -163,6 +151,14 @@ impl Drop for GameInfoUI {
 
 impl EventHandler<GameEngineEvent> for GameInfoUI {
     fn handle_event(&mut self, event: &GameEngineEvent) {
-        self.handle_game_engine_event(event);
+        match event {
+            GameEngineEvent::TimerStateChanged(timer_state) => {
+                self.update_timer_state(&timer_state);
+            }
+            GameEngineEvent::HintUsageChanged(hints_used) => {
+                self.update_hints_used(*hints_used);
+            }
+            _ => {}
+        }
     }
 }
