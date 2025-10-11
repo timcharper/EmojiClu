@@ -351,6 +351,7 @@ pub fn build_ui(app: &Application) {
     app.set_accels_for_action("win.new-game", &["<Control>n"]);
     app.set_accels_for_action("win.pause", &["space"]);
     app.set_accels_for_action("win.restart", &["<Control>r"]);
+    app.set_accels_for_action("win.toggle-fullscreen", &["F11"]);
 
     // Create menu model for hamburger menu
     let menu = Menu::new();
@@ -513,6 +514,11 @@ pub fn build_ui(app: &Application) {
     window.set_child(Some(&scrolled_window));
 
     window.present();
+
+    // Apply fullscreen setting if enabled
+    if initial_settings.fullscreen {
+        window.fullscreen();
+    }
 
     // Add actions for keyboard shortcuts and menu items
     let action_undo = SimpleAction::new("undo", None);

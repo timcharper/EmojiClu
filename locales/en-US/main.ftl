@@ -19,6 +19,7 @@ menu-about = About
 # Settings menu
 settings-show-clue-tooltips = Show Clue Tooltips
 settings-touch-screen-controls = Touch Screen Controls
+settings-fullscreen = Fullscreen
 
 # Buttons
 submit = Submit

@@ -21,6 +21,7 @@ pub struct SettingsMenuUI {
     action_toggle_tooltips: SimpleAction,
     action_toggle_spotlight: SimpleAction,
     action_toggle_touch_controls: SimpleAction,
+    action_toggle_fullscreen: SimpleAction,
     game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
 }
@@ -37,6 +38,8 @@ impl Destroyable for SettingsMenuUI {
             .remove_action(&self.action_toggle_spotlight.name());
         self.window
             .remove_action(&self.action_toggle_touch_controls.name());
+        self.window
+            .remove_action(&self.action_toggle_fullscreen.name());
     }
 }
 
@@ -55,6 +58,10 @@ impl SettingsMenuUI {
             Some(&t!("settings-touch-screen-controls")),
             Some("win.toggle-touch-controls"),
         );
+        settings_menu.append(
+            Some(&t!("settings-fullscreen")),
+            Some("win.toggle-fullscreen"),
+        );
 
         if Settings::is_debug_mode() {
             settings_menu.append(Some("Show Clue X-Ray"), Some("win.toggle-spotlight"));
@@ -63,6 +70,7 @@ impl SettingsMenuUI {
         let action_toggle_tooltips: SimpleAction;
         let action_toggle_spotlight: SimpleAction;
         let action_toggle_touch_controls: SimpleAction;
+        let action_toggle_fullscreen: SimpleAction;
 
         {
             action_toggle_tooltips = SimpleAction::new_stateful(
@@ -82,6 +90,12 @@ impl SettingsMenuUI {
                 None,
                 &settings.touch_screen_controls.to_variant(),
             );
+
+            action_toggle_fullscreen = SimpleAction::new_stateful(
+                "toggle-fullscreen",
+                None,
+                &settings.fullscreen.to_variant(),
+            );
         }
 
         let settings_menu_ui = Rc::new(RefCell::new(Self {
@@ -90,6 +104,7 @@ impl SettingsMenuUI {
             action_toggle_tooltips,
             action_toggle_spotlight,
             action_toggle_touch_controls,
+            action_toggle_fullscreen,
             game_engine_event_subscription: None,
             game_engine_command_emitter: game_engine_command_emitter.clone(),
         }));
@@ -157,11 +172,29 @@ impl SettingsMenuUI {
                 });
             window.add_action(&settings_menu_ui_ref.action_toggle_touch_controls);
         }
+
+        // Connect fullscreen action
+        {
+            let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
+            settings_menu_ui_ref
+                .action_toggle_fullscreen
+                .connect_activate(move |action, _| {
+                    let current_state = action.state().unwrap().get::<bool>().unwrap();
+                    let new_state = !current_state;
+                    action.set_state(&new_state.to_variant());
+                    if let Some(settings_menu_ui) = weak_settings_menu_ui.upgrade() {
+                        settings_menu_ui
+                            .borrow_mut()
+                            .set_fullscreen(new_state);
+                    }
+                });
+            window.add_action(&settings_menu_ui_ref.action_toggle_fullscreen);
+        }
     }
 
     fn set_tooltips_enabled(&mut self, enabled: bool) {
         let mut settings_change = SettingsChange::default();
-        settings_change.clue_spotlight_enabled = Some(enabled);
+        settings_change.clue_tooltips_enabled = Some(enabled);
         self.game_engine_command_emitter
             .emit(GameEngineCommand::ChangeSettings(settings_change));
     }
@@ -176,6 +209,18 @@ impl SettingsMenuUI {
     fn set_touch_screen_controls(&mut self, enabled: bool) {
         let mut settings_change = SettingsChange::default();
         settings_change.touch_screen_controls = Some(enabled);
+        self.game_engine_command_emitter
+            .emit(GameEngineCommand::ChangeSettings(settings_change));
+    }
+
+    fn set_fullscreen(&mut self, enabled: bool) {
+        if enabled {
+            self.window.fullscreen();
+        } else {
+            self.window.unfullscreen();
+        }
+        let mut settings_change = SettingsChange::default();
+        settings_change.fullscreen = Some(enabled);
         self.game_engine_command_emitter
             .emit(GameEngineCommand::ChangeSettings(settings_change));
     }
