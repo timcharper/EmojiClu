@@ -351,6 +351,7 @@ pub fn build_ui(app: &Application) {
     app.set_accels_for_action("win.new-game", &["<Control>n"]);
     app.set_accels_for_action("win.pause", &["space"]);
     app.set_accels_for_action("win.restart", &["<Control>r"]);
+    app.set_accels_for_action("win.toggle-fullscreen", &["F11"]);
 
     // Create menu model for hamburger menu
     let menu = Menu::new();
@@ -368,6 +369,15 @@ pub fn build_ui(app: &Application) {
 
     // Add menu button to header bar
     let header_bar = HeaderBar::new();
+
+    let solve_button = Button::with_label(&t!("solve-button"));
+
+    // Create left side box for timer and hints
+    let controls_box_left = gtk4::Box::builder()
+        .name("controls-box-left")
+        .orientation(Orientation::Horizontal)
+        .spacing(10) // Slightly larger spacing between groups
+        .build();
 
     // Create difficulty selector dropdown with label
     let difficulty_box = gtk4::Box::builder()
@@ -407,41 +417,45 @@ pub fn build_ui(app: &Application) {
             .emit(GameEngineCommand::NewGame(Some(new_difficulty), None));
     });
 
-    header_bar.pack_start(&difficulty_box);
-
-    let solve_button = Button::with_label(&t!("solve-button"));
-
-    // Create left side box for timer and hints
-    let left_box = gtk4::Box::builder()
-        .name("left-box")
-        .orientation(Orientation::Horizontal)
-        .spacing(10) // Slightly larger spacing between groups
-        .build();
-
-    // Create pause button
-    left_box.append(&components.timer_button.borrow().button);
-    left_box.append(&components.game_info_ui.borrow().timer_label);
-    left_box.append(&components.hint_button_ui.borrow().hint_button);
     let hints_label = Label::new(Some(&t!("hints-label")));
     hints_label.set_css_classes(&["hints-label"]);
-    left_box.append(&hints_label);
-    left_box.append(&components.game_info_ui.borrow().hints_label);
 
-    header_bar.pack_start(&left_box);
+    // Add widgets to left controls box
+    controls_box_left.append(&difficulty_box);
+    controls_box_left.append(&components.timer_button.borrow().button);
+    controls_box_left.append(&components.game_info_ui.borrow().timer_label);
+    controls_box_left.append(&components.hint_button_ui.borrow().hint_button);
+    controls_box_left.append(&hints_label);
+    controls_box_left.append(&components.game_info_ui.borrow().hints_label);
+
+    // Get decoration boxes from layout manager and add controls initially
+    let decoration_box_left = components
+        .layout_manager
+        .borrow()
+        .decoration_box_left
+        .clone();
+    let decoration_box_right = components
+        .layout_manager
+        .borrow()
+        .decoration_box_right
+        .clone();
+
+    decoration_box_left.append(&controls_box_left);
+    header_bar.pack_start(&decoration_box_left);
 
     // Create right side box for controls
-    let right_box = gtk4::Box::builder()
-        .name("right-box")
+    let controls_box_right = gtk4::Box::builder()
+        .name("controls-box-right")
         .orientation(Orientation::Horizontal)
         .spacing(5)
         .css_classes(["menu-box"])
         .build();
 
     // Create buttons first
-    right_box.append(components.history_controls_ui.borrow().undo_button.as_ref());
-    right_box.append(components.history_controls_ui.borrow().redo_button.as_ref());
+    controls_box_right.append(components.history_controls_ui.borrow().undo_button.as_ref());
+    controls_box_right.append(components.history_controls_ui.borrow().redo_button.as_ref());
     if Settings::is_debug_mode() {
-        right_box.append(&solve_button);
+        controls_box_right.append(&solve_button);
     }
 
     let menu_button = MenuButton::builder()
@@ -449,9 +463,11 @@ pub fn build_ui(app: &Application) {
         .menu_model(&menu)
         .build();
 
+    decoration_box_right.append(&controls_box_right);
+
     // Pack the controls on the right
     header_bar.pack_end(&menu_button); // Hamburger menu goes last
-    header_bar.pack_end(&right_box); // Controls go before hamburger menu
+    header_bar.pack_end(&decoration_box_right); // Controls go before hamburger menu
 
     window.set_titlebar(Some(&header_bar));
 
@@ -460,6 +476,14 @@ pub fn build_ui(app: &Application) {
         .name("puzzle-vertical-box")
         .orientation(Orientation::Vertical)
         .build();
+
+    // Add fullscreen controls box at the top
+    let fullscreen_controls_box = components
+        .layout_manager
+        .borrow()
+        .fullscreen_controls_box
+        .clone();
+    puzzle_vertical_box.append(&fullscreen_controls_box);
 
     let game_engine_command_emitter_solve = game_engine_command_emitter.clone();
     solve_button.connect_clicked(move |_| {
@@ -605,6 +629,29 @@ pub fn build_ui(app: &Application) {
         }
     });
     window.add_action(&action_restart);
+
+    // Add fullscreen toggle action
+    let action_toggle_fullscreen = SimpleAction::new("toggle-fullscreen", None);
+    action_toggle_fullscreen.connect_activate({
+        let window = window.clone();
+        let layout_manager = components.layout_manager.clone();
+        let controls_left = controls_box_left.clone();
+        let controls_right = controls_box_right.clone();
+        move |_, _| {
+            if window.is_fullscreen() {
+                window.unfullscreen();
+                layout_manager
+                    .borrow_mut()
+                    .toggle_fullscreen(&controls_left, &controls_right);
+            } else {
+                window.fullscreen();
+                layout_manager
+                    .borrow_mut()
+                    .toggle_fullscreen(&controls_left, &controls_right);
+            }
+        }
+    });
+    window.add_action(&action_toggle_fullscreen);
 
     window.connect_close_request({
         let components = Rc::new(RefCell::new(components));
