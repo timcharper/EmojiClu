@@ -184,9 +184,6 @@ impl GameEngine {
         if let Some(touch_screen_controls) = change.touch_screen_controls {
             self.settings.touch_screen_controls = touch_screen_controls;
         }
-        if let Some(fullscreen) = change.fullscreen {
-            self.settings.fullscreen = fullscreen;
-        }
         self.update_settings();
     }
     fn set_game_state(

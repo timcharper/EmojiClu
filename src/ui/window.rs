@@ -515,11 +515,6 @@ pub fn build_ui(app: &Application) {
 
     window.present();
 
-    // Apply fullscreen setting if enabled
-    if initial_settings.fullscreen {
-        window.fullscreen();
-    }
-
     // Add actions for keyboard shortcuts and menu items
     let action_undo = SimpleAction::new("undo", None);
     let game_engine_command_emitter_undo = game_engine_command_emitter.clone();
@@ -611,6 +606,18 @@ pub fn build_ui(app: &Application) {
         }
     });
     window.add_action(&action_restart);
+
+    // Add fullscreen toggle action
+    let action_toggle_fullscreen = SimpleAction::new("toggle-fullscreen", None);
+    let window_for_fullscreen = window.clone();
+    action_toggle_fullscreen.connect_activate(move |_, _| {
+        if window_for_fullscreen.is_fullscreen() {
+            window_for_fullscreen.unfullscreen();
+        } else {
+            window_for_fullscreen.fullscreen();
+        }
+    });
+    window.add_action(&action_toggle_fullscreen);
 
     window.connect_close_request({
         let components = Rc::new(RefCell::new(components));
