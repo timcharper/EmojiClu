@@ -41,9 +41,9 @@ impl NotQuiteRightDialog {
             .modal(true)
             .build();
 
-        content_area.append(&Label::new(Some(
-            "Sorry, that's not quite right. Click OK to rewind to the last correct state.",
-        )));
+        content_area.append(&Label::new(Some(&t!(
+            "not-quite-right-message"
+        ))));
 
         let buttons = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)

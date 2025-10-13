@@ -36,6 +36,7 @@ game-statistics = Game Statistics
 best-times = Best Times
 global-statistics = Global Statistics
 generating-puzzle = Generating puzzle...
+not-quite-right-message = Sorry, that's not quite right. Click OK to rewind to the last correct state.
 
 # About dialog
 about-author = Tim Harper

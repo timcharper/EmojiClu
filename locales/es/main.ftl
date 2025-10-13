@@ -36,6 +36,7 @@ game-statistics = Estadísticas del Juego
 best-times = Mejores Tiempos
 global-statistics = Estadísticas Globales
 generating-puzzle = Generando rompecabezas...
+not-quite-right-message = Lo siento, eso no es del todo correcto. Haga clic en OK para retroceder al último estado correcto.
 
 # About dialog
 about-author = Tim Harper
