@@ -299,7 +299,7 @@ impl ClueUI {
             .cursor_visible(false)
             .halign(Align::Fill)
             .valign(Align::Start)
-            .css_classes(["tooltip"])
+            .css_classes(["tutorial-text"])
             .vexpand(true)
             .hexpand(true)
             .wrap_mode(WrapMode::Word)
