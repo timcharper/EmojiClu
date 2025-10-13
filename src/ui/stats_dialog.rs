@@ -51,16 +51,6 @@ impl StatsDialog {
             scores_grid.attach(&label, i as i32, 0, 1, 1);
         }
 
-        // Add high scores
-
-        // pub fn get_high_scores(&self) -> Vec<GameStats> {
-        //     self.stats_manager.get_high_scores(20).unwrap_or_default()
-        // }
-
-        // pub fn get_global_stats(&self) -> Option<super::stats::GlobalStats> {
-        //     self.stats_manager.get_global_stats().ok()
-        // }
-        //     let high_scores = stats_manager.get_high_scores();
         for (i, score) in stats_manager
             .get_high_scores(difficulty, 20)
             .into_iter()
@@ -100,7 +90,7 @@ impl StatsDialog {
             }
             scores_grid.attach(&size, 3, row_index, 1, 1);
 
-            let difficulty = Label::new(Some(&format!("{:?}", score.difficulty)));
+            let difficulty = Label::new(Some(&(score.difficulty.to_string())));
             difficulty.set_halign(Align::End);
             if is_current_playthrough {
                 difficulty.add_css_class("highlight-score");
