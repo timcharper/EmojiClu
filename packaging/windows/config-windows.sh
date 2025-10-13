@@ -17,7 +17,10 @@ GTK_LIB_PATH=${BASEPATH}/packaging/windows/gtk/lib
 TARGET_PATH=${GTK_LIB_PATH}/usr/lib/x86_64-linux-gnu
 mkdir -p ${GTK_LIB_PATH}/usr/lib
 
+# On Ubuntu, we looked for it here.
 ln -sf ${GTK_LIB_PATH} ${GTK_LIB_PATH}/usr/lib/x86_64-linux-gnu
+# On Fedora, we look for it here
+ln -sf ${GTK_LIB_PATH} ${GTK_LIB_PATH}/usr/lib64
 
 GOBJECT_PKG_CONF=$GTK_LIB_PATH/pkgconfig/gobject-2.0.pc
 

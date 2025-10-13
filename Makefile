@@ -94,7 +94,8 @@ packaging/windows/emojiclu/bin/emojiclu.exe: target/x86_64-pc-windows-gnu/releas
 	./packaging/windows/package-windows.sh
 
 packaging/windows/emojiclu/icon.ico: resources/emojiclu-icon.png
-	convert $< -define icon:auto-resize=64,48,32,16 $@
+	mkdir -p packaging/windows/emojiclu
+	magick $< -define icon:auto-resize=64,48,32,16 $@
 
 artifacts/${VERSION}/emojiclu-installer-$(VERSION).exe: packaging/windows/emojiclu/bin/emojiclu.exe packaging/windows/emojiclu/icon.ico packaging/windows/installer.nsi
 	mkdir -p artifacts/${VERSION}
