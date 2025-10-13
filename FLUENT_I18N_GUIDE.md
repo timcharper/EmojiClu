@@ -6,7 +6,7 @@ This document explains how internationalization (i18n) is implemented in EmojiCl
 
 EmojiClu now supports multiple languages using Mozilla's Fluent localization system. The setup includes:
 
-- **English (en-US)** - Default/fallback language
+- **English (en)** - Default/fallback language
 - **Spanish (es)** - Complete translation
 - **French (fr)** - Complete translation
 
@@ -14,7 +14,7 @@ EmojiClu now supports multiple languages using Mozilla's Fluent localization sys
 
 ```
 locales/
-├── en-US/
+├── en/
 │   └── main.ftl
 ├── es/
 │   └── main.ftl
@@ -27,7 +27,7 @@ locales/
 ### 1. Initialization
 The i18n system is initialized in `src/lib.rs`:
 ```rust
-fluent_i18n::i18n!("locales", fallback = "en-US");
+fluent_i18n::i18n!("locales", fallback = "en");
 ```
 
 ### 2. Usage in Code
@@ -43,7 +43,7 @@ Button::with_label(&t!("submit"))
 ```
 
 ### 3. Translation Keys
-All translation keys are defined in `.ftl` files. For example, in `locales/en-US/main.ftl`:
+All translation keys are defined in `.ftl` files. For example, in `locales/en/main.ftl`:
 ```fluent
 submit = Submit
 menu-new-game = New Game

@@ -6,7 +6,7 @@ pub mod model;
 pub mod solver;
 pub mod ui;
 
-fluent_i18n::i18n!("locales", fallback = "en-US");
+fluent_i18n::i18n!("locales", fallback = "en");
 
 #[cfg(test)]
 mod tests {
