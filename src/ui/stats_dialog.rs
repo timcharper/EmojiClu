@@ -130,21 +130,21 @@ impl StatsDialog {
         stats_grid.set_column_spacing(10);
         stats_grid.set_margin_start(10);
 
-        let total_games = Label::new(Some("Total Games:"));
+        let total_games = Label::new(Some(&t!("stats-total-games")));
         total_games.set_halign(Align::Start);
         stats_grid.attach(&total_games, 0, 0, 1, 1);
         let total_games_value = Label::new(Some(&stats.total_games_played.to_string()));
         total_games_value.set_halign(Align::End);
         stats_grid.attach(&total_games_value, 1, 0, 1, 1);
 
-        let total_time = Label::new(Some("Total Time:"));
+        let total_time = Label::new(Some(&t!("stats-total-time")));
         total_time.set_halign(Align::Start);
         stats_grid.attach(&total_time, 0, 1, 1, 1);
         let total_time_value = Label::new(Some(&Self::format_duration(stats.total_time_played)));
         total_time_value.set_halign(Align::End);
         stats_grid.attach(&total_time_value, 1, 1, 1, 1);
 
-        let avg_time = Label::new(Some("Average Time:"));
+        let avg_time = Label::new(Some(&t!("stats-average-time")));
         avg_time.set_halign(Align::Start);
         stats_grid.attach(&avg_time, 0, 2, 1, 1);
         let avg_duration = if stats.total_games_played > 0 {
@@ -158,7 +158,7 @@ impl StatsDialog {
         avg_time_value.set_halign(Align::End);
         stats_grid.attach(&avg_time_value, 1, 2, 1, 1);
 
-        let total_hints = Label::new(Some("Total Hints Used:"));
+        let total_hints = Label::new(Some(&t!("stats-total-hints-used")));
         total_hints.set_halign(Align::Start);
         stats_grid.attach(&total_hints, 0, 3, 1, 1);
         let total_hints_value = Label::new(Some(&stats.total_hints_used.to_string()));

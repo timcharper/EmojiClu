@@ -362,7 +362,7 @@ pub fn build_ui(app: &Application) {
     menu.append(Some(&t!("menu-statistics")), Some("win.statistics"));
     menu.append(Some(&t!("menu-seed")), Some("win.seed"));
     menu.append_submenu(
-        Some("Settings"),
+        Some(&t!("menu-settings")),
         components.settings_menu_ui.borrow().get_menu(),
     );
     menu.append(Some(&t!("menu-about")), Some("win.about"));

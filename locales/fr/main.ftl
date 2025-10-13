@@ -14,6 +14,7 @@ menu-new-game = Nouveau Jeu
 menu-restart = Redémarrer
 menu-statistics = Statistiques
 menu-seed = Graine
+menu-settings = Paramètres
 menu-about = À propos
 
 # Settings menu
@@ -48,6 +49,10 @@ stats-hints = Indices
 stats-grid-size = Taille de la Grille
 stats-difficulty = Difficulté
 stats-date = Date
+stats-total-games = Total de Jeux :
+stats-total-time = Temps Total :
+stats-average-time = Temps Moyen :
+stats-total-hints-used = Total d'Indices Utilisés :
 stats-unknown = Inconnu
 
 # Timer

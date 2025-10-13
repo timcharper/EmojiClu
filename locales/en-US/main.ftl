@@ -14,6 +14,7 @@ menu-new-game = New Game
 menu-restart = Restart
 menu-statistics = Statistics
 menu-seed = Seed
+menu-settings = Settings
 menu-about = About
 
 # Settings menu
@@ -49,6 +50,10 @@ stats-grid-size = Grid Size
 stats-difficulty = Difficulty
 stats-date = Date
 stats-unknown = Unknown
+stats-total-games = Total Games:
+stats-total-time = Total Time:
+stats-average-time = Average Time:
+stats-total-hints-used = Total Hints Used:
 
 # Timer
 timer-pause = ⏸︎
