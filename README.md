@@ -50,7 +50,6 @@ Current differences:
 - More subtle clue system which nudges the user where to look, with incremental help.
 - A stupid amount of possible puzzles... 18,446,744,073,709,551,615 of them.
 
-
 Planned differences:
 
 - Experimental new clue types.
@@ -59,6 +58,30 @@ Planned differences:
 If you enjoy this game, please buy Everett's mobile version for your phone / iPad. He's a smart guy and it's worth your money. Also, check out his other puzzle games.
 
 There are no plans to make a mobile version of EmojiClu.
+
+# Contributing
+
+## Translations
+
+Help translate EmojiClu into your language! We use [Weblate](https://weblate.org/) for managing translations.
+
+[![Translation status](https://hosted.weblate.org/widget/emojiclu/287x66-grey.png)](https://hosted.weblate.org/engage/emojiclu/)
+
+### How to contribute translations:
+
+1. Visit our [Weblate project page](https://hosted.weblate.org/projects/emojiclu/)
+2. Sign up for a free Weblate account (or use GitHub/Google login)
+3. Select your language or request a new one
+4. Start translating!
+
+### Translation guidelines:
+
+- Preserve special syntax like `{$variable}`, `{"{"}icon:name{"}"}`, and HTML tags (`<b>`, `<i>`, `<tt>`)
+- Keep keyboard shortcuts in `<tt>` tags (e.g., `<tt>Ctrl+Z</tt>`)
+- Maintain the friendly, instructional tone
+- Test that translations fit in UI elements (keep button text concise)
+
+Translations are automatically submitted as pull requests and reviewed before being merged into the game.
 
 # Credits Etc
 
