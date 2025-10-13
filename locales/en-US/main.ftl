@@ -20,6 +20,7 @@ menu-about = About
 # Settings menu
 settings-show-clue-tooltips = Show Clue Tooltips
 settings-touch-screen-controls = Touch Screen Controls
+settings-auto-solve = Auto-Solve
 
 # Buttons
 submit = Submit

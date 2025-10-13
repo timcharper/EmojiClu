@@ -20,6 +20,7 @@ menu-about = Acerca de
 # Settings menu
 settings-show-clue-tooltips = Mostrar Tooltips de Pistas
 settings-touch-screen-controls = Controles de Pantalla Táctil
+settings-auto-solve = Auto-Resolver
 
 # Buttons
 submit = Enviar

@@ -20,6 +20,7 @@ menu-about = À propos
 # Settings menu
 settings-show-clue-tooltips = Afficher les Infobulles des Indices
 settings-touch-screen-controls = Contrôles d'Écran Tactile
+settings-auto-solve = Résolution Automatique
 
 # Buttons
 submit = Soumettre

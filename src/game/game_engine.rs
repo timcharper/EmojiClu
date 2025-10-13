@@ -184,6 +184,9 @@ impl GameEngine {
         if let Some(touch_screen_controls) = change.touch_screen_controls {
             self.settings.touch_screen_controls = touch_screen_controls;
         }
+        if let Some(auto_solve_enabled) = change.auto_solve_enabled {
+            self.settings.auto_solve_enabled = auto_solve_enabled;
+        }
         self.update_settings();
     }
     fn set_game_state(
@@ -238,7 +241,9 @@ impl GameEngine {
                     }
                     CandidateState::Available => {
                         current_board.select_tile_at_position(col, candidate.tile);
-                        current_board.auto_solve_row(row);
+                        if self.settings.auto_solve_enabled {
+                            current_board.auto_solve_row(row);
+                        }
                     }
                 }
                 self.push_board(current_board, GameBoardChangeReason::TileStatusChanged);
@@ -424,7 +429,9 @@ impl GameEngine {
             if let Some(candidate) = self.current_board.get_candidate(row, col, variant) {
                 if candidate.state == CandidateState::Available {
                     current_board.remove_candidate(col, candidate.tile);
-                    current_board.auto_solve_row(row);
+                    if self.settings.auto_solve_enabled {
+                        current_board.auto_solve_row(row);
+                    }
                     self.push_board(current_board, GameBoardChangeReason::TileStatusChanged);
                 }
             }

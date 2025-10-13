@@ -21,6 +21,7 @@ pub struct SettingsMenuUI {
     action_toggle_tooltips: SimpleAction,
     action_toggle_spotlight: SimpleAction,
     action_toggle_touch_controls: SimpleAction,
+    action_toggle_auto_solve: SimpleAction,
     game_engine_event_subscription: Option<Unsubscriber<GameEngineEvent>>,
     game_engine_command_emitter: EventEmitter<GameEngineCommand>,
 }
@@ -37,6 +38,8 @@ impl Destroyable for SettingsMenuUI {
             .remove_action(&self.action_toggle_spotlight.name());
         self.window
             .remove_action(&self.action_toggle_touch_controls.name());
+        self.window
+            .remove_action(&self.action_toggle_auto_solve.name());
     }
 }
 
@@ -55,6 +58,10 @@ impl SettingsMenuUI {
             Some(&t!("settings-touch-screen-controls")),
             Some("win.toggle-touch-controls"),
         );
+        settings_menu.append(
+            Some(&t!("settings-auto-solve")),
+            Some("win.toggle-auto-solve"),
+        );
 
         if Settings::is_debug_mode() {
             settings_menu.append(Some("Show Clue X-Ray"), Some("win.toggle-spotlight"));
@@ -63,6 +70,7 @@ impl SettingsMenuUI {
         let action_toggle_tooltips: SimpleAction;
         let action_toggle_spotlight: SimpleAction;
         let action_toggle_touch_controls: SimpleAction;
+        let action_toggle_auto_solve: SimpleAction;
 
         {
             action_toggle_tooltips = SimpleAction::new_stateful(
@@ -82,6 +90,12 @@ impl SettingsMenuUI {
                 None,
                 &settings.touch_screen_controls.to_variant(),
             );
+
+            action_toggle_auto_solve = SimpleAction::new_stateful(
+                "toggle-auto-solve",
+                None,
+                &settings.auto_solve_enabled.to_variant(),
+            );
         }
 
         let settings_menu_ui = Rc::new(RefCell::new(Self {
@@ -90,6 +104,7 @@ impl SettingsMenuUI {
             action_toggle_tooltips,
             action_toggle_spotlight,
             action_toggle_touch_controls,
+            action_toggle_auto_solve,
             game_engine_event_subscription: None,
             game_engine_command_emitter: game_engine_command_emitter.clone(),
         }));
@@ -105,11 +120,11 @@ impl SettingsMenuUI {
         let settings_menu_ui_ref = settings_menu_ui.borrow();
 
         // Connect toggle tooltips action
-        {
-            let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
-            settings_menu_ui_ref
-                .action_toggle_tooltips
-                .connect_activate(move |action, _| {
+        settings_menu_ui_ref
+            .action_toggle_tooltips
+            .connect_activate({
+                let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
+                move |action, _| {
                     let current_state = action.state().unwrap().get::<bool>().unwrap();
                     let new_state = !current_state;
                     action.set_state(&new_state.to_variant());
@@ -118,16 +133,16 @@ impl SettingsMenuUI {
                             .borrow_mut()
                             .set_tooltips_enabled(new_state);
                     }
-                });
-            window.add_action(&settings_menu_ui_ref.action_toggle_tooltips);
-        }
+                }
+            });
+        window.add_action(&settings_menu_ui_ref.action_toggle_tooltips);
 
         // Connect x-ray mode action
-        {
-            let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
-            settings_menu_ui_ref
-                .action_toggle_spotlight
-                .connect_activate(move |action, _| {
+        settings_menu_ui_ref
+            .action_toggle_spotlight
+            .connect_activate({
+                let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
+                move |action, _| {
                     let current_state = action.state().unwrap().get::<bool>().unwrap();
                     let new_state = !current_state;
                     action.set_state(&new_state.to_variant());
@@ -136,16 +151,16 @@ impl SettingsMenuUI {
                             .borrow_mut()
                             .set_clue_spotlight_enabled(new_state);
                     }
-                });
-            window.add_action(&settings_menu_ui_ref.action_toggle_spotlight);
-        }
+                }
+            });
+        window.add_action(&settings_menu_ui_ref.action_toggle_spotlight);
 
         // Connect touch screen controls action
-        {
-            let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
-            settings_menu_ui_ref
-                .action_toggle_touch_controls
-                .connect_activate(move |action, _| {
+        settings_menu_ui_ref
+            .action_toggle_touch_controls
+            .connect_activate({
+                let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
+                move |action, _| {
                     let current_state = action.state().unwrap().get::<bool>().unwrap();
                     let new_state = !current_state;
                     action.set_state(&new_state.to_variant());
@@ -154,9 +169,27 @@ impl SettingsMenuUI {
                             .borrow_mut()
                             .set_touch_screen_controls(new_state);
                     }
-                });
-            window.add_action(&settings_menu_ui_ref.action_toggle_touch_controls);
-        }
+                }
+            });
+        window.add_action(&settings_menu_ui_ref.action_toggle_touch_controls);
+
+        // Connect auto-solve action
+        settings_menu_ui_ref
+            .action_toggle_auto_solve
+            .connect_activate({
+                let weak_settings_menu_ui = Weak::clone(&weak_settings_menu_ui);
+                move |action, _| {
+                    let current_state = action.state().unwrap().get::<bool>().unwrap();
+                    let new_state = !current_state;
+                    action.set_state(&new_state.to_variant());
+                    if let Some(settings_menu_ui) = weak_settings_menu_ui.upgrade() {
+                        settings_menu_ui
+                            .borrow_mut()
+                            .set_auto_solve_enabled(new_state);
+                    }
+                }
+            });
+        window.add_action(&settings_menu_ui_ref.action_toggle_auto_solve);
     }
 
     fn set_tooltips_enabled(&mut self, enabled: bool) {
@@ -176,6 +209,13 @@ impl SettingsMenuUI {
     fn set_touch_screen_controls(&mut self, enabled: bool) {
         let mut settings_change = SettingsChange::default();
         settings_change.touch_screen_controls = Some(enabled);
+        self.game_engine_command_emitter
+            .emit(GameEngineCommand::ChangeSettings(settings_change));
+    }
+
+    fn set_auto_solve_enabled(&mut self, enabled: bool) {
+        let mut settings_change = SettingsChange::default();
+        settings_change.auto_solve_enabled = Some(enabled);
         self.game_engine_command_emitter
             .emit(GameEngineCommand::ChangeSettings(settings_change));
     }

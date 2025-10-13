@@ -6,6 +6,7 @@ pub struct SettingsChange {
     pub clue_tooltips_enabled: Option<bool>,
     pub clue_spotlight_enabled: Option<bool>,
     pub touch_screen_controls: Option<bool>,
+    pub auto_solve_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone)]

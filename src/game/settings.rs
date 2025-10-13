@@ -20,6 +20,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub touch_screen_controls: bool,
+
+    #[serde(default = "default_true")]
+    pub auto_solve_enabled: bool,
 }
 
 // Helper functions for default values
@@ -37,6 +40,7 @@ impl Default for Settings {
             clue_tooltips_enabled: true,
             clue_spotlight_enabled: false,
             touch_screen_controls: false,
+            auto_solve_enabled: true,
             version: 1,
         }
     }
