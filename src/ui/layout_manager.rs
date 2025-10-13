@@ -8,7 +8,7 @@ use fixed::types::I8F8;
 use glib::{object::ObjectExt, source::SourceId, timeout_add_local, ControlFlow};
 use gtk4::{
     glib::SignalHandlerId,
-    prelude::{BoxExt, MonitorExt, NativeExt, SurfaceExt, WidgetExt},
+    prelude::{MonitorExt, NativeExt, SurfaceExt, WidgetExt},
     ApplicationWindow,
 };
 use itertools::Itertools;
@@ -37,7 +37,6 @@ const SOLUTION_IMG_SIZE: i32 = 128;
 const CANDIDATE_IMG_SIZE: i32 = SOLUTION_IMG_SIZE / 2;
 
 const TUTORIAL_HEIGHT: i32 = 200;
-const FULLSCREEN_CONTROLS_HEIGHT: i32 = 60;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ClueStats {
@@ -77,10 +76,6 @@ pub struct LayoutManager {
     last_layout_change: Option<Instant>,
     layout_monitor_source: Option<SourceId>,
     scale_factor: I8F8,
-    is_fullscreen: bool,
-    pub fullscreen_controls_box: gtk4::Box,
-    pub decoration_box_left: gtk4::Box,
-    pub decoration_box_right: gtk4::Box,
 }
 
 impl Destroyable for LayoutManager {
@@ -131,29 +126,6 @@ impl LayoutManager {
             .vexpand_set(true)
             .build();
 
-        // Create decoration boxes for header bar
-        let decoration_box_left = gtk4::Box::builder()
-            .name("decoration-box-left")
-            .orientation(gtk4::Orientation::Horizontal)
-            .build();
-
-        let decoration_box_right = gtk4::Box::builder()
-            .name("decoration-box-right")
-            .orientation(gtk4::Orientation::Horizontal)
-            .build();
-
-        // Create fullscreen controls box (initially hidden)
-        let fullscreen_controls_box = gtk4::Box::builder()
-            .name("fullscreen-controls-box")
-            .orientation(gtk4::Orientation::Horizontal)
-            .spacing(10)
-            .height_request(FULLSCREEN_CONTROLS_HEIGHT)
-            .halign(gtk4::Align::Center)
-            .valign(gtk4::Align::Start)
-            .visible(false)
-            .css_classes(["fullscreen-controls"])
-            .build();
-
         let dw = Rc::new(RefCell::new(Self {
             layout_manager_event_emitter,
             window: window.clone(),
@@ -167,10 +139,6 @@ impl LayoutManager {
             last_layout_change: Some(Instant::now()),
             layout_monitor_source: None,
             scale_factor: I8F8::from_num(1),
-            is_fullscreen: false,
-            fullscreen_controls_box,
-            decoration_box_left,
-            decoration_box_right,
         }));
 
         window.connect_realize({
@@ -292,33 +260,6 @@ impl LayoutManager {
         } else {
             trace!(target: "layout_manager", "layout unchanged");
         }
-    }
-
-    /// Toggle fullscreen mode by moving controls between decoration boxes and fullscreen controls box
-    pub fn toggle_fullscreen(&mut self, controls_left: &gtk4::Box, controls_right: &gtk4::Box) {
-        self.is_fullscreen = !self.is_fullscreen;
-
-        if self.is_fullscreen {
-            // Move controls from decoration boxes to fullscreen controls box
-            self.decoration_box_left.remove(controls_left);
-            self.decoration_box_right.remove(controls_right);
-
-            self.fullscreen_controls_box.append(controls_left);
-            self.fullscreen_controls_box.append(controls_right);
-            self.fullscreen_controls_box.set_visible(true);
-        } else {
-            // Move controls back to decoration boxes
-            self.fullscreen_controls_box.remove(controls_left);
-            self.fullscreen_controls_box.remove(controls_right);
-
-            self.decoration_box_left.append(controls_left);
-            self.decoration_box_right.append(controls_right);
-            self.fullscreen_controls_box.set_visible(false);
-        }
-
-        // Recalculate layout with adjusted available space
-        let new_layout = self.calculate_scaled_layout();
-        self.maybe_publish_layout(new_layout);
     }
 
     pub fn calculate_layout(
@@ -451,12 +392,7 @@ impl LayoutManager {
 
         // Calculate scaling factors based on window dimensions
         let available_width = surface.width;
-        let mut available_height = surface.height - base_layout.tutorial.height; // don't scale the tutorial height
-
-        // Account for fullscreen controls height when in fullscreen mode
-        if self.is_fullscreen {
-            available_height -= FULLSCREEN_CONTROLS_HEIGHT;
-        }
+        let available_height = surface.height - base_layout.tutorial.height; // don't scale the tutorial height
 
         // Calculate scale factors for both dimensions
         let width_scale = available_width as f32 / total_required_width as f32;
