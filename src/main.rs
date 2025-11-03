@@ -17,12 +17,19 @@ fn main() -> ExitCode {
     // Initialize logger
     env_logger::init();
 
-    // Set locale from environment variable if provided
+    // Set locale from environment variable if provided, otherwise auto-detect
     if let Ok(locale) = std::env::var("LOCALE") {
         if let Err(e) = set_locale(Some(&locale)) {
             eprintln!("Warning: Failed to set locale '{}': {}", locale, e);
         } else {
-            println!("Locale set to: {}", locale);
+            log::info!("Locale explicitly set to: {}", locale);
+        }
+    } else {
+        // Auto-detect system locale
+        if let Err(e) = set_locale(None) {
+            eprintln!("Warning: Failed to auto-detect locale: {}", e);
+        } else {
+            log::info!("Locale auto-detected from system settings");
         }
     }
 

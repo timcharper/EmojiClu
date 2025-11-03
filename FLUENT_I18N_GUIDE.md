@@ -25,25 +25,40 @@ locales/
 ## How It Works
 
 ### 1. Initialization
+
 The i18n system is initialized in `src/lib.rs`:
+
 ```rust
 fluent_i18n::i18n!("locales", fallback = "en");
 ```
 
+The locale is automatically detected from the system settings at runtime in `src/main.rs`. You can override it by setting the `LOCALE` environment variable:
+
+```bash
+LOCALE=fr ./emojiclu  # Force French
+LOCALE=es ./emojiclu  # Force Spanish
+```
+
+The system automatically handles locale variations (e.g., `fr_FR`, `fr_BE` → `fr`, `es_ES`, `es_MX` → `es`).
+
 ### 2. Usage in Code
+
 Replace hardcoded strings with the `t!` macro:
+
 ```rust
 use fluent_i18n::t;
 
 // Before
 Button::with_label("Submit")
 
-// After  
+// After
 Button::with_label(&t!("submit"))
 ```
 
 ### 3. Translation Keys
+
 All translation keys are defined in `.ftl` files. For example, in `locales/en/main.ftl`:
+
 ```fluent
 submit = Submit
 menu-new-game = New Game
