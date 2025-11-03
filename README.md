@@ -94,17 +94,24 @@ Translations are automatically submitted as pull requests and reviewed before be
 
 EmojiClu is built with Rust and GTK4+. You should install a modern version of Rust using `rustup`.
 
+General package requirements:
+
+- `pv`
+- `inkscape` (for svg -> ico conversion)
+- `make`
+- `dpkg-deb` (building fedora packages)
+
 ## Notes on windows build
 
 - need packages
 
   - Ubuntu `gcc-mingw-w64`, `mingw-w64`, `nsis` (nullsoft installer), and some dev deps probably.
-  - Fedora `mingw64-gcc`, `mingw64-nsis`
+  - Fedora `mingw64-gcc`, `mingw-nsis-base`, `mingw32-nsis`, `mingw64-nsis`
 
-- Download gtk for windows, extract to `./packaging/windows/gtk`
+- Download [gtk for windows](https://github.com/wingtk/gvsbuild), extract to `./packaging/windows/gtk`
 - Download VulkanRT-{ver}-Components.zip; extract to `./packaging/windows/vulkan`
   - Maybe need to install SDK for windows and copy this? IDK. I did it but the file seems to be in VulkanRT components. `~/.wine-affinity/drive_c/windows/system32/vulkan-1.dll` to `./bundle/gtk/lib/vulkan-1.dll`
-- run `./config-windows.sh` to finish setting up the files and editing paths in the package conf files, and setting some symlinks to hack around errors.
+- run `./packaging/windows/config-windows.sh` to finish setting up the files and editing paths in the package conf files, and setting some symlinks to hack around errors.
 
 - run `make windows`.
 

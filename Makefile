@@ -85,7 +85,8 @@ target/release/emojiclu: $(RUST_SOURCES) $(RESOURCE_FILES)
 
 artifacts/${VERSION}/emojiclu-linux-$(VERSION)-x86_64.tar.xz: target/release/emojiclu
 	mkdir -p artifacts/${VERSION}
-	cd target/release && tar c emojiclu | xz -7 -T 0 | pv > ../../$@
+	cd target/release && tar c emojiclu | xz -7 -T 0 | pv > ../../$@.tmp
+	mv $@.tmp $@
 
 target/x86_64-pc-windows-gnu/release/emojiclu.exe: $(RUST_SOURCES) $(RESOURCE_FILES) packaging/windows/emojiclu/icon.ico
 	./packaging/windows/build-windows.sh
